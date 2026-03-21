@@ -1,0 +1,19 @@
+# values.yaml
+
+# Définition des valeurs par défaut
+replicaCount: 1
+
+# Définition de l'image Docker
+image:
+  repository: mon-image-docker
+  tag: v1.0.0
+  pullPolicy: IfNotPresent
+
+# Définition des ressources
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
