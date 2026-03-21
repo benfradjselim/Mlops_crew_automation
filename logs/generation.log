@@ -351,3 +351,53 @@
 2026-03-21 00:19:23: Essai: meta-llama/llama-3.2-3b-instruct:free
 2026-03-21 00:19:27: OK: meta-llama/llama-3.2-3b-instruct:free
 2026-03-21 00:19:27: OK src/collector/logs.py
+2026-03-21 00:19:28: Push GitHub
+2026-03-21 00:19:31: --- src/model/online_detector.py ---
+2026-03-21 00:19:31: Gen: src/model/online_detector.py
+2026-03-21 00:19:31: Essai: google/gemini-2.0-flash-exp:free
+2026-03-21 00:19:31: Echec google/gemini-2.0-flash-exp:free: 404
+2026-03-21 00:19:32: Essai: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 00:19:32: Echec google/gemini-2.0-flash-lite-preview-02-05:free: 400
+2026-03-21 00:19:33: Essai: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 00:19:33: Echec mistralai/mistral-7b-instruct-v0.3: 404
+2026-03-21 00:19:34: Essai: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:19:34: Echec meta-llama/llama-3.2-3b-instruct:free: 429
+2026-03-21 00:19:35: Essai: deepseek/deepseek-chat:free
+2026-03-21 00:19:35: Echec deepseek/deepseek-chat:free: 404
+2026-03-21 00:19:36: Essai: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 00:19:36: Echec qwen/qwen-2.5-7b-instruct:free: 404
+2026-03-21 00:19:37: Essai: cohere/command-r-plus-08-2024:free
+2026-03-21 00:19:37: Echec cohere/command-r-plus-08-2024:free: 404
+2026-03-21 00:19:38: Essai: microsoft/phi-3-mini-128k:free
+2026-03-21 00:19:38: Echec microsoft/phi-3-mini-128k:free: 400
+2026-03-21 00:19:39: OK raw/src/model/online_detector.py.txt
+2026-03-21 00:19:39: --- src/api/main.py ---
+2026-03-21 00:19:39: Gen: src/api/main.py
+2026-03-21 00:19:39: Essai: google/gemini-2.0-flash-exp:free
+2026-03-21 00:19:39: Echec google/gemini-2.0-flash-exp:free: 404
+2026-03-21 00:19:40: Essai: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 00:19:40: Echec google/gemini-2.0-flash-lite-preview-02-05:free: 400
+2026-03-21 00:19:41: Essai: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 00:19:42: Echec mistralai/mistral-7b-instruct-v0.3: 404
+2026-03-21 00:19:43: Essai: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:19:43: Echec meta-llama/llama-3.2-3b-instruct:free: 429
+2026-03-21 00:19:44: Essai: deepseek/deepseek-chat:free
+2026-03-21 00:19:44: Echec deepseek/deepseek-chat:free: 404
+2026-03-21 00:19:45: Essai: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 00:19:45: Echec qwen/qwen-2.5-7b-instruct:free: 404
+2026-03-21 00:19:46: Essai: cohere/command-r-plus-08-2024:free
+2026-03-21 00:19:46: Echec cohere/command-r-plus-08-2024:free: 404
+2026-03-21 00:19:47: Essai: microsoft/phi-3-mini-128k:free
+2026-03-21 00:19:47: Echec microsoft/phi-3-mini-128k:free: 400
+2026-03-21 00:19:48: OK raw/src/api/main.py.txt
+2026-03-21 00:19:48: --- dashboard/app.py ---
+2026-03-21 00:19:48: Gen: dashboard/app.py
+2026-03-21 00:19:48: Essai: google/gemini-2.0-flash-exp:free
+2026-03-21 00:19:48: Echec google/gemini-2.0-flash-exp:free: 404
+2026-03-21 00:19:49: Essai: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 00:19:49: Echec google/gemini-2.0-flash-lite-preview-02-05:free: 400
+2026-03-21 00:19:50: Essai: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 00:19:50: Echec mistralai/mistral-7b-instruct-v0.3: 404
+2026-03-21 00:19:51: Essai: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:19:58: OK: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:19:58: OK dashboard/app.py
