@@ -36,13 +36,31 @@ class OnlineDetector:
         self.data_path = data_path
         self.model = None
 
-    def train(self, n_estimators: int = 100, max_depth: int = 10, min_samples_split: int = 2, min_samples_leaf: int = 1):
+    def _load_data(self) -> np.ndarray:
         """
-        Train the model using the data from the data_path.
+        Load the data from the data_path.
+
+        Returns:
+        np.ndarray: The loaded data.
+
+        Raises:
+        FileNotFoundError: If the data file is not found.
+        """
+        try:
+            data = load_data(self.data_path)
+            return data
+        except FileNotFoundError as e:
+            logger.error(f"Data file not found: {e}")
+            raise
+
+    def _train_model(self, data: np.ndarray, n_estimators: int = 100, max_depth: int = 10, min_samples_split: int = 2, min_samples_leaf: int = 1) -> RandomForestClassifier:
+        """
+        Train the model using the data.
 
         Args:
+        data (np.ndarray): The data to train the model.
         n_estimators (int): The number of estimators in the random forest.
-        max_depth (int): The maximum depth of the trees in the random forest.
+        max_depth (int): The maximum depth of the trees.
         min_samples_split (int): The minimum number of samples required to split an internal node.
         min_samples_leaf (int): The minimum number of samples required to be at a leaf node.
 
@@ -50,69 +68,70 @@ class OnlineDetector:
         RandomForestClassifier: The trained model.
 
         Raises:
-        FileNotFoundError: If data_path does not exist.
-        ValueError: If n_estimators, max_depth, min_samples_split or min_samples_leaf is invalid.
+        ValueError: If the data is empty.
+        """
+        if data.shape[0] == 0:
+            raise ValueError("Data is empty")
+        X, y = data[:, :-1], data[:, -1]
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, min_samples_split=min_samples_split, min_samples_leaf=min_samples_leaf)
+        model.fit(X_train, y_train)
+        return model
+
+    def train(self, n_estimators: int = 100, max_depth: int = 10, min_samples_split: int = 2, min_samples_leaf: int = 1) -> None:
+        """
+        Train the model using the data from the data_path.
+
+        Args:
+        n_estimators (int): The number of estimators in the random forest.
+        max_depth (int): The maximum depth of the trees.
+        min_samples_split (int): The minimum number of samples required to split an internal node.
+        min_samples_leaf (int): The minimum number of samples required to be at a leaf node.
+
+        Raises:
+        FileNotFoundError: If the data file is not found.
+        ValueError: If the data is empty.
         """
         try:
-            # Load data
-            data = load_data(self.data_path)
-            X, y = data['X'], data['y']
-
-            # Split data into training and testing sets
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-            # Train model
-            self.model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth, min_samples_split=min_samples_split, min_samples_leaf=min_samples_leaf)
-            self.model.fit(X_train, y_train)
-
-            # Evaluate model
-            y_pred = self.model.predict(X_test)
-            accuracy = accuracy_score(y_test, y_pred)
-            logger.info(f"Model accuracy: {accuracy:.2f}")
-
-            # Save model
-            save_model(self.model, self.model_path)
-
-            return self.model
-
-        except FileNotFoundError:
-            logger.error(f"Data file not found at {self.data_path}")
-            raise
-        except ValueError as e:
-            logger.error(f"Invalid value: {e}")
-            raise
+            data = self._load_data()
+            model = self._train_model(data, n_estimators, max_depth, min_samples_split, min_samples_leaf)
+            self.model = model
+            save_model(self.model_path, model)
+            logger.info("Model trained and saved")
         except Exception as e:
-            logger.error(f"An error occurred: {e}")
+            logger.error(f"Error training model: {e}")
             raise
 
-    def predict(self, data: np.ndarray):
+    def predict(self, data: np.ndarray) -> np.ndarray:
         """
         Make predictions using the trained model.
 
         Args:
-        data (np.ndarray): The input data.
+        data (np.ndarray): The data to make predictions on.
 
         Returns:
         np.ndarray: The predicted labels.
 
         Raises:
-        ValueError: If data is None.
+        ValueError: If the model is not trained.
         """
-        if data is None:
-            raise ValueError("Data cannot be None")
         if self.model is None:
-            raise ValueError("Model has not been trained")
+            raise ValueError("Model is not trained")
         return self.model.predict(data)
 
-def main():
-    # Example usage
-    model_path = "model.pkl"
-    data_path = "data.csv"
-    detector = OnlineDetector(model_path, data_path)
-    detector.train()
-    data = np.array([[1, 2, 3], [4, 5, 6]])
-    predictions = detector.predict(data)
-    print(predictions)
+    def evaluate(self, data: np.ndarray) -> float:
+        """
+        Evaluate the model using the data.
 
-if __name__ == "__main__":
-    main()
+        Args:
+        data (np.ndarray): The data to evaluate the model on.
+
+        Returns:
+        float: The accuracy of the model.
+
+        Raises:
+        ValueError: If the model is not trained.
+        """
+        if self.model is None:
+            raise ValueError("Model is not trained")
+        return accuracy_score(data[:, -1], self.model.predict(data[:, :-1]))
