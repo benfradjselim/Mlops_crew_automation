@@ -53,11 +53,15 @@ def create_helm_chart(chart: Dict) -> client.V1Package:
     """
     try:
         api = client.AppsV1Api()
-        package = api.create_namespaced_package("default", chart)
-        return package
+        response = api.create_namespaced_deployment(
+            body=chart,
+            namespace="default"
+        )
+        logger.info(f"Chart créé avec succès : {response.metadata.name}")
+        return response
     except kubernetes.client.ApiException as e:
-        logger.error(f"Erreur lors de la création de la chart Helm : {e}")
-        raise kubernetes.client.ApiException("Erreur lors de la création de la chart Helm")
+        logger.error(f"Erreur lors de la création de la chart : {e}")
+        raise kubernetes.client.ApiException("Erreur lors de la création de la chart")
 
 def main() -> None:
     """
@@ -68,13 +72,18 @@ def main() -> None:
     """
     try:
         load_kube_config()
-        chart = {"apiVersion": "v1", "kind": "Deployment", "metadata": {"name": "my-deployment"}}
+        chart = {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "metadata": {
+                "name": "mon-deployment"
+            }
+        }
         validate_chart(chart)
-        package = create_helm_chart(chart)
-        logger.info(f"Chart Helm créée avec succès : {package}")
+        create_helm_chart(chart)
     except Exception as e:
-        logger.error(f"Erreur inattendue : {e}")
-        raise
+        logger.error(f"Erreur générale : {e}")
+        raise e
 
 if __name__ == "__main__":
     main()
