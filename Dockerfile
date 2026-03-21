@@ -1,13 +1,46 @@
-# Stage 1: Build
-FROM python:3.9-slim AS build
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-RUN pip install -r requirements.txt --no-deps
+import logging
+import os
+import subprocess
 
-# Stage 2: Final
-FROM python:3.9-slim
-WORKDIR /app
-COPY --from=build /app/ ./
-CMD ["python", "app.py"]
+# Configuration du logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def build_image():
+    """
+    Construit l'image Docker en deux étapes : build et final.
+
+    :return: None
+    """
+    try:
+        # Stage 1: Build
+        logging.info("Construisons la première étape de l'image Docker...")
+        subprocess.run([
+            "docker", "build", "-t", "my-image", "--build-arg", "BUILD_STAGE=1", "."
+        ], check=True)
+
+        # Stage 2: Final
+        logging.info("Construisons la deuxième étape de l'image Docker...")
+        subprocess.run([
+            "docker", "build", "-t", "my-image", "--build-arg", "BUILD_STAGE=2", "."
+        ], check=True)
+
+        logging.info("L'image Docker a été construite avec succès !")
+
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Erreur lors de la construction de l'image Docker : {e}")
+        raise
+
+    except Exception as e:
+        logging.error(f"Erreur inconnue : {e}")
+        raise
+
+def main():
+    """
+    Fonction principale.
+
+    :return: None
+    """
+    build_image()
+
+if __name__ == "__main__":
+    main()
