@@ -1,30 +1,48 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: example-deployment
-  labels:
-    app: example-app
+  name: {{ .Values.appName }}
 spec:
-  replicas: 3
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: example-app
+      app: {{ .Values.appName }}
   template:
     metadata:
       labels:
-        app: example-app
+        app: {{ .Values.appName }}
     spec:
       containers:
-      - name: example-container
-        image: nginx:latest
+      - name: {{ .Values.appName }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
         ports:
-        - containerPort: 80
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 10
-          periodSeconds: 10
-        env:
-        - name: EXAMPLE_ENV
-          value: "example_value"
+        - containerPort: {{ .Values.service.port }}
+        resources:
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+          limits:
+            cpu: {{ .Values.resources.limits.cpu }}
+            memory: {{ .Values.resources.limits.memory }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+      - name: {{ .Values.persistence.name }}
+        persistentVolumeClaim:
+          claimName: {{ .Values.persistence.claimName }}
+      {{- end }}
+  {{- if .Values.autoscaling.enabled }}
+  strategy:
+    type: {{ .Values.autoscaling.strategy.type }}
+    rollingUpdate:
+      maxSurge: {{ .Values.autoscaling.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.autoscaling.strategy.rollingUpdate.maxUnavailable }}
+  {{- end }}
+  {{- if .Values.autoscaling.enabled }}
+  {{- if .Values.autoscaling.minReplicas }}
+  minReadySeconds: {{ .Values.autoscaling.minReplicas }}
+  {{- end }}
+  {{- if .Values.autoscaling.maxReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  {{- end }}
+  {{- end }}
