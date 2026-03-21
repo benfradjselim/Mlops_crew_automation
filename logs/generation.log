@@ -451,3 +451,53 @@
 2026-03-21 00:20:23: Essai: meta-llama/llama-3.2-3b-instruct:free
 2026-03-21 00:20:26: OK: meta-llama/llama-3.2-3b-instruct:free
 2026-03-21 00:20:26: OK deploy/helm/Chart.yaml
+2026-03-21 00:20:26: Push GitHub
+2026-03-21 00:20:29: --- deploy/helm/values.yaml ---
+2026-03-21 00:20:29: Gen: deploy/helm/values.yaml
+2026-03-21 00:20:29: Essai: google/gemini-2.0-flash-exp:free
+2026-03-21 00:20:29: Echec google/gemini-2.0-flash-exp:free: 404
+2026-03-21 00:20:30: Essai: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 00:20:30: Echec google/gemini-2.0-flash-lite-preview-02-05:free: 400
+2026-03-21 00:20:31: Essai: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 00:20:31: Echec mistralai/mistral-7b-instruct-v0.3: 404
+2026-03-21 00:20:32: Essai: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:20:33: Echec meta-llama/llama-3.2-3b-instruct:free: 429
+2026-03-21 00:20:34: Essai: deepseek/deepseek-chat:free
+2026-03-21 00:20:34: Echec deepseek/deepseek-chat:free: 404
+2026-03-21 00:20:35: Essai: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 00:20:35: Echec qwen/qwen-2.5-7b-instruct:free: 404
+2026-03-21 00:20:36: Essai: cohere/command-r-plus-08-2024:free
+2026-03-21 00:20:36: Echec cohere/command-r-plus-08-2024:free: 404
+2026-03-21 00:20:37: Essai: microsoft/phi-3-mini-128k:free
+2026-03-21 00:20:37: Echec microsoft/phi-3-mini-128k:free: 400
+2026-03-21 00:20:38: OK raw/deploy/helm/values.yaml.txt
+2026-03-21 00:20:38: --- deploy/helm/templates/deployment.yaml ---
+2026-03-21 00:20:38: Gen: deploy/helm/templates/deployment.yaml
+2026-03-21 00:20:38: Essai: google/gemini-2.0-flash-exp:free
+2026-03-21 00:20:38: Echec google/gemini-2.0-flash-exp:free: 404
+2026-03-21 00:20:39: Essai: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 00:20:39: Echec google/gemini-2.0-flash-lite-preview-02-05:free: 400
+2026-03-21 00:20:40: Essai: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 00:20:40: Echec mistralai/mistral-7b-instruct-v0.3: 404
+2026-03-21 00:20:41: Essai: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:20:41: Echec meta-llama/llama-3.2-3b-instruct:free: 429
+2026-03-21 00:20:42: Essai: deepseek/deepseek-chat:free
+2026-03-21 00:20:42: Echec deepseek/deepseek-chat:free: 404
+2026-03-21 00:20:43: Essai: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 00:20:43: Echec qwen/qwen-2.5-7b-instruct:free: 404
+2026-03-21 00:20:44: Essai: cohere/command-r-plus-08-2024:free
+2026-03-21 00:20:45: Echec cohere/command-r-plus-08-2024:free: 404
+2026-03-21 00:20:46: Essai: microsoft/phi-3-mini-128k:free
+2026-03-21 00:20:46: Echec microsoft/phi-3-mini-128k:free: 400
+2026-03-21 00:20:47: OK raw/deploy/helm/templates/deployment.yaml.txt
+2026-03-21 00:20:47: --- deploy/helm/templates/service.yaml ---
+2026-03-21 00:20:47: Gen: deploy/helm/templates/service.yaml
+2026-03-21 00:20:47: Essai: google/gemini-2.0-flash-exp:free
+2026-03-21 00:20:47: Echec google/gemini-2.0-flash-exp:free: 404
+2026-03-21 00:20:48: Essai: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 00:20:48: Echec google/gemini-2.0-flash-lite-preview-02-05:free: 400
+2026-03-21 00:20:49: Essai: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 00:20:49: Echec mistralai/mistral-7b-instruct-v0.3: 404
+2026-03-21 00:20:50: Essai: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:20:54: OK: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:20:54: OK deploy/helm/templates/service.yaml

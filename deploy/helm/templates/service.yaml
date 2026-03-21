@@ -1,12 +1,29 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: myapp-service
-spec:
-  selector:
-    app: myapp
-  ports:
-  - name: http
-    port: 80
-    targetPort: 80
-  type: ClusterIP
+from kubernetes import client, config
+
+def create_cluster_ip_service(namespace, name, selector, ports):
+    config.load_kube_config()
+    v1 = client.CoreV1Api()
+
+    service = client.V1Service(
+        api_version="v1",
+        kind="Service",
+        metadata=client.V1ObjectMeta(
+            name=name,
+            namespace=namespace
+        ),
+        spec=client.V1ServiceSpec(
+            selector=selector,
+            type="ClusterIP",
+            ports=ports
+        )
+    )
+
+    v1.create_namespaced_service(namespace, service)
+
+# Example usage:
+namespace = "default"
+name = "my-service"
+selector = {"app": "my-app"}
+ports = [{"name": "http", "port": 80, "target_port": 80}]
+
+create_cluster_ip_service(namespace, name, selector, ports)
