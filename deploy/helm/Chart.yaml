@@ -2,6 +2,7 @@ import logging
 import kubernetes
 from kubernetes import client, config
 from typing import Dict
+import json
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -17,7 +18,7 @@ def load_kube_config() -> None:
     try:
         config.load_kube_config()
     except kubernetes.config.ConfigException as e:
-        logger.error(f"Failed to load Kubernetes configuration: {e}")
+        logger.error(f"Erreur lors du chargement de la configuration Kubernetes : {e}")
         raise
 
 def validate_chart(chart: Dict) -> None:
@@ -30,9 +31,13 @@ def validate_chart(chart: Dict) -> None:
     Raises:
         ValueError: If the chart is invalid.
     """
+    # Check if chart is a dictionary
+    if not isinstance(chart, dict):
+        raise ValueError("La chart doit être un dictionnaire")
+
     required_keys = ["apiVersion", "kind", "metadata"]
     if not all(key in chart for key in required_keys):
-        raise ValueError("Invalid chart. Missing required keys.")
+        raise ValueError("La chart est invalide. Les clés requises manquent.")
 
 def create_helm_chart(chart: Dict) -> client.V1Package:
     """
@@ -52,7 +57,7 @@ def create_helm_chart(chart: Dict) -> client.V1Package:
         package = api.create_namespaced_package("default", chart)
         return package
     except kubernetes.client.ApiException as e:
-        logger.error(f"Failed to create Helm chart: {e}")
+        logger.error(f"Erreur lors de la création de la chart Helm : {e}")
         raise
 
 def main() -> None:
@@ -62,15 +67,16 @@ def main() -> None:
     # Load Kubernetes configuration
     load_kube_config()
 
-    # Define the Helm chart
-    chart = {
-        "apiVersion": "v1",
-        "kind": "Package",
-        "metadata": {
-            "name": "mlops-anomaly",
-            "version": "1.0.0"
-        }
-    }
+    # Load chart from file
+    try:
+        with open('chart.json', 'r') as f:
+            chart = json.load(f)
+    except FileNotFoundError:
+        logger.error("Le fichier chart.json n'existe pas")
+        return
+    except json.JSONDecodeError:
+        logger.error("Erreur lors du chargement du fichier chart.json")
+        return
 
     # Validate the chart
     validate_chart(chart)

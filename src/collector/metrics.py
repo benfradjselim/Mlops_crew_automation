@@ -12,7 +12,7 @@ cpu_usage = prometheus_client.Gauge('cpu_usage', 'CPU usage')
 memory_usage = prometheus_client.Gauge('memory_usage', 'Memory usage')
 latency = prometheus_client.Gauge('latency', 'Latency')
 
-def collect_metrics():
+def collect_metrics() -> None:
     """
     Collect CPU, memory, and latency metrics.
 
@@ -31,8 +31,10 @@ def collect_metrics():
         response = requests.get('http://example.com', timeout=5)
         response.raise_for_status()  # Raise an exception for HTTP errors
         latency.set((time.time() - start_time) * 1000)
-    except Exception as e:
+    except requests.RequestException as e:
         logging.error(f"Error collecting metrics: {e}")
+    except Exception as e:
+        logging.error(f"Unexpected error collecting metrics: {e}")
 
 def start_metrics_server(port: int = 8000) -> None:
     """
@@ -40,7 +42,14 @@ def start_metrics_server(port: int = 8000) -> None:
 
     Args:
         port (int): The port to listen on. Defaults to 8000.
+
+    Raises:
+        Exception: If an error occurs while starting the metrics server.
     """
+    if not isinstance(port, int) or port < 0 or port > 65535:
+        logging.error("Invalid port number. Port must be an integer between 0 and 65535.")
+        return
+
     try:
         prometheus_client.start_http_server(port)
     except Exception as e:
@@ -52,6 +61,7 @@ def main() -> None:
 
     Collects metrics every 1 second and logs any errors.
     """
+    logging.info("Starting metrics server...")
     start_metrics_server()
 
     while True:
