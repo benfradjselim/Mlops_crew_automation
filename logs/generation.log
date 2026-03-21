@@ -1002,3 +1002,469 @@
 2026-03-21 00:54:35: 🔄 Essai 2/3: meta-llama/llama-3.2-3b-instruct:free
 2026-03-21 00:54:41: ✅ OK: meta-llama/llama-3.2-3b-instruct:free
 2026-03-21 00:54:41: ✅ README.md
+2026-03-21 00:54:41: 📤 Push: Gen README.md
+2026-03-21 00:54:45: 
+--- .gitignore ---
+2026-03-21 00:54:45: 📝 Generation: .gitignore
+2026-03-21 00:54:45: 🔄 Essai 1/3: google/gemini-2.0-flash-exp:free
+2026-03-21 00:54:46: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 00:54:48: 🔄 Essai 1/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 00:54:48: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 00:54:50: 🔄 Essai 1/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 00:54:51: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 00:54:53: 🔄 Essai 1/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:54:53: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 00:55:25: 🔄 Essai 1/3: deepseek/deepseek-chat:free
+2026-03-21 00:55:25: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 00:55:27: 🔄 Essai 1/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 00:55:27: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 00:55:29: 🔄 Essai 1/3: cohere/command-r-plus-08-2024:free
+2026-03-21 00:55:29: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 00:55:31: 🔄 Essai 1/3: microsoft/phi-3-mini-128k:free
+2026-03-21 00:55:31: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 00:55:33: ⚠️ Fin du cycle, pause 30s avant retry 1/3
+2026-03-21 00:56:03: 🔄 Essai 2/3: google/gemini-2.0-flash-exp:free
+2026-03-21 00:56:03: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 00:56:05: 🔄 Essai 2/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 00:56:05: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 00:56:07: 🔄 Essai 2/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 00:56:07: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 00:56:09: 🔄 Essai 2/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:56:10: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 00:56:42: 🔄 Essai 2/3: deepseek/deepseek-chat:free
+2026-03-21 00:56:42: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 00:56:44: 🔄 Essai 2/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 00:56:44: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 00:56:46: 🔄 Essai 2/3: cohere/command-r-plus-08-2024:free
+2026-03-21 00:56:46: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 00:56:48: 🔄 Essai 2/3: microsoft/phi-3-mini-128k:free
+2026-03-21 00:56:48: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 00:56:50: ⚠️ Fin du cycle, pause 30s avant retry 2/3
+2026-03-21 00:57:20: 🔄 Essai 3/3: google/gemini-2.0-flash-exp:free
+2026-03-21 00:57:20: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 00:57:22: 🔄 Essai 3/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 00:57:22: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 00:57:24: 🔄 Essai 3/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 00:57:24: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 00:57:26: 🔄 Essai 3/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:57:26: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 00:57:58: 🔄 Essai 3/3: deepseek/deepseek-chat:free
+2026-03-21 00:57:58: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 00:58:00: 🔄 Essai 3/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 00:58:01: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 00:58:03: 🔄 Essai 3/3: cohere/command-r-plus-08-2024:free
+2026-03-21 00:58:03: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 00:58:05: 🔄 Essai 3/3: microsoft/phi-3-mini-128k:free
+2026-03-21 00:58:05: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 00:58:07: ⚠️ Fin du cycle, pause 30s avant retry 3/3
+2026-03-21 00:58:37: ❌ Echec generation .gitignore
+2026-03-21 00:58:37: ❌ Echec .gitignore, continue
+2026-03-21 00:58:37: 
+======================================================================
+2026-03-21 00:58:37: PHASE 2: OPTIMISATION CONTINUE - LOOP INFINI
+2026-03-21 00:58:37: ======================================================================
+2026-03-21 00:58:37: 
+======================================================================
+2026-03-21 00:58:37: ITERATION 1 - 2026-03-21 00:58:37
+2026-03-21 00:58:37: ======================================================================
+2026-03-21 00:58:37: 🔄 Essai 1/3: google/gemini-2.0-flash-exp:free
+2026-03-21 00:58:37: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 00:58:39: 🔄 Essai 1/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 00:58:39: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 00:58:41: 🔄 Essai 1/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 00:58:41: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 00:58:43: 🔄 Essai 1/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:58:53: ✅ OK: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:58:53: ✅ src/collector/metrics.py
+2026-03-21 00:58:53: 🔄 Optimized: src/collector/metrics.py (+880 chars)
+2026-03-21 00:58:55: 🔄 Essai 1/3: google/gemini-2.0-flash-exp:free
+2026-03-21 00:58:55: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 00:58:57: 🔄 Essai 1/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 00:58:57: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 00:58:59: 🔄 Essai 1/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 00:58:59: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 00:59:01: 🔄 Essai 1/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:59:02: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 00:59:34: 🔄 Essai 1/3: deepseek/deepseek-chat:free
+2026-03-21 00:59:34: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 00:59:36: 🔄 Essai 1/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 00:59:37: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 00:59:39: 🔄 Essai 1/3: cohere/command-r-plus-08-2024:free
+2026-03-21 00:59:39: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 00:59:41: 🔄 Essai 1/3: microsoft/phi-3-mini-128k:free
+2026-03-21 00:59:41: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 00:59:43: ⚠️ Fin du cycle, pause 30s avant retry 1/3
+2026-03-21 01:00:13: 🔄 Essai 2/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:00:13: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:00:15: 🔄 Essai 2/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:00:15: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:00:17: 🔄 Essai 2/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:00:17: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:00:19: 🔄 Essai 2/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:00:30: ✅ OK: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:00:30: ✅ src/collector/logs.py
+2026-03-21 01:00:30: 🔄 Optimized: src/collector/logs.py (+1529 chars)
+2026-03-21 01:00:32: 🔄 Essai 1/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:00:32: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:00:34: 🔄 Essai 1/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:00:35: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:00:37: 🔄 Essai 1/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:00:37: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:00:39: 🔄 Essai 1/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:00:39: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:01:11: 🔄 Essai 1/3: deepseek/deepseek-chat:free
+2026-03-21 01:01:11: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:01:13: 🔄 Essai 1/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:01:13: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:01:15: 🔄 Essai 1/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:01:15: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:01:17: 🔄 Essai 1/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:01:17: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:01:19: ⚠️ Fin du cycle, pause 30s avant retry 1/3
+2026-03-21 01:01:49: 🔄 Essai 2/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:01:49: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:01:51: 🔄 Essai 2/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:01:51: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:01:53: 🔄 Essai 2/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:01:53: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:01:55: 🔄 Essai 2/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:01:56: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:02:28: 🔄 Essai 2/3: deepseek/deepseek-chat:free
+2026-03-21 01:02:28: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:02:30: 🔄 Essai 2/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:02:30: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:02:32: 🔄 Essai 2/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:02:32: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:02:34: 🔄 Essai 2/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:02:34: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:02:36: ⚠️ Fin du cycle, pause 30s avant retry 2/3
+2026-03-21 01:03:06: 🔄 Essai 3/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:03:07: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:03:09: 🔄 Essai 3/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:03:09: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:03:11: 🔄 Essai 3/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:03:11: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:03:13: 🔄 Essai 3/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:03:13: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:03:45: 🔄 Essai 3/3: deepseek/deepseek-chat:free
+2026-03-21 01:03:47: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:03:49: 🔄 Essai 3/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:03:49: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:03:51: 🔄 Essai 3/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:03:51: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:03:53: 🔄 Essai 3/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:03:53: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:03:55: ⚠️ Fin du cycle, pause 30s avant retry 3/3
+2026-03-21 01:04:25: 🔄 Essai 1/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:04:25: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:04:27: 🔄 Essai 1/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:04:27: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:04:29: 🔄 Essai 1/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:04:29: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:04:31: 🔄 Essai 1/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:04:32: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:05:04: 🔄 Essai 1/3: deepseek/deepseek-chat:free
+2026-03-21 01:05:04: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:05:06: 🔄 Essai 1/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:05:06: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:05:08: 🔄 Essai 1/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:05:08: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:05:10: 🔄 Essai 1/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:05:10: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:05:12: ⚠️ Fin du cycle, pause 30s avant retry 1/3
+2026-03-21 01:05:42: 🔄 Essai 2/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:05:42: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:05:44: 🔄 Essai 2/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:05:44: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:05:46: 🔄 Essai 2/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:05:46: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:05:48: 🔄 Essai 2/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:05:48: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:06:20: 🔄 Essai 2/3: deepseek/deepseek-chat:free
+2026-03-21 01:06:20: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:06:22: 🔄 Essai 2/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:06:23: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:06:25: 🔄 Essai 2/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:06:25: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:06:27: 🔄 Essai 2/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:06:27: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:06:29: ⚠️ Fin du cycle, pause 30s avant retry 2/3
+2026-03-21 01:06:59: 🔄 Essai 3/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:06:59: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:07:01: 🔄 Essai 3/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:07:01: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:07:03: 🔄 Essai 3/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:07:03: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:07:05: 🔄 Essai 3/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:07:05: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:07:37: 🔄 Essai 3/3: deepseek/deepseek-chat:free
+2026-03-21 01:07:37: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:07:39: 🔄 Essai 3/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:07:39: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:07:41: 🔄 Essai 3/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:07:41: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:07:43: 🔄 Essai 3/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:07:43: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:07:45: ⚠️ Fin du cycle, pause 30s avant retry 3/3
+2026-03-21 01:08:15: 🔄 Essai 1/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:08:15: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:08:17: 🔄 Essai 1/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:08:18: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:08:20: 🔄 Essai 1/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:08:20: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:08:22: 🔄 Essai 1/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:08:22: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:08:54: 🔄 Essai 1/3: deepseek/deepseek-chat:free
+2026-03-21 01:08:54: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:08:56: 🔄 Essai 1/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:08:56: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:08:58: 🔄 Essai 1/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:08:58: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:09:00: 🔄 Essai 1/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:09:00: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:09:02: ⚠️ Fin du cycle, pause 30s avant retry 1/3
+2026-03-21 01:09:32: 🔄 Essai 2/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:09:32: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:09:34: 🔄 Essai 2/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:09:34: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:09:36: 🔄 Essai 2/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:09:36: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:09:38: 🔄 Essai 2/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:09:54: ✅ OK: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:09:54: ✅ dashboard/app.py
+2026-03-21 01:09:54: 🔄 Optimized: dashboard/app.py (+2197 chars)
+2026-03-21 01:09:56: 🔄 Essai 1/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:09:56: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:09:58: 🔄 Essai 1/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:09:58: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:10:00: 🔄 Essai 1/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:10:00: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:10:02: 🔄 Essai 1/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:10:11: ✅ OK: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:10:11: ✅ Dockerfile
+2026-03-21 01:10:11: 🔄 Optimized: Dockerfile (+1682 chars)
+2026-03-21 01:10:13: 🔄 Essai 1/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:10:14: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:10:16: 🔄 Essai 1/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:10:16: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:10:18: 🔄 Essai 1/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:10:18: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:10:20: 🔄 Essai 1/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:10:20: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:10:52: 🔄 Essai 1/3: deepseek/deepseek-chat:free
+2026-03-21 01:10:52: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:10:54: 🔄 Essai 1/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:10:54: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:10:56: 🔄 Essai 1/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:10:56: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:10:58: 🔄 Essai 1/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:10:58: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:11:00: ⚠️ Fin du cycle, pause 30s avant retry 1/3
+2026-03-21 01:11:30: 🔄 Essai 2/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:11:31: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:11:33: 🔄 Essai 2/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:11:33: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:11:35: 🔄 Essai 2/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:11:35: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:11:37: 🔄 Essai 2/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:11:54: ✅ OK: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:11:54: ✅ requirements.txt
+2026-03-21 01:11:54: 🔄 Optimized: requirements.txt (+3912 chars)
+2026-03-21 01:11:56: 🔄 Essai 1/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:11:56: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:11:58: 🔄 Essai 1/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:11:58: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:12:00: 🔄 Essai 1/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:12:00: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:12:02: 🔄 Essai 1/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:12:03: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:12:35: 🔄 Essai 1/3: deepseek/deepseek-chat:free
+2026-03-21 01:12:35: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:12:37: 🔄 Essai 1/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:12:37: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:12:39: 🔄 Essai 1/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:12:39: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:12:41: 🔄 Essai 1/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:12:41: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:12:43: ⚠️ Fin du cycle, pause 30s avant retry 1/3
+2026-03-21 01:13:13: 🔄 Essai 2/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:13:13: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:13:15: 🔄 Essai 2/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:13:15: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:13:17: 🔄 Essai 2/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:13:17: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:13:19: 🔄 Essai 2/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:13:20: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:13:52: 🔄 Essai 2/3: deepseek/deepseek-chat:free
+2026-03-21 01:13:52: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:13:54: 🔄 Essai 2/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:13:54: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:13:56: 🔄 Essai 2/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:13:56: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:13:58: 🔄 Essai 2/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:13:58: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:14:00: ⚠️ Fin du cycle, pause 30s avant retry 2/3
+2026-03-21 01:14:30: 🔄 Essai 3/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:14:30: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:14:32: 🔄 Essai 3/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:14:32: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:14:34: 🔄 Essai 3/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:14:34: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:14:36: 🔄 Essai 3/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:14:46: ✅ OK: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:14:46: ✅ deploy/helm/Chart.yaml
+2026-03-21 01:14:46: 🔄 Optimized: deploy/helm/Chart.yaml (+1575 chars)
+2026-03-21 01:14:48: 🔄 Essai 1/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:14:48: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:14:50: 🔄 Essai 1/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:14:50: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:14:52: 🔄 Essai 1/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:14:52: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:14:54: 🔄 Essai 1/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:14:54: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:15:26: 🔄 Essai 1/3: deepseek/deepseek-chat:free
+2026-03-21 01:15:26: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:15:28: 🔄 Essai 1/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:15:28: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:15:30: 🔄 Essai 1/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:15:30: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:15:32: 🔄 Essai 1/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:15:32: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:15:34: ⚠️ Fin du cycle, pause 30s avant retry 1/3
+2026-03-21 01:16:04: 🔄 Essai 2/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:16:05: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:16:07: 🔄 Essai 2/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:16:07: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:16:09: 🔄 Essai 2/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:16:09: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:16:11: 🔄 Essai 2/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:16:39: ✅ OK: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:16:39: ✅ deploy/helm/templates/deployment.yaml
+2026-03-21 01:16:39: 🔄 Optimized: deploy/helm/templates/deployment.yaml (+5031 chars)
+2026-03-21 01:16:41: 🔄 Essai 1/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:16:41: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:16:43: 🔄 Essai 1/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:16:43: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:16:45: 🔄 Essai 1/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:16:45: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:16:47: 🔄 Essai 1/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:16:58: ✅ OK: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:16:58: ✅ deploy/helm/templates/service.yaml
+2026-03-21 01:16:58: 🔄 Optimized: deploy/helm/templates/service.yaml (+2283 chars)
+2026-03-21 01:17:00: 🔄 Essai 1/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:17:00: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:17:02: 🔄 Essai 1/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:17:02: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:17:04: 🔄 Essai 1/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:17:04: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:17:06: 🔄 Essai 1/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:17:06: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:17:38: 🔄 Essai 1/3: deepseek/deepseek-chat:free
+2026-03-21 01:17:38: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:17:40: 🔄 Essai 1/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:17:41: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:17:43: 🔄 Essai 1/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:17:43: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:17:45: 🔄 Essai 1/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:17:45: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:17:47: ⚠️ Fin du cycle, pause 30s avant retry 1/3
+2026-03-21 01:18:17: 🔄 Essai 2/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:18:17: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:18:19: 🔄 Essai 2/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:18:19: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:18:21: 🔄 Essai 2/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:18:21: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:18:23: 🔄 Essai 2/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:18:23: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:18:55: 🔄 Essai 2/3: deepseek/deepseek-chat:free
+2026-03-21 01:18:55: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:18:57: 🔄 Essai 2/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:18:57: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:18:59: 🔄 Essai 2/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:19:00: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:19:02: 🔄 Essai 2/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:19:02: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:19:04: ⚠️ Fin du cycle, pause 30s avant retry 2/3
+2026-03-21 01:19:34: 🔄 Essai 3/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:19:34: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:19:36: 🔄 Essai 3/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:19:36: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:19:38: 🔄 Essai 3/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:19:38: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:19:40: 🔄 Essai 3/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:20:00: ✅ OK: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:20:00: ⚠️ Erreur meta-llama/llama-3.2-3b-instruct:free: 'choices'
+2026-03-21 01:20:02: 🔄 Essai 3/3: deepseek/deepseek-chat:free
+2026-03-21 01:20:02: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:20:04: 🔄 Essai 3/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:20:04: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:20:06: 🔄 Essai 3/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:20:06: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:20:08: 🔄 Essai 3/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:20:08: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:20:10: ⚠️ Fin du cycle, pause 30s avant retry 3/3
+2026-03-21 01:20:40: 🔄 Essai 1/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:20:40: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:20:42: 🔄 Essai 1/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:20:42: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:20:44: 🔄 Essai 1/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:20:44: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:20:46: 🔄 Essai 1/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:20:47: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:21:19: 🔄 Essai 1/3: deepseek/deepseek-chat:free
+2026-03-21 01:21:19: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:21:21: 🔄 Essai 1/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:21:21: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:21:23: 🔄 Essai 1/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:21:23: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:21:25: 🔄 Essai 1/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:21:25: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:21:27: ⚠️ Fin du cycle, pause 30s avant retry 1/3
+2026-03-21 01:21:57: 🔄 Essai 2/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:21:57: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:21:59: 🔄 Essai 2/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:21:59: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:22:01: 🔄 Essai 2/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:22:01: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:22:03: 🔄 Essai 2/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:22:03: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:22:35: 🔄 Essai 2/3: deepseek/deepseek-chat:free
+2026-03-21 01:22:35: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:22:37: 🔄 Essai 2/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:22:38: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:22:40: 🔄 Essai 2/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:22:40: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:22:42: 🔄 Essai 2/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:22:42: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:22:44: ⚠️ Fin du cycle, pause 30s avant retry 2/3
+2026-03-21 01:23:14: 🔄 Essai 3/3: google/gemini-2.0-flash-exp:free
+2026-03-21 01:23:14: ⚠️ google/gemini-2.0-flash-exp:free echec: 404
+2026-03-21 01:23:16: 🔄 Essai 3/3: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 01:23:16: ⚠️ google/gemini-2.0-flash-lite-preview-02-05:free echec: 400
+2026-03-21 01:23:18: 🔄 Essai 3/3: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 01:23:18: ⚠️ mistralai/mistral-7b-instruct-v0.3 echec: 404
+2026-03-21 01:23:20: 🔄 Essai 3/3: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 01:23:20: ⚠️ Rate limit meta-llama/llama-3.2-3b-instruct:free, attente 30s
+2026-03-21 01:23:52: 🔄 Essai 3/3: deepseek/deepseek-chat:free
+2026-03-21 01:23:52: ⚠️ deepseek/deepseek-chat:free echec: 404
+2026-03-21 01:23:54: 🔄 Essai 3/3: qwen/qwen-2.5-7b-instruct:free
+2026-03-21 01:23:54: ⚠️ qwen/qwen-2.5-7b-instruct:free echec: 404
+2026-03-21 01:23:56: 🔄 Essai 3/3: cohere/command-r-plus-08-2024:free
+2026-03-21 01:23:56: ⚠️ cohere/command-r-plus-08-2024:free echec: 404
+2026-03-21 01:23:58: 🔄 Essai 3/3: microsoft/phi-3-mini-128k:free
+2026-03-21 01:23:58: ⚠️ microsoft/phi-3-mini-128k:free echec: 400
+2026-03-21 01:24:00: ⚠️ Fin du cycle, pause 30s avant retry 3/3
+2026-03-21 01:24:30: 📈 src/collector/metrics.py score: 6/7 (new best)
+2026-03-21 01:24:30: 📈 src/collector/logs.py score: 7/7 (new best)
+2026-03-21 01:24:30: 📈 src/model/online_detector.py score: 5/7 (new best)
+2026-03-21 01:24:30: 📈 src/api/main.py score: 5/7 (new best)
+2026-03-21 01:24:30: 📈 dashboard/app.py score: 7/7 (new best)
+2026-03-21 01:24:30: 📈 Dockerfile score: 6/7 (new best)
+2026-03-21 01:24:30: 📈 requirements.txt score: 7/7 (new best)
+2026-03-21 01:24:30: 📈 deploy/helm/Chart.yaml score: 7/7 (new best)
+2026-03-21 01:24:30: 📈 deploy/helm/templates/deployment.yaml score: 7/7 (new best)
+2026-03-21 01:24:30: 📈 deploy/helm/templates/service.yaml score: 7/7 (new best)
+2026-03-21 01:24:30: 📈 scripts/install.sh score: 1/7 (new best)
+2026-03-21 01:24:30: 📈 README.md score: 1/7 (new best)
+2026-03-21 01:24:30: 📊 QUALITE TOTALE: 66/98 (67.3%)
+2026-03-21 01:24:30: 📊 FICHIERS OPTIMISES: 8/14

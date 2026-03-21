@@ -1,19 +1,83 @@
+import logging
+import kubernetes
 from kubernetes import client, config
+from typing import Dict
 
-# Load Kubernetes configuration
-config.load_kube_config()
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Define the Helm chart
-chart = {
-    "apiVersion": "v1",
-    "kind": "Package",
-    "metadata": {
-        "name": "mlops-anomaly",
-        "version": "1.0.0"
+def load_kube_config() -> None:
+    """
+    Load Kubernetes configuration.
+
+    Raises:
+        kubernetes.config.ConfigException: If the configuration cannot be loaded.
+    """
+    try:
+        config.load_kube_config()
+    except kubernetes.config.ConfigException as e:
+        logger.error(f"Failed to load Kubernetes configuration: {e}")
+        raise
+
+def validate_chart(chart: Dict) -> None:
+    """
+    Validate the Helm chart.
+
+    Args:
+        chart (Dict): The Helm chart.
+
+    Raises:
+        ValueError: If the chart is invalid.
+    """
+    required_keys = ["apiVersion", "kind", "metadata"]
+    if not all(key in chart for key in required_keys):
+        raise ValueError("Invalid chart. Missing required keys.")
+
+def create_helm_chart(chart: Dict) -> client.V1Package:
+    """
+    Create the Helm chart.
+
+    Args:
+        chart (Dict): The Helm chart.
+
+    Returns:
+        client.V1Package: The created Helm chart.
+
+    Raises:
+        kubernetes.client.ApiException: If the chart cannot be created.
+    """
+    try:
+        api = client.AppsV1Api()
+        package = api.create_namespaced_package("default", chart)
+        return package
+    except kubernetes.client.ApiException as e:
+        logger.error(f"Failed to create Helm chart: {e}")
+        raise
+
+def main() -> None:
+    """
+    Main function.
+    """
+    # Load Kubernetes configuration
+    load_kube_config()
+
+    # Define the Helm chart
+    chart = {
+        "apiVersion": "v1",
+        "kind": "Package",
+        "metadata": {
+            "name": "mlops-anomaly",
+            "version": "1.0.0"
+        }
     }
-}
 
-# Create the Helm chart
-api = client.AppsV1Api()
-package = api.create_namespaced_package("default", chart)
-print(package)
+    # Validate the chart
+    validate_chart(chart)
+
+    # Create the Helm chart
+    package = create_helm_chart(chart)
+    print(package)
+
+if __name__ == "__main__":
+    main()

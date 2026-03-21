@@ -1,8 +1,149 @@
-# Requirements.txt
+import logging
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-numpy
-pandas
-matplotlib
-scikit-learn
-scipy
-seaborn
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def load_data(file_path: str) -> pd.DataFrame:
+    """
+    Load data from a CSV file.
+
+    Args:
+    file_path (str): Path to the CSV file.
+
+    Returns:
+    pd.DataFrame: Loaded data.
+
+    Raises:
+    FileNotFoundError: If the file does not exist.
+    """
+    try:
+        data = pd.read_csv(file_path)
+        logging.info(f"Data loaded from {file_path}")
+        return data
+    except FileNotFoundError:
+        logging.error(f"File not found: {file_path}")
+        raise
+    except pd.errors.EmptyDataError:
+        logging.error(f"File is empty: {file_path}")
+        raise
+    except pd.errors.ParserError:
+        logging.error(f"Error parsing file: {file_path}")
+        raise
+
+def preprocess_data(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Preprocess the data by selecting relevant columns and handling missing values.
+
+    Args:
+    data (pd.DataFrame): Loaded data.
+
+    Returns:
+    pd.DataFrame: Preprocessed data.
+
+    Raises:
+    ValueError: If the data is empty.
+    """
+    if data.empty:
+        logging.error("Data is empty")
+        raise ValueError("Data is empty")
+
+    # Select relevant columns
+    data = data[['column1', 'column2', 'column3']]  # Replace with actual column names
+
+    # Handle missing values
+    data = data.dropna()  # Replace with actual missing value handling strategy
+
+    logging.info("Data preprocessed")
+    return data
+
+def split_data(data: pd.DataFrame) -> tuple:
+    """
+    Split the data into training and testing sets.
+
+    Args:
+    data (pd.DataFrame): Preprocessed data.
+
+    Returns:
+    tuple: Training and testing sets.
+
+    Raises:
+    ValueError: If the data is empty.
+    """
+    if data.empty:
+        logging.error("Data is empty")
+        raise ValueError("Data is empty")
+
+    X = data.drop('target', axis=1)  # Replace with actual feature column
+    y = data['target']  # Replace with actual target column
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    logging.info("Data split")
+    return X_train, X_test, y_train, y_test
+
+def train_model(X_train: pd.DataFrame, y_train: pd.Series) -> LinearRegression:
+    """
+    Train a linear regression model.
+
+    Args:
+    X_train (pd.DataFrame): Training features.
+    y_train (pd.Series): Training target.
+
+    Returns:
+    LinearRegression: Trained model.
+
+    Raises:
+    ValueError: If the data is empty.
+    """
+    if X_train.empty or y_train.empty:
+        logging.error("Data is empty")
+        raise ValueError("Data is empty")
+
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+
+    logging.info("Model trained")
+    return model
+
+def evaluate_model(model: LinearRegression, X_test: pd.DataFrame, y_test: pd.Series) -> float:
+    """
+    Evaluate the model using mean squared error.
+
+    Args:
+    model (LinearRegression): Trained model.
+    X_test (pd.DataFrame): Testing features.
+    y_test (pd.Series): Testing target.
+
+    Returns:
+    float: Mean squared error.
+
+    Raises:
+    ValueError: If the data is empty.
+    """
+    if X_test.empty or y_test.empty:
+        logging.error("Data is empty")
+        raise ValueError("Data is empty")
+
+    y_pred = model.predict(X_test)
+    mse = mean_squared_error(y_test, y_pred)
+
+    logging.info(f"Model evaluated with MSE: {mse}")
+    return mse
+
+def main():
+    file_path = 'data.csv'  # Replace with actual file path
+    data = load_data(file_path)
+    data = preprocess_data(data)
+    X_train, X_test, y_train, y_test = split_data(data)
+    model = train_model(X_train, y_train)
+    mse = evaluate_model(model, X_test, y_test)
+
+if __name__ == "__main__":
+    main()
