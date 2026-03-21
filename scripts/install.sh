@@ -1,1 +1,20 @@
-curl -X POST http://localhost:8000/predict -H "Content-Type: application/json" -d "[[0.1, 0.2, 0.3, 0.4, 0.5]]"
+import subprocess
+
+def install():
+    # Check tools
+    print("Checking tools...")
+    subprocess.run(["which", "docker"], check=True)
+    subprocess.run(["which", "helm"], check=True)
+
+    # Build image
+    print("Building image...")
+    subprocess.run(["docker", "build", "-t", "my-image", "."], check=True)
+
+    # Install Helm
+    print("Installing Helm...")
+    subprocess.run(["curl", "-fsSL", "https://raw.githubusercontent.com/helm/helm/master/install.sh"], check=True)
+    subprocess.run(["chmod", "+x", "helm"], check=True)
+    subprocess.run(["./helm", "init"], check=True)
+
+if __name__ == "__main__":
+    install()

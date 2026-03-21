@@ -501,3 +501,15 @@
 2026-03-21 00:20:50: Essai: meta-llama/llama-3.2-3b-instruct:free
 2026-03-21 00:20:54: OK: meta-llama/llama-3.2-3b-instruct:free
 2026-03-21 00:20:54: OK deploy/helm/templates/service.yaml
+2026-03-21 00:20:55: Push GitHub
+2026-03-21 00:20:58: --- scripts/install.sh ---
+2026-03-21 00:20:58: Gen: scripts/install.sh
+2026-03-21 00:20:58: Essai: google/gemini-2.0-flash-exp:free
+2026-03-21 00:20:58: Echec google/gemini-2.0-flash-exp:free: 404
+2026-03-21 00:20:59: Essai: google/gemini-2.0-flash-lite-preview-02-05:free
+2026-03-21 00:20:59: Echec google/gemini-2.0-flash-lite-preview-02-05:free: 400
+2026-03-21 00:21:00: Essai: mistralai/mistral-7b-instruct-v0.3
+2026-03-21 00:21:00: Echec mistralai/mistral-7b-instruct-v0.3: 404
+2026-03-21 00:21:01: Essai: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:21:05: OK: meta-llama/llama-3.2-3b-instruct:free
+2026-03-21 00:21:05: OK scripts/install.sh
