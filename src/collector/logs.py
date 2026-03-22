@@ -56,6 +56,8 @@ def collect_logs(namespace: str, pod_name: str, container_name: str) -> str:
         return response
     except client.ApiException as e:
         logger.error(f"Error collecting logs: {e}")
+        logger.error(f"Error code: {e.status}")
+        logger.error(f"Error reason: {e.reason}")
         raise
     except Exception as e:
         logger.error(f"An error occurred: {e}")
@@ -69,7 +71,7 @@ def collect_all_logs(namespace: str) -> Dict[str, str]:
         namespace (str): The namespace of the pods.
 
     Returns:
-        Dict[str, str]: A dictionary of pod names and their logs.
+        Dict[str, str]: A dictionary with pod names as keys and logs as values.
 
     Raises:
         ValueError: If namespace is None or empty.
@@ -79,16 +81,14 @@ def collect_all_logs(namespace: str) -> Dict[str, str]:
         raise ValueError("Namespace must not be empty")
 
     try:
-        # Get the list of pods
+        # Get the list of pods in the namespace
         v1 = client.CoreV1Api()
         pods = v1.list_namespaced_pod(namespace=namespace)
 
         # Collect logs from each pod
         logs = {}
         for pod in pods.items:
-            pod_name = pod.metadata.name
-            container_name = pod.spec.containers[0].name
-            logs[pod_name] = collect_logs(namespace, pod_name, container_name)
+            logs[pod.metadata.name] = collect_logs(namespace, pod.metadata.name, pod.spec.containers[0].name)
 
         return logs
     except client.ApiException as e:
