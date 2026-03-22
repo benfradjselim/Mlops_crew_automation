@@ -72,43 +72,39 @@ def load_alert_data(file_path: str) -> pd.DataFrame:
         logger.error(f"Le fichier '{file_path}' est vide.")
         raise e
 
-def send_alert(message: str) -> None:
+def get_data(file_path: str) -> pd.DataFrame:
     """
-    Envoie une alerte via l'API.
+    Charge les données à partir du fichier CSV.
 
     Args:
-        message (str): Le message de l'alerte.
+        file_path (str): Chemin du fichier CSV.
+
+    Returns:
+        pd.DataFrame: Les données chargées.
+
+    Raises:
+        FileNotFoundError: Si le fichier n'existe pas.
+        pd.errors.EmptyDataError: Si le fichier est vide.
     """
     try:
-        requests.post('https://api.example.com/alert', json={'message': message})
-        logger.info("L'alerte a été envoyée avec succès.")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Erreur lors de l'envoi de l'alerte : {e}")
+        return pd.read_csv(file_path)
+    except Exception as e:
+        logger.error(f"Une erreur est survenue lors du chargement du fichier '{file_path}': {e}")
+        raise e
 
 def main() -> None:
     """
-    Fonction principale du script.
+    Fonction principale du dashboard.
     """
     st.title("Dashboard")
 
     # Chargement des données
-    data = load_data('data.csv')
-    stock_data = load_stock_data('AAPL')
-    alert_data = load_alert_data('alert.csv')
+    file_path = "data.csv"
+    data = get_data(file_path)
 
-    # Affichage des données
-    st.subheader("Données")
-    st.write(data)
-
-    st.subheader("Données de la bourse")
-    st.write(stock_data)
-
-    st.subheader("Données d'alerte")
-    st.write(alert_data)
-
-    # Envoi d'une alerte
-    message = "Alerte envoyée"
-    send_alert(message)
+    # Création des graphiques
+    fig = px.line(data, x="date", y="value")
+    st.plotly_chart(fig, use_container_width=True)
 
 if __name__ == "__main__":
     main()
