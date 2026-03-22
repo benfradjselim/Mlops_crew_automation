@@ -1,10 +1,17 @@
 import logging
+from typing import Dict
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def create_service(service_name: str, selector_app: str, port: int, target_port: int, service_type: str) -> dict:
+def create_service(
+    service_name: str,
+    selector_app: str,
+    port: int,
+    target_port: int,
+    service_type: str
+) -> Dict:
     """
     Creates a Kubernetes Service object.
 
@@ -16,13 +23,12 @@ def create_service(service_name: str, selector_app: str, port: int, target_port:
     - service_type (str): The type of the service (e.g., ClusterIP, NodePort).
 
     Returns:
-    - dict: A dictionary representing the Kubernetes Service object.
+    - Dict: A dictionary representing the Kubernetes Service object.
 
     Raises:
     - ValueError: If any of the input parameters are invalid.
     - TypeError: If any of the input parameters are of the wrong type.
     """
-
     try:
         # Validate input parameters
         if not isinstance(service_name, str) or not service_name:
@@ -51,25 +57,20 @@ def create_service(service_name: str, selector_app: str, port: int, target_port:
                     {
                         "name": "http",
                         "port": port,
-                        "targetPort": target_port,
-                        "protocol": "TCP"
+                        "targetPort": target_port
                     }
                 ],
                 "type": service_type
             }
         }
-
-        # Log the created Service object
-        logger.info("Created Service object: %s", service)
-
         return service
 
     except ValueError as e:
-        logger.error("Invalid input parameter: %s", e)
+        logger.error(f"Invalid input parameter: {e}")
         raise
     except TypeError as e:
-        logger.error("Invalid input type: %s", e)
+        logger.error(f"Invalid input parameter type: {e}")
         raise
     except Exception as e:
-        logger.error("An error occurred: %s", e)
+        logger.error(f"An error occurred: {e}")
         raise
