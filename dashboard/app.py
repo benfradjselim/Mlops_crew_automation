@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import logging
+from typing import Optional
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +31,7 @@ def load_data(file_path: str) -> pd.DataFrame:
         logger.error(f"Le fichier '{file_path}' est vide.")
         raise e
 
-def load_stock_data(ticker: str) -> pd.DataFrame:
+def load_stock_data(ticker: str) -> Optional[pd.DataFrame]:
     """
     Charge les données de la bourse pour le ticker spécifié.
 
@@ -47,7 +48,7 @@ def load_stock_data(ticker: str) -> pd.DataFrame:
         return yf.download(tickers=ticker, period='1d')
     except yf.TickerDataUnavailable as e:
         logger.error(f"Les données pour le ticker '{ticker}' ne sont pas disponibles.")
-        raise e
+        return None
 
 def load_alert_data(file_path: str) -> pd.DataFrame:
     """
@@ -72,35 +73,17 @@ def load_alert_data(file_path: str) -> pd.DataFrame:
         logger.error(f"Le fichier '{file_path}' est vide.")
         raise e
 
-def get_data(file_path: str) -> pd.DataFrame:
-    """
-    Charge les données à partir du fichier CSV.
-
-    Args:
-        file_path (str): Chemin du fichier CSV.
-
-    Returns:
-        pd.DataFrame: Les données chargées.
-
-    Raises:
-        FileNotFoundError: Si le fichier n'existe pas.
-        pd.errors.EmptyDataError: Si le fichier est vide.
-    """
-    try:
-        return pd.read_csv(file_path)
-    except Exception as e:
-        logger.error(f"Une erreur est survenue lors du chargement du fichier '{file_path}': {e}")
-        raise e
-
-def main() -> None:
-    """
-    Fonction principale du dashboard.
-    """
+def main():
     st.title("Dashboard")
 
     # Chargement des données
     file_path = "data.csv"
-    data = get_data(file_path)
+    try:
+        data = load_data(file_path)
+    except Exception as e:
+        logger.error(f"Erreur lors du chargement des données : {e}")
+        st.error("Erreur lors du chargement des données")
+        return
 
     # Création des graphiques
     fig = px.line(data, x="date", y="value")
