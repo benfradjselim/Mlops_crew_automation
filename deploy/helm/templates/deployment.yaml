@@ -26,7 +26,7 @@ def load_yaml_config(file_path: str) -> dict:
     except yaml.YAMLError as e:
         logger.error(f"Error loading YAML configuration: {e}")
         raise
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         logger.error(f"File not found: {file_path}")
         raise
 
@@ -60,9 +60,6 @@ def create_deployment(config: dict) -> str:
         ValueError: If configuration is invalid.
     """
     try:
-        # Load configuration
-        config = load_yaml_config(config)
-
         # Validate configuration
         validate_config(config)
 
@@ -84,10 +81,16 @@ spec:
     spec:
       containers:
       - name: {{ .Values.appName }}
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
-        ports:
-        - containerPort: {{ .Values.containerPort }}
+        image: {{ .Values.image }}
+        resources:
+          {{ .Values.resources }}
+        volumeMounts:
+        - name: {{ .Values.persistence }}
+          mountPath: /{{ .Values.persistence }}
+      volumes:
+      - name: {{ .Values.persistence }}
+        persistentVolumeClaim:
+          claimName: {{ .Values.persistence }}
 """
         return deployment_yaml
     except Exception as e:
