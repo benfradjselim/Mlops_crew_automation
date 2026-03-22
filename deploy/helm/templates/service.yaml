@@ -63,6 +63,8 @@ def create_service(
                 "type": service_type
             }
         }
+
+        logger.info(f"Service created: {service_name}")
         return service
 
     except ValueError as e:
