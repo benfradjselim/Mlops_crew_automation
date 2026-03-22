@@ -79,16 +79,66 @@ async def make_prediction(data: dict):
     data (dict): The data to make a prediction on.
 
     Returns:
-    dict: The prediction.
+    dict: The predicted value.
 
     Raises:
     HTTPException: If the data is invalid or the model cannot make a prediction.
     """
     try:
+        # Input validation
+        if not data:
+            raise HTTPException(status_code=400, detail="No data provided")
+
         # Make a prediction using the loaded model
         prediction = model.predict(data)
 
+        logger.info("Prediction made successfully")
         return {"prediction": prediction}
     except Exception as e:
         logger.error(f"Failed to make prediction: {e}")
         raise HTTPException(status_code=500, detail="Failed to make prediction")
+
+# Define the endpoint to get the model's health
+@app.get("/health")
+async def get_health():
+    """
+    Get the model's health status.
+
+    Returns:
+    dict: The model's health status.
+
+    Raises:
+    HTTPException: If the model is not healthy.
+    """
+    try:
+        # Check the model's health
+        if not model:
+            raise HTTPException(status_code=500, detail="Model is not healthy")
+
+        logger.info("Model is healthy")
+        return {"health": "healthy"}
+    except Exception as e:
+        logger.error(f"Failed to get model's health: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get model's health")
+
+# Define the endpoint to get the model's metrics
+@app.get("/metrics")
+async def get_metrics():
+    """
+    Get the model's metrics.
+
+    Returns:
+    dict: The model's metrics.
+
+    Raises:
+    HTTPException: If the model's metrics cannot be retrieved.
+    """
+    try:
+        # Get the model's metrics
+        metrics = model.get_params()
+
+        logger.info("Model's metrics retrieved successfully")
+        return {"metrics": metrics}
+    except Exception as e:
+        logger.error(f"Failed to get model's metrics: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get model's metrics")
