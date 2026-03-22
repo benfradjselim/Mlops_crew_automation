@@ -14,6 +14,10 @@ def load_yaml_config(file_path: str) -> dict:
 
     Returns:
         dict: YAML configuration as dictionary.
+
+    Raises:
+        yaml.YAMLError: If YAML configuration is invalid.
+        FileNotFoundError: If file is not found.
     """
     try:
         with open(file_path, 'r') as file:
@@ -32,6 +36,9 @@ def validate_config(config: dict) -> None:
 
     Args:
         config (dict): Configuration to validate.
+
+    Raises:
+        KeyError: If required key is missing.
     """
     required_keys = ['appName', 'replicaCount', 'image', 'service', 'resources', 'persistence']
     for key in required_keys:
@@ -48,6 +55,9 @@ def create_deployment(config: dict) -> str:
 
     Returns:
         str: Deployment YAML as string.
+
+    Raises:
+        ValueError: If configuration is invalid.
     """
     try:
         # Load configuration
@@ -77,103 +87,9 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         ports:
-        - containerPort: {{ .Values.service.port }}
-        resources:
-          requests:
-            cpu: {{ .Values.resources.requests.cpu }}
-            memory: {{ .Values.resources.requests.memory }}
-          limits:
-            cpu: {{ .Values.resources.limits.cpu }}
-            memory: {{ .Values.resources.limits.memory }}
-      {{- if .Values.persistence.enabled }}
-      volumes:
-      - name: {{ .Values.persistence.name }}
-        persistentVolumeClaim:
-          claimName: {{ .Values.persistence.claimName }}
-      {{- end }}
-  {{- if .Values.autoscaling.enabled }}
-  strategy:
-    type: {{ .Values.autoscaling.strategy.type }}
-    rollingUpdate:
-      maxSurge: {{ .Values.autoscaling.strategy.rollingUpdate.maxSurge }}
-      maxUnavailable: {{ .Values.autoscaling.strategy.rollingUpdate.maxUnavailable }}
-  {{- end }}
-  {{- if .Values.autoscaling.enabled }}
-  {{- if .Values.autoscaling.minReplicas }}
-  minReadySeconds: {{ .Values.autoscaling.minReplicas }}
-  {{- end }}
-  {{- if .Values.autoscaling.maxReplicas }}
-  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
-  {{- end }}
-  {{- end }}
+        - containerPort: {{ .Values.containerPort }}
 """
-
-        # Render deployment YAML
-        deployment_yaml = deployment_yaml.replace('{{ .Values.appName }}', config['appName'])
-        deployment_yaml = deployment_yaml.replace('{{ .Values.replicaCount }}', str(config['replicaCount']))
-        deployment_yaml = deployment_yaml.replace('{{ .Values.image.repository }}', config['image']['repository'])
-        deployment_yaml = deployment_yaml.replace('{{ .Values.image.tag }}', config['image']['tag'])
-        deployment_yaml = deployment_yaml.replace('{{ .Values.image.pullPolicy }}', config['image']['pullPolicy'])
-        deployment_yaml = deployment_yaml.replace('{{ .Values.service.port }}', str(config['service']['port']))
-        deployment_yaml = deployment_yaml.replace('{{ .Values.resources.requests.cpu }}', config['resources']['requests']['cpu'])
-        deployment_yaml = deployment_yaml.replace('{{ .Values.resources.requests.memory }}', config['resources']['requests']['memory'])
-        deployment_yaml = deployment_yaml.replace('{{ .Values.resources.limits.cpu }}', config['resources']['limits']['cpu'])
-        deployment_yaml = deployment_yaml.replace('{{ .Values.resources.limits.memory }}', config['resources']['limits']['memory'])
-        deployment_yaml = deployment_yaml.replace('{{ .Values.persistence.enabled }}', str(config['persistence']['enabled']))
-        deployment_yaml = deployment_yaml.replace('{{ .Values.persistence.name }}', config['persistence']['name'])
-        deployment_yaml = deployment_yaml.replace('{{ .Values.persistence.claimName }}', config['persistence']['claimName'])
-        deployment_yaml = deployment_yaml.replace('{{ .Values.autoscaling.enabled }}', str(config['autoscaling']['enabled']))
-        deployment_yaml = deployment_yaml.replace('{{ .Values.autoscaling.strategy.type }}', config['autoscaling']['strategy']['type'])
-        deployment_yaml = deployment_yaml.replace('{{ .Values.autoscaling.strategy.rollingUpdate.maxSurge }}', str(config['autoscaling']['strategy']['rollingUpdate']['maxSurge']))
-        deployment_yaml = deployment_yaml.replace('{{ .Values.autoscaling.strategy.rollingUpdate.maxUnavailable }}', str(config['autoscaling']['strategy']['rollingUpdate']['maxUnavailable']))
-        deployment_yaml = deployment_yaml.replace('{{ .Values.autoscaling.minReplicas }}', str(config['autoscaling']['minReplicas']))
-        deployment_yaml = deployment_yaml.replace('{{ .Values.autoscaling.maxReplicas }}', str(config['autoscaling']['maxReplicas']))
-
         return deployment_yaml
     except Exception as e:
         logger.error(f"Error creating deployment YAML: {e}")
         raise
-
-# Example usage
-config = {
-    'appName': 'my-app',
-    'replicaCount': 3,
-    'image': {
-        'repository': 'my-image',
-        'tag': 'latest',
-        'pullPolicy': 'IfNotPresent'
-    },
-    'service': {
-        'port': 8080
-    },
-    'resources': {
-        'requests': {
-            'cpu': '100m',
-            'memory': '128Mi'
-        },
-        'limits': {
-            'cpu': '200m',
-            'memory': '256Mi'
-        }
-    },
-    'persistence': {
-        'enabled': True,
-        'name': 'my-pvc',
-        'claimName': 'my-claim'
-    },
-    'autoscaling': {
-        'enabled': True,
-        'strategy': {
-            'type': 'RollingUpdate',
-            'rollingUpdate': {
-                'maxSurge': 1,
-                'maxUnavailable': 1
-            }
-        },
-        'minReplicas': 1,
-        'maxReplicas': 10
-    }
-}
-
-deployment_yaml = create_deployment(config)
-print(deployment_yaml)
