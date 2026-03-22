@@ -14,11 +14,9 @@ def get_started() -> NoReturn:
     """
     try:
         # Installation des dépendances
-        logging.info("Installation des dépendances...")
         install_dependencies()
 
         # Démarrage de l'application
-        logging.info("Démarrage de l'application...")
         run_application()
 
         logging.info("Projet démarré avec succès !")
@@ -38,7 +36,7 @@ def install_dependencies() -> None:
         logging.info("Dépendances installées avec succès !")
     except Exception as e:
         logging.error(f"Erreur lors de l'installation des dépendances : {e}")
-        sys.exit(1)
+        raise
 
 def run_application() -> None:
     """
@@ -52,7 +50,7 @@ def run_application() -> None:
         logging.info("Application démarrée avec succès !")
     except Exception as e:
         logging.error(f"Erreur lors du démarrage de l'application : {e}")
-        sys.exit(1)
+        raise
 
 def main() -> NoReturn:
     """
@@ -68,5 +66,4 @@ def main() -> NoReturn:
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()# Test
-# Test
+    main()
