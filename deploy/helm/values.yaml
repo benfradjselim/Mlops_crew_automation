@@ -75,3 +75,24 @@ def validate_values(values: dict) -> None:
     if "image" not in values:
         logging.error("Le champ 'image' est obligatoire.")
         raise ValueError("Le champ 'image' est obligatoire.")
+    if "resources" not in values:
+        logging.error("Le champ 'resources' est obligatoire.")
+        raise ValueError("Le champ 'resources' est obligatoire.")
+
+def load_config() -> dict:
+    """
+    Charge la configuration à partir du fichier values.yaml.
+
+    Returns:
+        dict: La configuration chargée.
+
+    Raises:
+        Exception: Si une erreur se produit lors du chargement de la configuration.
+    """
+    try:
+        values = load_values()
+        validate_values(values)
+        return values
+    except Exception as e:
+        logging.error(f"Erreur lors du chargement de la configuration : {e}")
+        raise e
