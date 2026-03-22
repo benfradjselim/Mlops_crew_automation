@@ -1,31 +1,34 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import plotly.express as px
-import yfinance as yf
-import requests
 import logging
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def load_data() -> pd.DataFrame:
+def load_data(file_path: str) -> pd.DataFrame:
     """
     Charge les données à partir du fichier CSV.
 
+    Args:
+        file_path (str): Chemin du fichier CSV.
+
     Returns:
         pd.DataFrame: Les données chargées.
+
+    Raises:
+        FileNotFoundError: Si le fichier n'existe pas.
+        pd.errors.EmptyDataError: Si le fichier est vide.
     """
     try:
-        data = pd.read_csv('data.csv')
-        return data
-    except FileNotFoundError:
-        logger.error("Le fichier 'data.csv' n'existe pas.")
-        raise
-    except pd.errors.EmptyDataError:
-        logger.error("Le fichier 'data.csv' est vide.")
-        raise
+        return pd.read_csv(file_path)
+    except FileNotFoundError as e:
+        logger.error(f"Le fichier '{file_path}' n'existe pas.")
+        raise e
+    except pd.errors.EmptyDataError as e:
+        logger.error(f"Le fichier '{file_path}' est vide.")
+        raise e
 
 def load_stock_data(ticker: str) -> pd.DataFrame:
     """
@@ -36,80 +39,76 @@ def load_stock_data(ticker: str) -> pd.DataFrame:
 
     Returns:
         pd.DataFrame: Les données de la bourse.
+
+    Raises:
+        yf.TickerDataUnavailable: Si les données ne sont pas disponibles.
     """
     try:
-        stock_data = yf.download(tickers=ticker, period='1d')
-        return stock_data
-    except yf.TickerDataUnavailable:
+        return yf.download(tickers=ticker, period='1d')
+    except yf.TickerDataUnavailable as e:
         logger.error(f"Les données pour le ticker '{ticker}' ne sont pas disponibles.")
-        raise
+        raise e
 
-def load_alert_data() -> pd.DataFrame:
+def load_alert_data(file_path: str) -> pd.DataFrame:
     """
     Charge les données d'alerte à partir du fichier CSV.
 
+    Args:
+        file_path (str): Chemin du fichier CSV.
+
     Returns:
         pd.DataFrame: Les données d'alerte chargées.
+
+    Raises:
+        FileNotFoundError: Si le fichier n'existe pas.
+        pd.errors.EmptyDataError: Si le fichier est vide.
     """
     try:
-        alert_data = pd.read_csv('alert.csv')
-        return alert_data
-    except FileNotFoundError:
-        logger.error("Le fichier 'alert.csv' n'existe pas.")
-        raise
-    except pd.errors.EmptyDataError:
-        logger.error("Le fichier 'alert.csv' est vide.")
-        raise
+        return pd.read_csv(file_path)
+    except FileNotFoundError as e:
+        logger.error(f"Le fichier '{file_path}' n'existe pas.")
+        raise e
+    except pd.errors.EmptyDataError as e:
+        logger.error(f"Le fichier '{file_path}' est vide.")
+        raise e
 
-def send_alert() -> None:
+def send_alert(message: str) -> None:
     """
     Envoie une alerte via l'API.
+
+    Args:
+        message (str): Le message de l'alerte.
     """
     try:
-        requests.post('https://api.example.com/alert', json={'message': 'Alerte envoyée'})
+        requests.post('https://api.example.com/alert', json={'message': message})
         logger.info("L'alerte a été envoyée avec succès.")
     except requests.exceptions.RequestException as e:
         logger.error(f"Erreur lors de l'envoi de l'alerte : {e}")
 
-def main():
-    # Set page title
-    st.title('Dashboard')
+def main() -> None:
+    """
+    Fonction principale du script.
+    """
+    st.title("Dashboard")
 
-    # Create sidebar
-    st.sidebar.title('Menu')
-    menu = ['Graphiques', 'Alertes']
-    choice = st.sidebar.selectbox('Choisir une option', menu)
+    # Chargement des données
+    data = load_data('data.csv')
+    stock_data = load_stock_data('AAPL')
+    alert_data = load_alert_data('alert.csv')
 
-    # Graphiques
-    if choice == 'Graphiques':
-        # Load data
-        data = load_data()
+    # Affichage des données
+    st.subheader("Données")
+    st.write(data)
 
-        # Create line chart
-        fig, ax = plt.subplots()
-        ax.plot(data['Date'], data['Value'])
-        st.pyplot(fig)
+    st.subheader("Données de la bourse")
+    st.write(stock_data)
 
-        # Create bar chart
-        fig, ax = plt.subplots()
-        ax.bar(data['Date'], data['Value'])
-        st.pyplot(fig)
+    st.subheader("Données d'alerte")
+    st.write(alert_data)
 
-    # Alertes
-    elif choice == 'Alertes':
-        # Load alert data
-        alert_data = load_alert_data()
+    # Envoi d'une alerte
+    message = "Alerte envoyée"
+    send_alert(message)
 
-        # Create table
-        st.write(alert_data)
-
-        # Create alert message
-        if st.button('Envoyer une alerte'):
-            # Send alert via API
-            send_alert()
-
-            # Display success message
-            st.success('Alerte envoyée avec succès.')
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
