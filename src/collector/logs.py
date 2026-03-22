@@ -58,42 +58,45 @@ def collect_logs(namespace: str, pod_name: str, container_name: str) -> str:
         logger.error(f"Error collecting logs: {e}")
         logger.error(f"Error code: {e.status}")
         logger.error(f"Error reason: {e.reason}")
-        raise
+        raise ValueError(f"Error collecting logs: {e}")
     except Exception as e:
         logger.error(f"An error occurred: {e}")
         raise
 
 def collect_all_logs(namespace: str) -> Dict[str, str]:
     """
-    Collect logs from all pods in a Kubernetes namespace.
+    Collect all logs from a Kubernetes namespace.
 
     Args:
-        namespace (str): The namespace of the pods.
+        namespace (str): The namespace to collect logs from.
 
     Returns:
-        Dict[str, str]: A dictionary with pod names as keys and logs as values.
+        Dict[str, str]: A dictionary of logs where the key is the pod name and the value is the log.
 
     Raises:
         ValueError: If namespace is None or empty.
-        client.ApiException: If there is an error collecting logs.
     """
     if not namespace:
         raise ValueError("Namespace must not be empty")
 
+    logs = {}
     try:
         # Get the list of pods in the namespace
         v1 = client.CoreV1Api()
         pods = v1.list_namespaced_pod(namespace=namespace)
 
         # Collect logs from each pod
-        logs = {}
         for pod in pods.items:
-            logs[pod.metadata.name] = collect_logs(namespace, pod.metadata.name, pod.spec.containers[0].name)
+            pod_name = pod.metadata.name
+            container_name = pod.spec.containers[0].name
+            logs[pod_name] = collect_logs(namespace, pod_name, container_name)
 
         return logs
     except client.ApiException as e:
         logger.error(f"Error collecting logs: {e}")
-        raise
+        logger.error(f"Error code: {e.status}")
+        logger.error(f"Error reason: {e.reason}")
+        raise ValueError(f"Error collecting logs: {e}")
     except Exception as e:
         logger.error(f"An error occurred: {e}")
         raise
