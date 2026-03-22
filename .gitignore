@@ -50,33 +50,12 @@ def nettoyer_config() -> None:
     # Nettoyage des fichiers
     for chemin in chemins:
         try:
-            # Récupération du chemin du fichier à nettoyer
-            chemin_fichier = os.path.join(os.getcwd(), chemin)
-
-            # Vérification si le chemin est un fichier
-            if os.path.isfile(chemin_fichier):
-                # Suppression du fichier
-                os.remove(chemin_fichier)
-                logging.info(f"Fichier supprimé : {chemin_fichier}")
-            else:
-                # Vérification si le chemin est un répertoire
-                if os.path.isdir(chemin_fichier):
-                    # Suppression du répertoire et de tous ses fichiers
-                    for fichier in os.listdir(chemin_fichier):
-                        fichier_path = os.path.join(chemin_fichier, fichier)
-                        if os.path.isfile(fichier_path):
-                            os.remove(fichier_path)
-                            logging.info(f"Fichier supprimé : {fichier_path}")
-                        elif os.path.isdir(fichier_path):
-                            shutil.rmtree(fichier_path)
-                            logging.info(f"Répertoire supprimé : {fichier_path}")
-                    # Suppression du répertoire
-                    os.rmdir(chemin_fichier)
-                    logging.info(f"Répertoire supprimé : {chemin_fichier}")
-                else:
-                    logging.warning(f"Chemin non trouvé : {chemin_fichier}")
+            # Récupération des fichiers à nettoyer
+            fichiers = os.listdir(chemin)
+            # Suppression des fichiers
+            for fichier in fichiers:
+                if re.search(regex[chemin], fichier):
+                    os.remove(os.path.join(chemin, fichier))
+                    logging.info(f"Fichier {fichier} supprimé")
         except Exception as e:
-            logging.error(f"Erreur lors du nettoyage du fichier : {e}")
-
-if __name__ == "__main__":
-    nettoyer_config()
+            logging.error(f"Erreur lors du nettoyage des fichiers de {chemin}: {e}")
