@@ -11,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 class OnlineDetector:
     """
-    A class for online detection using a random forest classifier.
+    A class for online detection using a HalfSpaceTrees model.
 
     Attributes:
     model_path (str): The path to the model file.
     data_path (str): The path to the data file.
-    model (RandomForestClassifier): The trained model.
+    model (HalfSpaceTrees): The trained model.
     """
 
     def __init__(self, model_path: str, data_path: str) -> None:
@@ -60,7 +60,7 @@ class OnlineDetector:
         Args:
         data (np.ndarray): The data to train the model.
         n_estimators (int): The number of estimators in the random forest.
-        max_depth (int): The maximum depth of the trees.
+        max_depth (int): The maximum depth of the tree.
         min_samples_split (int): The minimum number of samples required to split an internal node.
         min_samples_leaf (int): The minimum number of samples required to be at a leaf node.
 
@@ -76,40 +76,48 @@ class OnlineDetector:
             logger.error(f"Error training model: {e}")
             raise
 
-    def train(self, data: np.ndarray, n_estimators: int = 100, max_depth: int = 10, min_samples_split: int = 2, min_samples_leaf: int = 1) -> None:
+    def train(self, n_estimators: int = 100, max_depth: int = 10, min_samples_split: int = 2, min_samples_leaf: int = 1) -> None:
         """
-        Train the model using the data.
+        Train the model using the loaded data.
 
         Args:
-        data (np.ndarray): The data to train the model.
         n_estimators (int): The number of estimators in the random forest.
-        max_depth (int): The maximum depth of the trees.
+        max_depth (int): The maximum depth of the tree.
         min_samples_split (int): The minimum number of samples required to split an internal node.
         min_samples_leaf (int): The minimum number of samples required to be at a leaf node.
         """
         try:
-            model = self._train_model(data, n_estimators, max_depth, min_samples_split, min_samples_leaf)
-            self.model = model
-            save_model(self.model_path, model)
+            data = self._load_data()
+            self.model = self._train_model(data, n_estimators, max_depth, min_samples_split, min_samples_leaf)
+            save_model(self.model, self.model_path)
         except Exception as e:
             logger.error(f"Error training model: {e}")
             raise
 
     def predict(self, data: np.ndarray) -> np.ndarray:
         """
-        Predict the labels using the trained model.
+        Make predictions using the trained model.
 
         Args:
-        data (np.ndarray): The data to predict.
+        data (np.ndarray): The data to make predictions on.
 
         Returns:
         np.ndarray: The predicted labels.
         """
         try:
             if self.model is None:
-                raise ValueError("Model is not trained")
-            predictions = self.model.predict(data)
-            return predictions
+                raise ValueError("Model not trained")
+            return self.model.predict(data)
         except Exception as e:
-            logger.error(f"Error making prediction: {e}")
+            logger.error(f"Error making predictions: {e}")
+            raise
+
+    def load_model(self) -> None:
+        """
+        Load the trained model from the model_path.
+        """
+        try:
+            self.model = load_model(self.model_path)
+        except Exception as e:
+            logger.error(f"Error loading model: {e}")
             raise
