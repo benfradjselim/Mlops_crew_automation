@@ -26,7 +26,9 @@ check_directory() {
   if [ ! -d "$dir" ]; then
     mkdir -p "$dir"
     log_message "INFO" "Directory $dir created."
+    return 0
   fi
+  return 1
 }
 
 # Function to check if script is already installed
@@ -45,31 +47,43 @@ install_script() {
   local script_path=$1
   local script_dir=$2
   local script_name=$3
-  cp "$script_path" "$script_dir/$script_name"
-  log_message "INFO" "Script $script_name installed."
-  chmod +x "$script_dir/$script_name"
-  log_message "INFO" "Script $script_name made executable."
+  if [ -f "$script_path" ]; then
+    cp "$script_path" "$script_dir/$script_name"
+    log_message "INFO" "Script $script_name installed."
+    chmod +x "$script_dir/$script_name"
+    log_message "INFO" "Script $script_name made executable."
+    return 0
+  fi
+  log_message "ERROR" "Script $script_name not found."
+  return 1
 }
 
 # Main function
 main() {
   # Check if installation directory exists
-  check_directory "$INSTALL_DIR"
-
-  # Check if script is already installed
-  if check_script_installed "$INSTALL_DIR" "$SCRIPT_NAME"; then
-    log_message "INFO" "Script installation successful."
-    echo "Script installed successfully!"
-    return 0
+  if ! check_directory "$INSTALL_DIR"; then
+    log_message "ERROR" "Installation directory $INSTALL_DIR does not exist."
+    return 1
   fi
 
-  # Install script
-  install_script "$SCRIPT_PATH" "$INSTALL_DIR" "$SCRIPT_NAME"
+  # Check if script is already installed
+  if ! check_script_installed "$INSTALL_DIR" "$SCRIPT_NAME"; then
+    log_message "INFO" "Script installation started."
+    # Install script
+    if ! install_script "$SCRIPT_PATH" "$INSTALL_DIR" "$SCRIPT_NAME"; then
+      log_message "ERROR" "Script installation failed."
+      return 1
+    fi
+  fi
 
   # Print success message
+  log_message "INFO" "Script installed successfully!"
   echo "Script installed successfully!"
   return 0
 }
 
 # Call main function
-main
+if ! main; then
+  log_message "ERROR" "Script installation failed."
+  exit 1
+fi
