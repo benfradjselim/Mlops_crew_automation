@@ -7,6 +7,7 @@ Ce fichier définit les valeurs par défaut pour l'application, notamment le nom
 """
 
 import logging
+import yaml
 
 # Configuration du logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -17,20 +18,20 @@ def load_values() -> dict:
 
     Returns:
         dict: Les valeurs de configuration chargées.
+
+    Raises:
+        FileNotFoundError: Si le fichier values.yaml n'existe pas.
+        yaml.YAMLError: Si le fichier n'est pas au format YAML.
     """
     try:
-        # Tentative de chargement des valeurs
         with open('values.yaml', 'r') as f:
-            values = yaml.safe_load(f)
-            return values
-    except FileNotFoundError:
-        # Gestion de l'erreur si le fichier n'existe pas
+            return yaml.safe_load(f)
+    except FileNotFoundError as e:
         logging.error("Le fichier values.yaml n'existe pas.")
-        raise
+        raise e
     except yaml.YAMLError as e:
-        # Gestion de l'erreur si le fichier n'est pas au format YAML
         logging.error(f"Erreur de format YAML : {e}")
-        raise
+        raise e
 
 def get_default_values() -> dict:
     """
@@ -64,28 +65,13 @@ def validate_values(values: dict) -> None:
 
     Args:
         values (dict): Les valeurs de configuration à valider.
+
+    Raises:
+        ValueError: Si le champ 'replicaCount' est obligatoire.
     """
-    # Validation des valeurs
     if "replicaCount" not in values:
         logging.error("Le champ 'replicaCount' est obligatoire.")
         raise ValueError("Le champ 'replicaCount' est obligatoire.")
     if "image" not in values:
         logging.error("Le champ 'image' est obligatoire.")
         raise ValueError("Le champ 'image' est obligatoire.")
-    if "resources" not in values:
-        logging.error("Le champ 'resources' est obligatoire.")
-        raise ValueError("Le champ 'resources' est obligatoire.")
-
-def main() -> None:
-    """
-    Programme principal.
-
-    Charge les valeurs de configuration, les valide et les retourne.
-    """
-    values = load_values()
-    validate_values(values)
-    return values
-
-if __name__ == "__main__":
-    values = main()
-    print(values)
