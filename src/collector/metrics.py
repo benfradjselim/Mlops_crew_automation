@@ -3,6 +3,7 @@ import prometheus_client
 import logging
 import time
 import requests
+from typing import Optional
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -70,6 +71,9 @@ def main() -> None:
         # Run indefinitely
         while True:
             time.sleep(1)
+    except KeyboardInterrupt:
+        logging.info("Stopping metrics server...")
+        prometheus_client.stop_http_server()
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
 
