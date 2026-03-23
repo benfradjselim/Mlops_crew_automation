@@ -83,16 +83,22 @@ spec:
       - name: {{ .Values.appName }}
         image: {{ .Values.image }}
         resources:
-          {{ .Values.resources }}
-        volumeMounts:
-        - name: {{ .Values.persistence }}
-          mountPath: /{{ .Values.persistence }}
-      volumes:
-      - name: {{ .Values.persistence }}
-        persistentVolumeClaim:
-          claimName: {{ .Values.persistence }}
+          requests:
+            cpu: {{ .Values.resources.cpu }}
+            memory: {{ .Values.resources.memory }}
+        ports:
+        - containerPort: {{ .Values.service.port }}
 """
         return deployment_yaml
     except Exception as e:
         logger.error(f"Error creating deployment YAML: {e}")
         raise
+
+def main():
+    config_file = "config.yaml"
+    config = load_yaml_config(config_file)
+    deployment_yaml = create_deployment(config)
+    print(deployment_yaml)
+
+if __name__ == "__main__":
+    main()
