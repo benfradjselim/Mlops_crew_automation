@@ -50,12 +50,10 @@ def nettoyer_config() -> None:
     # Nettoyage des fichiers
     for chemin in chemins:
         try:
-            # Récupération des fichiers à nettoyer
-            fichiers = os.listdir(chemin)
-            # Suppression des fichiers
-            for fichier in fichiers:
-                if re.search(regex[chemin], fichier):
+            # Suppression des fichiers correspondants
+            for fichier in os.listdir(chemin):
+                if re.match(regex[chemin], fichier):
                     os.remove(os.path.join(chemin, fichier))
                     logging.info(f"Fichier {fichier} supprimé")
         except Exception as e:
-            logging.error(f"Erreur lors du nettoyage des fichiers de {chemin}: {e}")
+            logging.error(f"Erreur lors du nettoyage des fichiers de {chemin}: {str(e)}")
