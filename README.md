@@ -76,72 +76,57 @@ def run_application() -> None:
         logging.info("Application démarrée avec succès !")
     except Exception as e:
         logging.error(f"Erreur lors du démarrage de l'application : {e}")
-        raise
+        sys.exit(1)
 
 def health_check() -> dict:
     """
     Fonction pour vérifier la santé de l'application.
 
     Retourne:
-        dict: Réponse de santé de l'application
+        dict: Réponse de santé
     """
     try:
         # Vérification de la santé de l'application
         logging.info("Vérification de la santé de l'application...")
-        return {"status": "OK"}
+        return {"status": "ok"}
     except Exception as e:
         logging.error(f"Erreur lors de la vérification de la santé de l'application : {e}")
-        return {"status": "ERROR"}
+        return {"status": "error"}
 
 def get_metrics() -> dict:
     """
-    Fonction pour récupérer les métriques de l'application.
+    Fonction pour récupérer les métriques.
 
     Retourne:
-        dict: Métriques de l'application
+        dict: Métriques
     """
     try:
-        # Récupération des métriques de l'application
-        logging.info("Récupération des métriques de l'application...")
+        # Récupération des métriques
+        logging.info("Récupération des métriques...")
         # Code pour récupérer les métriques
         return {"cpu": 0.5, "memory": 0.8, "latency": 0.2}
     except Exception as e:
-        logging.error(f"Erreur lors de la récupération des métriques de l'application : {e}")
-        return {"cpu": 0, "memory": 0, "latency": 0}
+        logging.error(f"Erreur lors de la récupération des métriques : {e}")
+        return {"error": "Erreur lors de la récupération des métriques"}
 
 def predict() -> dict:
     """
-    Fonction pour effectuer une prédiction.
+    Fonction pour faire une prédiction.
 
     Retourne:
-        dict: Réponse de prédiction
+        dict: Prédiction
     """
     try:
-        # Création du modèle de prédiction
-        model = HalfSpaceTrees()
-
-        # Entraînement du modèle
-        model.learn_one({"cpu": 0.5, "memory": 0.8, "latency": 0.2})
-
         # Prédiction
         logging.info("Prédiction...")
-        return {"prediction": model.predict({"cpu": 0.5, "memory": 0.8, "latency": 0.2})[0]}
+        # Code pour faire une prédiction
+        model = HalfSpaceTrees()
+        data = {"cpu": 0.5, "memory": 0.8, "latency": 0.2}
+        prediction = model.predict(data)
+        return {"prediction": prediction}
     except Exception as e:
         logging.error(f"Erreur lors de la prédiction : {e}")
-        return {"prediction": 0}
-
-def main() -> NoReturn:
-    """
-    Fonction principale du projet.
-
-    Retourne:
-        None
-    """
-    try:
-        get_started()
-    except Exception as e:
-        logging.error(f"Erreur lors de l'exécution du projet : {e}")
-        sys.exit(1)
+        return {"error": "Erreur lors de la prédiction"}
 
 if __name__ == "__main__":
-    main()
+    get_started()
