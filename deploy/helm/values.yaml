@@ -6,9 +6,6 @@ Fichier de valeurs pour la configuration de l'application.
 Ce fichier définit les valeurs par défaut pour l'application, notamment le nombre de répliques, l'image Docker et les ressources.
 """
 
-import logging
-import yaml
-
 # Configuration du logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -69,30 +66,15 @@ def validate_values(values: dict) -> None:
     Raises:
         ValueError: Si le champ 'replicaCount' est obligatoire.
     """
+    if not values:
+        raise ValueError("Les valeurs de configuration sont obligatoires.")
     if "replicaCount" not in values:
-        logging.error("Le champ 'replicaCount' est obligatoire.")
         raise ValueError("Le champ 'replicaCount' est obligatoire.")
-    if "image" not in values:
-        logging.error("Le champ 'image' est obligatoire.")
-        raise ValueError("Le champ 'image' est obligatoire.")
+    if "image" not in values or "repository" not in values["image"]:
+        raise ValueError("L'image Docker est obligatoire.")
     if "resources" not in values:
-        logging.error("Le champ 'resources' est obligatoire.")
-        raise ValueError("Le champ 'resources' est obligatoire.")
-
-def load_config() -> dict:
-    """
-    Charge la configuration à partir du fichier values.yaml.
-
-    Returns:
-        dict: La configuration chargée.
-
-    Raises:
-        Exception: Si une erreur se produit lors du chargement de la configuration.
-    """
-    try:
-        values = load_values()
-        validate_values(values)
-        return values
-    except Exception as e:
-        logging.error(f"Erreur lors du chargement de la configuration : {e}")
-        raise e
+        raise ValueError("Les ressources sont obligatoires.")
+    if "requests" not in values["resources"]:
+        raise ValueError("Les demandes de ressources sont obligatoires.")
+    if "limits" not in values["resources"]:
+        raise ValueError("Les limites de ressources sont obligatoires.")
