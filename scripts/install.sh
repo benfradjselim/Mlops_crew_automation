@@ -28,6 +28,7 @@ check_directory() {
     log_message "INFO" "Directory $dir created."
     return 0
   fi
+  log_message "ERROR" "Directory $dir does not exist."
   return 1
 }
 
@@ -39,6 +40,7 @@ check_script_installed() {
     log_message "INFO" "Script $script_name already installed, skipping installation."
     return 0
   fi
+  log_message "INFO" "Script $script_name not installed."
   return 1
 }
 
@@ -78,8 +80,7 @@ main() {
 
   # Print success message
   log_message "INFO" "Script installed successfully!"
-  echo "Script installed successfully!"
-  exit 0
+  echo "Script installed"
 }
 
 # Call main function
