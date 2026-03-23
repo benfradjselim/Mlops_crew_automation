@@ -3,8 +3,6 @@ name: Build MLOps Microservices Images
 on:
   push:
     branches: [ "main", "dev" ]
-  pull_request:
-    branches: [ "main" ]
 
 jobs:
   build:
@@ -28,4 +26,4 @@ jobs:
         context: .
         build-args: SERVICE=${{ matrix.service }}
         push: true
-        tags: ghcr.io/${{ github.repository }}/${{ matrix.service }}:latest
+        tags: ghcr.io/${{ github.repository_owner }}/mlops_crew_automation/${{ matrix.service }}:latest
