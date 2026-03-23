@@ -68,8 +68,12 @@ def main() -> None:
         # Collect metrics
         collect_metrics()
 
-        # Start the metrics server
+        # Start metrics server
         start_metrics_server()
+
     except Exception as e:
         logging.error(f"Error in main function: {e}")
         raise
+
+if __name__ == "__main__":
+    main()
