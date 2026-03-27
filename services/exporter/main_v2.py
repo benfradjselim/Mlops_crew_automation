@@ -25,14 +25,11 @@ async def summary():
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        result = conn.execute("SELECT COUNT(*) as count FROM anomalies").fetchone()
-        total = result["count"] if result else 0
+        total = conn.execute("SELECT COUNT(*) as count FROM anomalies WHERE timestamp >= datetime('now', '-24 hours')").fetchone()["count"]
+        real = conn.execute("SELECT COUNT(*) as count FROM anomalies WHERE timestamp >= datetime('now', '-24 hours') AND anomaly_score > 0.7").fetchone()["count"]
         conn.close()
-        return {
-            "total_anomalies_24h": total,
-            "anomaly_rate": 1.0 if total > 0 else 0.0,
-            "total_predictions": total
-        }
+        rate = real / total if total > 0 else 0.0
+        return {"total_anomalies_24h": total, "anomaly_rate": rate, "total_predictions": total}
     except Exception as e:
         logger.error(f"Error in summary: {e}")
         return {"total_anomalies_24h": 0, "anomaly_rate": 0.0, "total_predictions": 0}
@@ -88,7 +85,8 @@ async def dashboard_data(window: str = "24h"):
             for r in rows
         ]
         
-        total = conn.execute("SELECT COUNT(*) as count FROM anomalies").fetchone()["count"]
+        total = conn.execute("SELECT COUNT(*) as count FROM anomalies WHERE timestamp >= datetime('now', '-24 hours')").fetchone()["count"]
+        real = conn.execute("SELECT COUNT(*) as count FROM anomalies WHERE timestamp >= datetime('now', '-24 hours') AND anomaly_score > 0.7").fetchone()["count"]
         conn.close()
         
         return {
@@ -96,7 +94,7 @@ async def dashboard_data(window: str = "24h"):
             "metric_series": metric_series,
             "summary": {
                 "total_anomalies_24h": total,
-                "anomaly_rate": 1.0 if total > 0 else 0.0,
+                "anomaly_rate": real / total if total > 0 else 0.0,
                 "total_predictions": total
             },
             "recent_anomalies": recent,
