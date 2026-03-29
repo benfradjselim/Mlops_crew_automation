@@ -1,126 +1,302 @@
-"""DASHBOARD service (port 8501) - Streamlit real-time anomaly visualization."""
-import sys
-import time
-from datetime import datetime
+#!/usr/bin/env python3
+"""
+Dashboard V2 + V3 - MLOps Anomaly Detection
+Affiche les métriques v2 et les prédictions v3 du metric_predictor
+"""
 
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import requests
 import streamlit as st
+import requests
+import pandas as pd
+import plotly.graph_objects as go
+from datetime import datetime
+import os
 
-sys.path.insert(0, "/app")
-from shared import config
-
-EXPORTER_URL = config.get_str("EXPORTER_URL")
-REFRESH_SEC = config.get_int("DASHBOARD_REFRESH_SEC")
+# Configuration
+EXPORTER_URL = os.getenv('EXPORTER_URL', 'http://exporter:8005')
+METRIC_PREDICTOR_URL = os.getenv('METRIC_PREDICTOR_URL', 'http://metric-predictor:8008')
+DASHBOARD_REFRESH_SEC = int(os.getenv('DASHBOARD_REFRESH_SEC', '5'))
+ANOMALY_THRESHOLD = float(os.getenv('ANOMALY_THRESHOLD', '0.7'))
 
 st.set_page_config(
-    page_title="MLOps Anomaly Detection",
-    page_icon="🔍",
+    page_title="MLOps Anomaly Detection v3",
+    page_icon="🔮",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded"
 )
 
-st.markdown(
-    """
-    <style>
-    .anomaly-alert { background-color: #ff4b4b; padding: 10px; border-radius: 5px; color: white; }
-    .metric-card { background-color: #0e1117; border: 1px solid #333; border-radius: 8px; padding: 15px; }
-    </style>
-    """,
-    unsafe_allow_html=True,
+# Custom CSS
+st.markdown("""
+<style>
+    .stButton > button { width: 100%; }
+    .risk-critical { background-color: #ff4b4b; color: white; padding: 0.5rem; border-radius: 0.5rem; text-align: center; }
+    .risk-high { background-color: #ffa500; color: white; padding: 0.5rem; border-radius: 0.5rem; text-align: center; }
+    .risk-medium { background-color: #ffde59; color: black; padding: 0.5rem; border-radius: 0.5rem; text-align: center; }
+    .risk-low { background-color: #00cc96; color: white; padding: 0.5rem; border-radius: 0.5rem; text-align: center; }
+    .metric-card { background-color: #f0f2f6; padding: 1rem; border-radius: 0.5rem; margin: 0.5rem 0; }
+</style>
+""", unsafe_allow_html=True)
+
+# Sidebar
+st.sidebar.title("🔮 MLOps Anomaly Detection v3")
+st.sidebar.markdown("---")
+page = st.sidebar.radio(
+    "Navigation",
+    ["📊 Dashboard Principal (v2)", "📈 Prédictions Métriques (v3)"]
 )
 
-def _fetch(endpoint: str, params: dict | None = None) -> dict | None:
+st.sidebar.markdown("---")
+st.sidebar.info(
+    "**Version:** v3.0\n\n"
+    "- Services v2: 8001-8005\n"
+    "- Metric Predictor: 8008\n"
+    "- Dashboard: 8501"
+)
+
+# ---------------------------------------------------------------------------
+# Dashboard Principal (v2)
+# ---------------------------------------------------------------------------
+
+def fetch_anomalies():
+    """Fetch anomalies from exporter"""
     try:
-        resp = requests.get(f"{EXPORTER_URL}{endpoint}", params=params, timeout=5)
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as exc:
-        st.warning(f"Exporter unavailable: {exc}")
+        response = requests.get(f"{EXPORTER_URL}/dashboard/data", timeout=5)
+        if response.status_code == 200:
+            return response.json()
+    except Exception as e:
+        st.error(f"Erreur connexion exporter: {e}")
+    return None
+
+def plot_metric_series(data, title, metric_key, color='blue'):
+    """Plot metric time series"""
+    fig = go.Figure()
+    
+    if data and 'metric_series' in data:
+        series = data['metric_series']
+        timestamps = [s['timestamp'] for s in series]
+        values = [s.get(metric_key, 0) for s in series]
+        
+        fig.add_trace(go.Scatter(
+            x=timestamps, y=values, mode='lines',
+            name=title, line=dict(color=color, width=2)
+        ))
+        
+        if 'anomaly_series' in data:
+            anomalies = data['anomaly_series']
+            anomaly_times = [a['timestamp'] for a in anomalies if a.get('is_anomaly')]
+            anomaly_values = [a.get(metric_key, 0) for a in anomalies if a.get('is_anomaly')]
+            if anomaly_values:
+                fig.add_trace(go.Scatter(
+                    x=anomaly_times, y=anomaly_values, mode='markers',
+                    name='Anomalies', marker=dict(color='red', size=10, symbol='x')
+                ))
+    
+    fig.update_layout(
+        title=title,
+        xaxis_title="Temps",
+        yaxis_title="Valeur (normalisée)",
+        height=400,
+        hovermode='x unified'
+    )
+    return fig
+
+def dashboard_principal():
+    """Display v2 dashboard"""
+    st.header("📊 Dashboard Principal - Détection d'Anomalies")
+    
+    data = fetch_anomalies()
+    
+    if data:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Prédictions", data['summary']['total_predictions'])
+        with col2:
+            st.metric("Anomalies (24h)", data['summary']['total_anomalies_24h'],
+                     delta=f"{data['summary']['anomaly_rate']:.1%}")
+        with col3:
+            st.metric("Seuil", ANOMALY_THRESHOLD)
+        
+        tab1, tab2, tab3 = st.tabs(["CPU", "Mémoire", "Anomalies Récentes"])
+        
+        with tab1:
+            fig = plot_metric_series(data, "CPU Usage (normalisé)", "cpu_norm", 'red')
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with tab2:
+            fig = plot_metric_series(data, "Mémoire Usage (normalisé)", "memory_norm", 'green')
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with tab3:
+            if data.get('recent_anomalies'):
+                df = pd.DataFrame(data['recent_anomalies'])
+                st.dataframe(df[['timestamp', 'anomaly_score', 'pod_name']], use_container_width=True)
+            else:
+                st.info("Aucune anomalie récente")
+    else:
+        st.warning("Impossible de récupérer les données depuis l'exporter")
+
+# ---------------------------------------------------------------------------
+# V3: Metric Predictor
+# ---------------------------------------------------------------------------
+
+def fetch_metric_predictions():
+    """Fetch metric predictions from v3 service"""
+    try:
+        response = requests.get(f"{METRIC_PREDICTOR_URL}/forecast", timeout=5)
+        if response.status_code == 200:
+            return response.json()
+    except Exception as e:
+        st.error(f"Erreur connexion metric-predictor: {e}")
+    return None
+
+def fetch_metric_predictions_history():
+    """Fetch predictions history"""
+    try:
+        response = requests.get(f"{METRIC_PREDICTOR_URL}/predictions", timeout=5)
+        if response.status_code == 200:
+            return response.json()
+    except Exception as e:
+        return []
+
+def fetch_predictor_stats():
+    """Fetch predictor stats"""
+    try:
+        response = requests.get(f"{METRIC_PREDICTOR_URL}/stats", timeout=5)
+        if response.status_code == 200:
+            return response.json()
+    except Exception as e:
         return None
 
-def render_header() -> None:
-    st.title("MLOps Anomaly Detection Dashboard")
-    st.caption(f"Real-time monitoring | Refreshes every {REFRESH_SEC}s | {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
-
-def render_summary(summary: dict) -> None:
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Anomalies (24h)", summary.get("total_anomalies_24h", 0))
-    with col2:
-        rate = summary.get("anomaly_rate", 0.0)
-        st.metric("Anomaly Rate", f"{rate:.1%}")
-    with col3:
-        st.metric("Total Predictions", summary.get("total_predictions", 0))
-
-def render_anomaly_chart(series: list[dict]) -> None:
-    if not series:
-        st.info("No anomaly data yet.")
-        return
-    df = pd.DataFrame(series)
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
-    df["color"] = df["is_anomaly"].map({True: "Anomaly", False: "Normal"})
-    fig = px.scatter(
-        df, x="timestamp", y="value", color="color",
-        color_discrete_map={"Anomaly": "#ff4b4b", "Normal": "#00cc88"},
-        title="Anomaly Scores Over Time",
-        labels={"value": "Anomaly Score", "timestamp": "Time"},
-    )
-    fig.add_hline(y=config.get_float("ANOMALY_THRESHOLD"), line_dash="dash", line_color="orange", annotation_text="Threshold")
-    fig.update_layout(height=350, template="plotly_dark")
-    st.plotly_chart(fig, use_container_width=True)
-
-def render_metric_chart(series: list[dict]) -> None:
-    if not series:
-        st.info("No metric data yet.")
-        return
-    df = pd.DataFrame(series)
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
+def plot_forecast(forecast_data, title, values, color):
+    """Plot forecast data"""
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df["timestamp"], y=df["value"], mode="lines", name="CPU (normalized)", line={"color": "#4b9eff"}))
-    fig.update_layout(title="CPU Usage (Normalized)", height=300, template="plotly_dark", yaxis_title="Value (0-1)")
-    st.plotly_chart(fig, use_container_width=True)
+    days = list(range(1, len(values) + 1))
+    
+    fig.add_trace(go.Scatter(
+        x=days, y=values, mode='lines+markers',
+        name='Prédiction', line=dict(color=color, width=3, dash='dot'),
+        marker=dict(size=8, color=color)
+    ))
+    
+    fig.update_layout(
+        title=title,
+        xaxis_title="Jours",
+        yaxis_title="Valeur (normalisée)",
+        height=400,
+        xaxis=dict(tickmode='linear', tick0=1, dtick=1)
+    )
+    
+    return fig
 
-def render_recent_anomalies(anomalies: list[dict]) -> None:
-    if not anomalies:
-        st.success("No recent anomalies detected.")
-        return
-    st.subheader(f"Recent Anomalies ({len(anomalies)})")
-    df = pd.DataFrame(anomalies)[["timestamp", "anomaly_score", "pod_name", "namespace"]]
-    df["anomaly_score"] = df["anomaly_score"].round(4)
-    df = df.rename(columns={"timestamp": "Time", "anomaly_score": "Score", "pod_name": "Pod", "namespace": "Namespace"})
-    st.dataframe(df, use_container_width=True)
+def metric_predictions_page():
+    """Display v3 metric predictions"""
+    st.header("📈 Prédictions Métriques - 7 Jours")
+    
+    forecast = fetch_metric_predictions()
+    stats = fetch_predictor_stats()
+    
+    if forecast:
+        risk = forecast.get('global_risk', 'LOW')
+        risk_score = forecast.get('risk_score', 0)
+        
+        risk_class = {
+            'CRITICAL': 'risk-critical',
+            'HIGH': 'risk-high',
+            'MEDIUM': 'risk-medium',
+            'LOW': 'risk-low'
+        }.get(risk, 'risk-low')
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.markdown(f'<div class="{risk_class}">'
+                       f'<h3>⚠️ Risque Global</h3>'
+                       f'<h2>{risk}</h2>'
+                       f'<p>Score: {risk_score:.1f}</p>'
+                       f'</div>', unsafe_allow_html=True)
+        
+        with col2:
+            st.metric("Horizon Prédiction", "7 jours")
+        with col3:
+            st.metric("Dernière mise à jour", datetime.now().strftime("%H:%M:%S"))
+        with col4:
+            if stats:
+                st.metric("Points d'historique", stats.get('history_points', 0))
+        
+        cpu_values = [float(v) for v in forecast.get('cpu_forecast', [])]
+        memory_values = [float(v) for v in forecast.get('memory_forecast', [])]
+        latency_values = [float(v) for v in forecast.get('latency_forecast', [])]
+        
+        tab1, tab2, tab3 = st.tabs(["📊 CPU Forecast", "💾 Mémoire Forecast", "⏱️ Latence Forecast"])
+        
+        with tab1:
+            if cpu_values:
+                fig = plot_forecast(forecast, "Prédiction CPU - 7 Jours", cpu_values, 'red')
+                st.plotly_chart(fig, use_container_width=True)
+                
+                df_cpu = pd.DataFrame({
+                    'Jour': range(1, len(cpu_values) + 1),
+                    'Prédiction CPU': [f"{v:.2%}" for v in cpu_values]
+                })
+                st.dataframe(df_cpu, use_container_width=True)
+        
+        with tab2:
+            if memory_values:
+                fig = plot_forecast(forecast, "Prédiction Mémoire - 7 Jours", memory_values, 'green')
+                st.plotly_chart(fig, use_container_width=True)
+                
+                df_memory = pd.DataFrame({
+                    'Jour': range(1, len(memory_values) + 1),
+                    'Prédiction Mémoire': [f"{v:.2%}" for v in memory_values]
+                })
+                st.dataframe(df_memory, use_container_width=True)
+        
+        with tab3:
+            if latency_values:
+                fig = plot_forecast(forecast, "Prédiction Latence - 7 Jours", latency_values, 'blue')
+                st.plotly_chart(fig, use_container_width=True)
+                
+                df_latency = pd.DataFrame({
+                    'Jour': range(1, len(latency_values) + 1),
+                    'Prédiction Latence': [f"{v:.2%}" for v in latency_values]
+                })
+                st.dataframe(df_latency, use_container_width=True)
+        
+        st.subheader("📜 Historique des Prédictions")
+        history = fetch_metric_predictions_history()
+        if history:
+            df_history = pd.DataFrame(history)
+            df_history['timestamp'] = pd.to_datetime(df_history['timestamp'])
+            df_history = df_history.sort_values('timestamp', ascending=False)
+            st.dataframe(
+                df_history[['timestamp', 'global_risk', 'risk_score']].head(10),
+                use_container_width=True
+            )
+            
+            fig_risk = go.Figure()
+            df_history_asc = df_history.sort_values('timestamp')
+            fig_risk.add_trace(go.Scatter(
+                x=df_history_asc['timestamp'],
+                y=df_history_asc['risk_score'],
+                mode='lines+markers',
+                name='Score de risque',
+                line=dict(color='orange', width=2)
+            ))
+            fig_risk.update_layout(
+                title="Évolution du score de risque",
+                xaxis_title="Date",
+                yaxis_title="Score",
+                height=300
+            )
+            st.plotly_chart(fig_risk, use_container_width=True)
+    
+    else:
+        st.warning("⚠️ Service metric-predictor non disponible sur le port 8008")
+        st.info("Le service metric-predictor est en cours de démarrage. Les prédictions seront disponibles dans quelques instants.")
 
-def main() -> None:
-    with st.sidebar:
-        st.header("Controls")
-        window = st.selectbox("Time Window", ["1h", "6h", "24h"], index=0)
-        auto_refresh = st.checkbox("Auto Refresh", value=True)
-        if st.button("Refresh Now"):
-            st.rerun()
-    render_header()
-    data = _fetch("/dashboard-data", {"window": window})
-    summary_data = _fetch("/summary")
-    if summary_data:
-        render_summary(summary_data)
-    st.divider()
-    col_left, col_right = st.columns([2, 1])
-    with col_left:
-        if data:
-            render_anomaly_chart(data.get("anomaly_series", []))
-            render_metric_chart(data.get("metric_series", []))
-    with col_right:
-        if data:
-            render_recent_anomalies(data.get("recent_anomalies", []))
-        else:
-            st.info("Waiting for data from exporter...")
-    if auto_refresh:
-        time.sleep(REFRESH_SEC)
-        st.rerun()
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    main()
-else:
-    main()
+if page == "📊 Dashboard Principal (v2)":
+    dashboard_principal()
+elif page == "📈 Prédictions Métriques (v3)":
+    metric_predictions_page()
