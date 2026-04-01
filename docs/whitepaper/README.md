@@ -485,3 +485,305 @@ We invite the community to contribute to this new vision of observability.
 *Architect and Founder*  
 *April 2026*
 
+
+---
+
+## 6. Technical Architecture
+
+### 6.1 System Overview
+
+OHE runs as a single binary with internal components communicating via channels.
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         OBSERVABILITY HOLISTIC ENGINE                       │
+│                                   :8080                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  LAYER 1: COLLECTION                                                  │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                │ │
+│  │  │   System     │  │  Container   │  │    Logs      │                │ │
+│  │  │   procfs     │  │  Docker/K8s  │  │  file tail   │                │ │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘                │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                      ↓                                     │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  LAYER 2: PROCESSING                                                  │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                │ │
+│  │  │ Normalize    │  │  Aggregate   │  │ Downsample   │                │ │
+│  │  │    [0-1]     │  │ avg, p95     │  │  1m → 1h     │                │ │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘                │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                      ↓                                     │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  LAYER 3: KPI COMPUTATION                                             │ │
+│  │  ┌─────────────────────────────────────────────────────────────────┐  │ │
+│  │  │  Stress = α·CPU + β·RAM + γ·Latency + δ·Errors + ε·Timeouts    │  │ │
+│  │  │  Fatigue = ∫(Stress - Recovery) dt                              │  │ │
+│  │  │  Mood = (Uptime × Throughput) / (Errors × Timeouts × Restarts) │  │ │
+│  │  │  Pressure = dStress/dt + ∫Errors dt                             │  │ │
+│  │  │  Humidity = (Errors × Timeouts) / Throughput                    │  │ │
+│  │  │  Contagion = Σ(Error_propagation × Dependency)                  │  │ │
+│  │  └─────────────────────────────────────────────────────────────────┘  │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                      ↓                                     │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  LAYER 4: PREDICTION                                                  │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                │ │
+│  │  │    ARIMA     │  │   Dynamic    │  │   Anomaly    │                │ │
+│  │  │   Models     │  │  Thresholds  │  │  Detection   │                │ │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘                │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                      ↓                                     │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  LAYER 5: OUTPUT                                                      │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                │ │
+│  │  │   REST API   │  │  Embedded    │  │   Alerts     │                │ │
+│  │  │  /api/v1/*   │  │     UI       │  │ Slack/Email  │                │ │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘                │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+│  ┌───────────────────────────────────────────────────────────────────────┐ │
+│  │  STORAGE: Badger (embedded)                                           │ │
+│  │  • TTL: 7 days for metrics, 30 days for logs                         │ │
+│  │  • Automatic compaction and compression                               │ │
+│  │  • Concurrent read/write with snapshot isolation                      │ │
+│  └───────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+```
+
+### 6.2 Code Structure
+
+```
+
+workdir/
+├── cmd/agent/
+│   └── main.go                     # Orchestrator entry point
+│
+├── internal/
+│   ├── collector/                  # Data collection
+│   │   ├── system.go               # procfs, sysfs metrics
+│   │   ├── container.go            # Docker, Kubernetes API
+│   │   └── logs.go                 # File tailing, journald
+│   │
+│   ├── processor/                  # Data processing
+│   │   ├── normalize.go            # [0-1] normalization
+│   │   ├── aggregate.go            # avg, min, max, p95, p99
+│   │   └── downsample.go           # 1m → 5m → 1h → 1d
+│   │
+│   ├── analyzer/                   # KPI computation
+│   │   ├── stress.go               # Stress index
+│   │   ├── fatigue.go              # Cumulative fatigue
+│   │   ├── mood.go                 # System mood
+│   │   ├── pressure.go             # Atmospheric pressure
+│   │   ├── humidity.go             # Error humidity
+│   │   └── contagion.go            # Contagion index
+│   │
+│   ├── predictor/                  # Predictions
+│   │   ├── arima.go                # ARIMA time series
+│   │   ├── threshold.go            # Dynamic thresholds
+│   │   └── anomaly.go              # Anomaly detection
+│   │
+│   ├── storage/                    # Persistence
+│   │   └── badger.go               # Badger DB wrapper
+│   │
+│   ├── api/                        # REST API
+│   │   └── handlers.go             # HTTP handlers
+│   │
+│   └── web/                        # Embedded UI
+│       └── embed.go                # Svelte static files
+│
+├── pkg/
+│   ├── models/                     # Data structures
+│   │   ├── metric.go
+│   │   ├── kpi.go
+│   │   └── alert.go
+│   │
+│   └── utils/                      # Utilities
+│       ├── math.go                 # Mathematical helpers
+│       └── time.go                 # Time utilities
+│
+└── configs/
+└── agent.yaml                  # Configuration file
+
+```
+
+### 6.3 API Endpoints
+
+| Endpoint | Method | Description | Response |
+|----------|--------|-------------|----------|
+| `/api/v1/health` | GET | Health check | `{"status": "ok"}` |
+| `/api/v1/metrics` | GET | Raw metrics | `[{"name":"cpu","value":0.45}]` |
+| `/api/v1/kpis` | GET | Complex KPIs | `{"stress":0.32,"fatigue":0.41}` |
+| `/api/v1/predict` | GET | Predictions | `{"storm":"2h","confidence":0.85}` |
+| `/api/v1/alerts` | GET | Active alerts | `[{"severity":"warning","message":"..."}]` |
+
+---
+
+## 7. Mathematical Formalization
+
+### 7.1 Core Metrics Definition
+
+For a system with n services S = {s₁, s₂, ..., sₙ}, each service sᵢ at time t provides:
+
+| Category | Metrics |
+|----------|---------|
+| System | CPUᵢ(t), RAMᵢ(t), Diskᵢ(t), Netᵢ(t) |
+| Application | Reqᵢ(t), Errᵢ(t), Latᵢ(t), Toutᵢ(t) |
+| Behavioral | Restartᵢ(t), Uptimeᵢ(t) |
+
+All metrics are normalized to [0,1] range where 0 = optimal, 1 = critical.
+
+### 7.2 Fundamental KPIs
+
+#### Stress Index
+
+The stress index measures current system pressure combining multiple signals:
+
+```
+
+Sᵢ(t) = α·CPUᵢ(t) + β·RAMᵢ(t) + γ·Latᵢ(t) + δ·Errᵢ(t) + ε·Toutᵢ(t)
+
+```
+
+with α + β + γ + δ + ε = 1 (weights configurable by user)
+
+| S value | State |
+|---------|-------|
+| S < 0.3 | Calm |
+| 0.3 ≤ S < 0.6 | Nervous |
+| 0.6 ≤ S < 0.8 | Stressed |
+| S ≥ 0.8 | Panic |
+
+#### Cumulative Fatigue
+
+Fatigue accumulates when stress exceeds recovery capacity:
+
+```
+
+Fᵢ(t) = ∫₀ᵗ (Sᵢ(τ) - Rᵢ(τ)) dτ
+
+```
+
+where Rᵢ(τ) is the recovery factor (0.1 during normal operation, 0.5 during rest)
+
+| F value | State | Action |
+|---------|-------|--------|
+| F < 0.3 | Rested | Normal monitoring |
+| 0.3 ≤ F < 0.6 | Tired | Increase observation |
+| 0.6 ≤ F < 0.8 | Exhausted | Plan maintenance |
+| F ≥ 0.8 | Burnout | Preventive restart |
+
+#### System Mood
+
+Mood reflects overall system well-being:
+
+```
+
+Mᵢ(t) = (Uptimeᵢ(t) × Reqᵢ(t)) / (Errᵢ(t) × Toutᵢ(t) × Restartᵢ(t) + ε)
+
+```
+
+| M value | Mood |
+|---------|------|
+| M > 100 | Happy |
+| 50 < M ≤ 100 | Content |
+| 10 < M ≤ 50 | Neutral |
+| 1 < M ≤ 10 | Sad |
+| M ≤ 1 | Depressed |
+
+### 7.3 Systemic KPIs
+
+#### Atmospheric Pressure
+
+Pressure predicts approaching storms:
+
+```
+
+P(t) = dS̄/dt + ∫₀ᵗ Ē(τ) dτ
+
+```
+
+where S̄ = average stress across all services, Ē = average error rate
+
+| P trend | Prediction |
+|---------|------------|
+| P > 0.1 for 10m | Storm in 2h |
+| P stable | Stable |
+| P < 0 | Improving |
+
+#### Error Humidity
+
+Humidity indicates error density in the system:
+
+```
+
+H(t) = (Ē(t) × T̄(t)) / Q̄(t)
+
+```
+
+where T̄ = average timeout rate, Q̄ = average throughput
+
+| H value | State | Prediction |
+|---------|-------|------------|
+| H < 0.1 | Dry | Normal |
+| 0.1 ≤ H < 0.3 | Humid | Watch |
+| 0.3 ≤ H < 0.5 | Very humid | Alert |
+| H ≥ 0.5 | Storm | Immediate action |
+
+#### Contagion Index
+
+Contagion measures how failures propagate:
+
+```
+
+C(t) = Σᵢⱼ Eᵢⱼ(t) × Dᵢⱼ
+
+```
+
+where:
+- Eᵢⱼ = error propagation probability from i to j
+- Dᵢⱼ = dependency strength (call frequency, criticality)
+
+| C value | State | Action |
+|---------|-------|--------|
+| C < 0.3 | Low | Normal |
+| 0.3 ≤ C < 0.6 | Moderate | Monitor |
+| 0.6 ≤ C < 0.8 | Epidemic | Isolate |
+| C ≥ 0.8 | Pandemic | Global response |
+
+### 7.4 Prediction Functions
+
+#### Storm Forecast
+
+```
+
+Storm(t+Δt) = 1 if ∫ₜ₋δₜ^t P(τ) dτ > θ_p
+
+```
+
+where θ_p = 0.1, δ_t = 10 minutes
+
+#### Burnout Forecast
+
+```
+
+Burnout(t+Δt) = 1 if F̄(t) > θ_f
+
+```
+
+where θ_f = 0.7, Δt = 4 hours
+
+#### Epidemic Forecast
+
+```
+
+Epidemic(t+Δt) = 1 if C(t) > θ_c
+
+```
+
+where θ_c = 0.6, Δt = 30 minutes
+
