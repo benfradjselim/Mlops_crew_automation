@@ -2,8 +2,6 @@
 
 ## 1. Vue d'ensemble
 
-```
-
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         OBSERVABILITY HOLISTIC ENGINE                       │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -53,14 +51,12 @@
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-```
-
 ## 2. Modes de fonctionnement
 
 | Mode | Rôle | Déploiement | Port |
 |------|------|-------------|------|
-| **agent** | Collecte locale, push vers central | DaemonSet sur chaque node | 8081 (internal) |
-| **central** | Agrégation, API, UI | Deployment unique | 8080 (exposed) |
+| agent | Collecte locale, push vers central | DaemonSet sur chaque node | 8081 (internal) |
+| central | Agrégation, API, UI | Deployment unique | 8080 (exposed) |
 
 ## 3. Communication
 
@@ -82,32 +78,26 @@
 ## 5. Structure des données
 
 ### Metrics (TSDB Badger)
-
 Key: m:{metric_name}:{timestamp}
 Value: {value}
 Exemple: m:cpu_usage:1743552000 = 0.45
 
 ### Logs
-
 Key: l:{timestamp}:{pod_name}
 Value: {log_message}
 Exemple: l:1743552000:collector = {"level":"INFO","message":"collecting metrics"}
 
 ### KPIs
-
 Key: k:{kpi_name}:{timestamp}
 Value: {computed_value}
 Exemple: k:stress:1743552000 = 0.62
 
 ### Dashboards
-
 Key: d:{dashboard_id}
 Value: {dashboard_json}
 Exemple: d:system_overview = {"name":"System","widgets":[...]}
 
 ### Alerts
-
 Key: a:{alert_id}:{timestamp}
 Value: {alert_json}
 Exemple: a:cpu_high:1743552000 = {"severity":"warning","status":"active"}
-
