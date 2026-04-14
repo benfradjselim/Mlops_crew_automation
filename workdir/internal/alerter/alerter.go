@@ -39,20 +39,23 @@ var defaultRules = []Rule{
 
 // Alerter evaluates KPI snapshots against rules and fires alerts
 type Alerter struct {
-	mu     sync.RWMutex
-	rules  []Rule
-	active map[string]*models.Alert // key: alert ID
-	fired  map[string]time.Time     // dedup: last fire time per rule+host
-	ch     chan models.Alert
+	mu          sync.RWMutex
+	rules       []Rule
+	active      map[string]*models.Alert // key: alert ID (bounded by max 1/rule/host)
+	ruleHostIdx map[string]string        // fireKey → active alert ID (O(1) resolve)
+	fired       map[string]time.Time     // dedup: last fire time per rule+host
+	ch          chan models.Alert
+	dropped     int64 // count of alerts dropped due to full channel
 }
 
 // NewAlerter creates an alerter with default OHE rules
 func NewAlerter(bufferSize int) *Alerter {
 	return &Alerter{
-		rules:  defaultRules,
-		active: make(map[string]*models.Alert),
-		fired:  make(map[string]time.Time),
-		ch:     make(chan models.Alert, bufferSize),
+		rules:       defaultRules,
+		active:      make(map[string]*models.Alert),
+		ruleHostIdx: make(map[string]string),
+		fired:       make(map[string]time.Time),
+		ch:          make(chan models.Alert, bufferSize),
 	}
 }
 
@@ -61,12 +64,20 @@ func (a *Alerter) Alerts() <-chan models.Alert {
 	return a.ch
 }
 
-// Evaluate checks KPI values against all rules and fires new alerts
+// Evaluate checks KPI values against all rules and fires new alerts.
+// Uses an O(1) secondary index for resolution to avoid O(n) scans.
 func (a *Alerter) Evaluate(host string, kpis map[string]float64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	now := time.Now()
+
+	// Evict stale fired entries (> 5 min old) to bound map growth
+	for key, ts := range a.fired {
+		if now.Sub(ts) > 5*time.Minute {
+			delete(a.fired, key)
+		}
+	}
 
 	for _, rule := range a.rules {
 		val, ok := kpis[rule.Metric]
@@ -96,30 +107,34 @@ func (a *Alerter) Evaluate(host string, kpis map[string]float64) {
 				UpdatedAt:   now,
 			}
 			a.active[id] = &alert
+			a.ruleHostIdx[fireKey] = id
 			a.fired[fireKey] = now
 
 			select {
 			case a.ch <- alert:
 			default:
-				// channel full; drop
+				// channel full; count dropped alerts
+				a.dropped++
 			}
 		} else {
-			// Resolve any active alerts for this rule+host
-			for id, al := range a.active {
-				if al.Name == rule.Name && al.Host == host && al.Status == models.StatusActive {
+			// Resolve the active alert for this rule+host using the O(1) index
+			if existingID, ok := a.ruleHostIdx[fireKey]; ok {
+				if al, ok := a.active[existingID]; ok && al.Status == models.StatusActive {
 					t := now
 					al.Status = models.StatusResolved
 					al.ResolvedAt = &t
 					al.UpdatedAt = now
-					delete(a.fired, fireKey)
-					_ = id
+					// Remove from active map — resolved alerts are not kept
+					delete(a.active, existingID)
 				}
+				delete(a.ruleHostIdx, fireKey)
+				delete(a.fired, fireKey)
 			}
 		}
 	}
 }
 
-// GetActive returns all currently active alerts
+// GetActive returns copies of all currently active alerts (safe for concurrent use)
 func (a *Alerter) GetActive() []*models.Alert {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -127,10 +142,18 @@ func (a *Alerter) GetActive() []*models.Alert {
 	result := make([]*models.Alert, 0, len(a.active))
 	for _, al := range a.active {
 		if al.Status == models.StatusActive {
-			result = append(result, al)
+			cp := *al
+			result = append(result, &cp)
 		}
 	}
 	return result
+}
+
+// DroppedCount returns the number of alerts dropped due to a full channel buffer
+func (a *Alerter) DroppedCount() int64 {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.dropped
 }
 
 // GetAll returns all alerts (active + resolved)

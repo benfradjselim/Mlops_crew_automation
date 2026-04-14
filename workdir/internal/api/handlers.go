@@ -49,14 +49,19 @@ func NewHandlers(
 	alrt *alerter.Alerter,
 	jwtSecret string,
 	authEnabled bool,
+	allowedOrigins ...[]string,
 ) *Handlers {
+	var origins []string
+	if len(allowedOrigins) > 0 {
+		origins = allowedOrigins[0]
+	}
 	return &Handlers{
 		store:       store,
 		processor:   proc,
 		analyzer:    ana,
 		predictor:   pred,
 		alerter:     alrt,
-		hub:         NewHub(),
+		hub:         NewHub(origins),
 		jwtSecret:   jwtSecret,
 		startTime:   time.Now(),
 		authEnabled: authEnabled,

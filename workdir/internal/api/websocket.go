@@ -9,19 +9,32 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	// CheckOrigin validates against allowed origins; empty string allows all (dev mode).
-	CheckOrigin: func(r *http.Request) bool {
-		return true // TODO: restrict to configured allowed origins in production
-	},
+// newUpgrader returns a WebSocket upgrader that enforces the CORS origin allowlist.
+// If allowedOrigins is empty, all origins are permitted (dev mode).
+func newUpgrader(allowedOrigins []string) websocket.Upgrader {
+	allowed := make(map[string]struct{}, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		allowed[o] = struct{}{}
+	}
+	return websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			if len(allowedOrigins) == 0 {
+				return true // wildcard (dev mode)
+			}
+			origin := r.Header.Get("Origin")
+			_, ok := allowed[origin]
+			return ok
+		},
+	}
 }
 
 // Hub manages all WebSocket connections and broadcasts
 type Hub struct {
-	mu      sync.RWMutex
-	clients map[*wsClient]struct{}
+	mu       sync.RWMutex
+	clients  map[*wsClient]struct{}
+	upgrader websocket.Upgrader
 }
 
 type wsClient struct {
@@ -56,9 +69,13 @@ func (c *wsClient) close() {
 	}
 }
 
-// NewHub creates a new WebSocket hub
-func NewHub() *Hub {
-	return &Hub{clients: make(map[*wsClient]struct{})}
+// NewHub creates a new WebSocket hub with the given CORS origin allowlist.
+// Pass nil or empty slice for wildcard (dev mode).
+func NewHub(allowedOrigins []string) *Hub {
+	return &Hub{
+		clients:  make(map[*wsClient]struct{}),
+		upgrader: newUpgrader(allowedOrigins),
+	}
 }
 
 // Broadcast sends a message to all connected clients
@@ -90,7 +107,7 @@ func (hub *Hub) unregister(c *wsClient) {
 
 // WebSocketHandler upgrades HTTP to WebSocket and streams live KPI/metric events
 func (h *Handlers) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := h.hub.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("[ws] upgrade: %v", err)
 		return
