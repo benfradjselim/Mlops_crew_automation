@@ -10,8 +10,10 @@ agent
 
 # Workspace
 workdir/bin/
-workdir/pkg/
 workdir/vendor/
+# Ignore Go build cache but not source packages under workdir/pkg/
+workdir/pkg/**/*.a
+workdir/pkg/**/*.h
 .idea/
 .vscode/
 
