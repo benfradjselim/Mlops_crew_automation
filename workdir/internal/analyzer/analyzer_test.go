@@ -146,3 +146,86 @@ func TestContagionStates(t *testing.T) {
 		}
 	}
 }
+
+func TestMoodStates(t *testing.T) {
+	tests := []struct {
+		m    float64
+		want string
+	}{
+		{0.9, "happy"},
+		{0.6, "content"},
+		{0.4, "neutral"},
+		{0.2, "sad"},
+		{0.05, "depressed"},
+	}
+	for _, tc := range tests {
+		if got := moodState(tc.m); got != tc.want {
+			t.Errorf("moodState(%v) = %q; want %q", tc.m, got, tc.want)
+		}
+	}
+}
+
+func TestPressureStates(t *testing.T) {
+	tests := []struct {
+		p    float64
+		want string
+	}{
+		{0.8, "storm_approaching"},
+		{0.6, "rising"},
+		{0.5, "stable"},
+		{0.3, "improving"},
+	}
+	for _, tc := range tests {
+		if got := pressureState(tc.p); got != tc.want {
+			t.Errorf("pressureState(%v) = %q; want %q", tc.p, got, tc.want)
+		}
+	}
+}
+
+func TestAnalyzerSnapshot(t *testing.T) {
+	a := NewAnalyzer()
+
+	// Before any update, Snapshot should return false
+	if _, ok := a.Snapshot("ghost"); ok {
+		t.Error("Snapshot should return false for unknown host")
+	}
+
+	// After an update the snapshot should be retrievable
+	metrics := map[string]float64{"cpu_percent": 0.5, "memory_percent": 0.3}
+	a.Update("snap-host", metrics)
+
+	snap, ok := a.Snapshot("snap-host")
+	if !ok {
+		t.Fatal("Snapshot returned false after Update")
+	}
+	if snap.Host != "snap-host" {
+		t.Errorf("snapshot host = %q; want snap-host", snap.Host)
+	}
+}
+
+func TestAnalyzerRecordRestartAndResetFatigue(t *testing.T) {
+	a := NewAnalyzer()
+
+	// Accumulate some fatigue first
+	high := map[string]float64{
+		"cpu_percent": 0.95, "memory_percent": 0.95, "load_avg_1": 0.95,
+	}
+	for i := 0; i < 5; i++ {
+		a.Update("rr-host", high)
+	}
+
+	snap, _ := a.Snapshot("rr-host")
+	fatigueBeforeReset := snap.Fatigue.Value
+
+	// RecordRestart should not panic
+	a.RecordRestart("rr-host")
+
+	// ResetFatigue should bring fatigue back to 0
+	a.ResetFatigue("rr-host")
+
+	// Next update should reflect near-zero fatigue
+	snap2 := a.Update("rr-host", map[string]float64{"cpu_percent": 0.0})
+	if snap2.Fatigue.Value >= fatigueBeforeReset {
+		t.Errorf("fatigue after reset (%v) should be < pre-reset (%v)", snap2.Fatigue.Value, fatigueBeforeReset)
+	}
+}
