@@ -101,7 +101,7 @@ func New(cfg Config) (*Engine, error) {
 		log.Printf("[ohe] admin seed warning: %v", err)
 	}
 
-	handlers := api.NewHandlers(store, proc, ana, pred, alrt, cfg.JWTSecret, cfg.AuthEnabled, cfg.AllowedOrigins)
+	handlers := api.NewHandlers(store, proc, ana, pred, alrt, cfg.Host, cfg.JWTSecret, cfg.AuthEnabled, cfg.AllowedOrigins)
 	router := api.NewRouter(handlers, cfg.JWTSecret, cfg.AuthEnabled, cfg.AllowedOrigins)
 
 	srv := &http.Server{

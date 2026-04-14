@@ -68,7 +68,10 @@ export const api = {
   userCreate: (u) => req('POST', '/auth/users', u),
   userDelete: (username) => req('DELETE', `/auth/users/${username}`),
 
-  // Predict
-  predict: (host, metric, horizon) =>
-    req('GET', `/predict?host=${encodeURIComponent(host)}&metric=${encodeURIComponent(metric)}&horizon=${horizon}`),
+  // Predict — metric is optional; omit for all-metrics forecast
+  predict: (host, metric, horizon) => {
+    let path = `/predict?host=${encodeURIComponent(host)}&horizon=${horizon}`
+    if (metric) path += `&metric=${encodeURIComponent(metric)}`
+    return req('GET', path)
+  },
 }

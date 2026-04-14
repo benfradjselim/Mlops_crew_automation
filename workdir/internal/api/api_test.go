@@ -37,7 +37,7 @@ func setupServer(t *testing.T) *httptest.Server {
 	pred := predictor.NewPredictor()
 	alrt := alerter.NewAlerter(100)
 
-	handlers := api.NewHandlers(store, proc, ana, pred, alrt, "test-secret", false)
+	handlers := api.NewHandlers(store, proc, ana, pred, alrt, "test-host", "test-secret", false)
 	router := api.NewRouter(handlers, "test-secret", false, nil) // nil = wildcard CORS for tests
 	return httptest.NewServer(router)
 }
@@ -616,7 +616,7 @@ func TestReadinessProbeReady(t *testing.T) {
 	pred := predictor.NewPredictor()
 	alrt := alerter.NewAlerter(100)
 
-	handlers := api.NewHandlers(store, proc, ana, pred, alrt, "secret", false)
+	handlers := api.NewHandlers(store, proc, ana, pred, alrt, "test-host", "secret", false)
 	handlers.SetReady(true) // explicitly mark ready
 	router := api.NewRouter(handlers, "secret", false, nil)
 	srv := httptest.NewServer(router)

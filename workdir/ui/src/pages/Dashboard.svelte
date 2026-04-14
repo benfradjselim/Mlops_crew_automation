@@ -10,14 +10,29 @@
   let liveKpis = {}
   let metricHistory = {}   // metric -> array of values (last 20)
   let recentAlerts = []
+  let predictions = []
   let pollTimer = null
 
   const KPI_NAMES = ['stress', 'fatigue', 'mood', 'pressure', 'humidity', 'contagion']
+
+  async function detectHost() {
+    try {
+      const r = await api.health()
+      host = r.data?.host || ''
+    } catch {}
+  }
 
   async function loadKPIs() {
     try {
       const r = await api.kpis(host)
       liveKpis = r.data || {}
+    } catch {}
+  }
+
+  async function loadPredictions() {
+    try {
+      const r = await api.predict(host, '', 120)
+      predictions = Object.entries(r.data?.predictions || {}).map(([metric, p]) => ({ metric, ...p }))
     } catch {}
   }
 
@@ -55,11 +70,13 @@
     }
   }
 
-  onMount(() => {
+  onMount(async () => {
+    await detectHost()
     loadKPIs()
     loadAlerts()
+    loadPredictions()
     connectWS()
-    pollTimer = setInterval(() => { loadKPIs(); loadAlerts() }, 15000)
+    pollTimer = setInterval(() => { loadKPIs(); loadAlerts(); loadPredictions() }, 15000)
   })
 
   onDestroy(() => {
@@ -103,6 +120,28 @@
     </section>
   {/if}
 
+  <!-- Predictions -->
+  {#if predictions.length > 0}
+    <section class="predictions card">
+      <h2>Predictions <span class="badge">2h horizon</span></h2>
+      <table>
+        <thead>
+          <tr><th>Metric</th><th>Current</th><th>Predicted</th><th>Trend</th></tr>
+        </thead>
+        <tbody>
+          {#each predictions as p}
+            <tr>
+              <td>{p.metric}</td>
+              <td>{(p.current * 100).toFixed(1)}%</td>
+              <td>{(p.predicted * 100).toFixed(1)}%</td>
+              <td class="trend trend-{p.trend}">{p.trend}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </section>
+  {/if}
+
   <!-- Recent alerts -->
   <section class="alerts-section card">
     <h2>Recent Alerts <span class="badge">{recentAlerts.length}</span></h2>
@@ -119,7 +158,7 @@
               <td>{a.host}</td>
               <td>{a.rule_id}</td>
               <td><span class="badge-sev">{a.severity || 'info'}</span></td>
-              <td>{new Date(a.fired_at).toLocaleTimeString()}</td>
+              <td>{new Date(a.created_at).toLocaleTimeString()}</td>
               <td>
                 {#if !a.acknowledged}
                   <button class="btn-sm" on:click={() => ackAlert(a.id)}>Ack</button>
@@ -156,4 +195,8 @@
   .empty { color: #475569; font-size: 0.85rem; }
   .btn-sm { background: #0284c7; border: none; color: #fff; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
   .acked { color: #22c55e; font-size: 0.8rem; }
+  .trend { font-weight: 600; font-size: 0.8rem; }
+  .trend-rising { color: #f87171; }
+  .trend-falling { color: #4ade80; }
+  .trend-stable { color: #94a3b8; }
 </style>

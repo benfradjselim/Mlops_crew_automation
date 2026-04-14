@@ -40,7 +40,7 @@ func setupServerWithAuth(t *testing.T) *httptest.Server {
 	pred := predictor.NewPredictor()
 	alrt := alerter.NewAlerter(100)
 
-	handlers := api.NewHandlers(store, proc, ana, pred, alrt, "test-secret-key", true)
+	handlers := api.NewHandlers(store, proc, ana, pred, alrt, "test-host", "test-secret-key", true)
 	router := api.NewRouter(handlers, "test-secret-key", true, nil)
 	return httptest.NewServer(router)
 }

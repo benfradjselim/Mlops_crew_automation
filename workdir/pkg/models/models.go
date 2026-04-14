@@ -206,6 +206,7 @@ type LoginResponse struct {
 type HealthResponse struct {
 	Status    string            `json:"status"`
 	Version   string            `json:"version"`
+	Host      string            `json:"host"`
 	Uptime    float64           `json:"uptime_seconds"`
 	Checks    map[string]string `json:"checks"`
 	Timestamp time.Time         `json:"timestamp"`

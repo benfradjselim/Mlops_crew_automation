@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -36,6 +37,7 @@ type Handlers struct {
 	predictor   *predictor.Predictor
 	alerter     *alerter.Alerter
 	hub         *Hub
+	hostname    string
 	jwtSecret   string
 	startTime   time.Time
 	authEnabled bool
@@ -58,6 +60,7 @@ func NewHandlers(
 	ana *analyzer.Analyzer,
 	pred *predictor.Predictor,
 	alrt *alerter.Alerter,
+	hostname string,
 	jwtSecret string,
 	authEnabled bool,
 	allowedOrigins ...[]string,
@@ -66,6 +69,9 @@ func NewHandlers(
 	if len(allowedOrigins) > 0 {
 		origins = allowedOrigins[0]
 	}
+	if hostname == "" {
+		hostname, _ = os.Hostname()
+	}
 	return &Handlers{
 		store:       store,
 		processor:   proc,
@@ -73,6 +79,7 @@ func NewHandlers(
 		predictor:   pred,
 		alerter:     alrt,
 		hub:         NewHub(origins),
+		hostname:    hostname,
 		jwtSecret:   jwtSecret,
 		startTime:   time.Now(),
 		authEnabled: authEnabled,
@@ -91,6 +98,7 @@ func (h *Handlers) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	respondSuccess(w, models.HealthResponse{
 		Status:    "ok",
 		Version:   version,
+		Host:      h.hostname,
 		Uptime:    time.Since(h.startTime).Seconds(),
 		Checks:    checks,
 		Timestamp: time.Now().UTC(),
@@ -123,7 +131,7 @@ func (h *Handlers) ReadinessHandler(w http.ResponseWriter, _ *http.Request) {
 func (h *Handlers) MetricsListHandler(w http.ResponseWriter, r *http.Request) {
 	host := r.URL.Query().Get("host")
 	if host == "" {
-		host = "localhost"
+		host = h.hostname
 	}
 
 	// Return latest normalized values for common metrics
@@ -152,7 +160,7 @@ func (h *Handlers) MetricGetHandler(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
 	host := r.URL.Query().Get("host")
 	if host == "" {
-		host = "localhost"
+		host = h.hostname
 	}
 
 	from, to := parseTimeRange(r)
@@ -177,7 +185,7 @@ func (h *Handlers) MetricAggregateHandler(w http.ResponseWriter, r *http.Request
 	name := mux.Vars(r)["name"]
 	host := r.URL.Query().Get("host")
 	if host == "" {
-		host = "localhost"
+		host = h.hostname
 	}
 
 	agg, ok := h.processor.Aggregate(host, name)
@@ -192,7 +200,7 @@ func (h *Handlers) MetricAggregateHandler(w http.ResponseWriter, r *http.Request
 func (h *Handlers) KPIListHandler(w http.ResponseWriter, r *http.Request) {
 	host := r.URL.Query().Get("host")
 	if host == "" {
-		host = "localhost"
+		host = h.hostname
 	}
 
 	snap, ok := h.analyzer.Snapshot(host)
@@ -208,7 +216,7 @@ func (h *Handlers) KPIGetHandler(w http.ResponseWriter, r *http.Request) {
 	name := mux.Vars(r)["name"]
 	host := r.URL.Query().Get("host")
 	if host == "" {
-		host = "localhost"
+		host = h.hostname
 	}
 
 	from, to := parseTimeRange(r)
@@ -231,7 +239,7 @@ func (h *Handlers) KPIGetHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) PredictHandler(w http.ResponseWriter, r *http.Request) {
 	host := r.URL.Query().Get("host")
 	if host == "" {
-		host = "localhost"
+		host = h.hostname
 	}
 	horizonStr := r.URL.Query().Get("horizon")
 	horizon := 120 // default 2 hours

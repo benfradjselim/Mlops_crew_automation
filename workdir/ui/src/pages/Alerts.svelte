@@ -56,7 +56,7 @@
             <td>{a.host}</td>
             <td>{a.rule_id}</td>
             <td class="msg">{a.message || '—'}</td>
-            <td class="time">{new Date(a.fired_at).toLocaleString()}</td>
+            <td class="time">{new Date(a.created_at).toLocaleString()}</td>
             <td>
               {#if a.silenced}
                 <span class="tag">silenced</span>
