@@ -387,6 +387,7 @@ func (h *Handlers) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user.Password = "" // never expose hash in response
 	respondSuccess(w, models.LoginResponse{
 		Token:   signed,
 		Expires: exp.Unix(),

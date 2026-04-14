@@ -154,6 +154,114 @@ func TestKPIRangeFilter(t *testing.T) {
 	}
 }
 
+func TestRunGC(t *testing.T) {
+	s := openTestStore(t)
+	defer s.Close()
+	// RunGC on an essentially empty store returns ErrNoRewrite — that's expected and not a failure
+	_ = s.RunGC()
+}
+
+func TestAlertCRUD(t *testing.T) {
+	s := openTestStore(t)
+	defer s.Close()
+
+	alert := map[string]string{"id": "al1", "name": "stress_panic"}
+	if err := s.SaveAlert("al1", alert); err != nil {
+		t.Fatalf("SaveAlert: %v", err)
+	}
+
+	// ListAlerts
+	count := 0
+	if err := s.ListAlerts(func(val []byte) error { count++; return nil }); err != nil {
+		t.Fatalf("ListAlerts: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("ListAlerts count = %d; want 1", count)
+	}
+
+	// DeleteAlert
+	if err := s.DeleteAlert("al1"); err != nil {
+		t.Fatalf("DeleteAlert: %v", err)
+	}
+	count = 0
+	s.ListAlerts(func([]byte) error { count++; return nil })
+	if count != 0 {
+		t.Errorf("after delete ListAlerts count = %d; want 0", count)
+	}
+}
+
+func TestUserCRUDStorage(t *testing.T) {
+	s := openTestStore(t)
+	defer s.Close()
+
+	type user struct {
+		Username string `json:"username"`
+		Role     string `json:"role"`
+	}
+	if err := s.SaveUser("bob", user{Username: "bob", Role: "viewer"}); err != nil {
+		t.Fatalf("SaveUser: %v", err)
+	}
+	if err := s.SaveUser("alice", user{Username: "alice", Role: "admin"}); err != nil {
+		t.Fatalf("SaveUser alice: %v", err)
+	}
+
+	// ListUsers
+	count := 0
+	if err := s.ListUsers(func([]byte) error { count++; return nil }); err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("ListUsers count = %d; want 2", count)
+	}
+
+	// DeleteUser
+	if err := s.DeleteUser("bob"); err != nil {
+		t.Fatalf("DeleteUser: %v", err)
+	}
+	count = 0
+	s.ListUsers(func([]byte) error { count++; return nil })
+	if count != 1 {
+		t.Errorf("after delete ListUsers count = %d; want 1", count)
+	}
+}
+
+func TestDataSourceCRUDStorage(t *testing.T) {
+	s := openTestStore(t)
+	defer s.Close()
+
+	ds := map[string]string{"id": "ds1", "name": "prometheus", "url": "http://localhost:9090"}
+	if err := s.SaveDataSource("ds1", ds); err != nil {
+		t.Fatalf("SaveDataSource: %v", err)
+	}
+
+	// GetDataSource
+	var got map[string]string
+	if err := s.GetDataSource("ds1", &got); err != nil {
+		t.Fatalf("GetDataSource: %v", err)
+	}
+	if got["name"] != "prometheus" {
+		t.Errorf("name = %q; want prometheus", got["name"])
+	}
+
+	// ListDataSources
+	count := 0
+	if err := s.ListDataSources(func([]byte) error { count++; return nil }); err != nil {
+		t.Fatalf("ListDataSources: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("ListDataSources count = %d; want 1", count)
+	}
+
+	// DeleteDataSource
+	if err := s.DeleteDataSource("ds1"); err != nil {
+		t.Fatalf("DeleteDataSource: %v", err)
+	}
+	var gone map[string]string
+	if err := s.GetDataSource("ds1", &gone); err == nil {
+		t.Error("expected error getting deleted datasource")
+	}
+}
+
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "ohe-storage-test-*")

@@ -63,8 +63,8 @@ func AuthMiddleware(jwtSecret string, enabled bool) func(http.Handler) http.Hand
 				return
 			}
 
-			// Skip auth for health and login
-			if r.URL.Path == "/api/v1/health" || r.URL.Path == "/api/v1/auth/login" {
+			// Skip auth for health, login, and first-run setup (SetupHandler guards itself)
+			if r.URL.Path == "/api/v1/health" || r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/auth/setup" {
 				next.ServeHTTP(w, r)
 				return
 			}

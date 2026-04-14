@@ -87,7 +87,7 @@ type Alert struct {
 type User struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
-	Password string `json:"-"` // bcrypt hash
+	Password string `json:"password,omitempty"` // bcrypt hash — omitempty ensures it is never serialised when cleared
 	Role     string `json:"role"` // admin, viewer, operator
 }
 
