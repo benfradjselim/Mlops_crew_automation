@@ -245,7 +245,7 @@ go build -ldflags="-s -w" -o ohe ./cmd/ohe/
 | 3.1 | RBAC · CORS allowlist · Rate limiting · SSRF protection | ✅ Done |
 | 3.2 | First-boot admin seeding · Templates · Setup endpoint | ✅ Done |
 | 4 | Svelte UI + Dashboards | ✅ Done |
-| 5 | HA + K8s Operator | Planned |
+| 5 | HA + K8s Operator | ✅ Done |
 | 6 | Distributed Tracing + Multi-cluster | Planned |
 
 ---
