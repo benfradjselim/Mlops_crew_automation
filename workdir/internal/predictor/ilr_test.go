@@ -216,6 +216,31 @@ func TestStormDetector(t *testing.T) {
 	}
 }
 
+func TestBatchILRAlpha(t *testing.T) {
+	b := NewBatchILR(5)
+	// Before training Alpha should be 0
+	if b.Alpha() != 0 {
+		t.Errorf("untrained Alpha() = %v; want 0", b.Alpha())
+	}
+	// Train on y = 4x
+	for i := 0; i < 25; i++ {
+		b.Update(float64(i), float64(i)*4)
+	}
+	if math.Abs(b.Alpha()-4.0) > 0.1 {
+		t.Errorf("trained Alpha() = %v; want ~4.0", b.Alpha())
+	}
+}
+
+func TestDynamicThresholdUpperBoundInsufficientData(t *testing.T) {
+	dt := NewDynamicThreshold(100)
+	// Fewer than 2 values → should return 1.0 sentinel
+	dt.Update(0.5)
+	ub := dt.UpperBound(3)
+	if ub != 1.0 {
+		t.Errorf("UpperBound with <2 samples = %v; want 1.0", ub)
+	}
+}
+
 func TestAnomalyDetector(t *testing.T) {
 	ad := NewAnomalyDetector(3.0)
 

@@ -230,3 +230,29 @@ func TestCircularBufferValuesEmpty(t *testing.T) {
 		t.Errorf("Values() on empty buffer = %v; want []", vals)
 	}
 }
+
+func TestCircularBufferZeroSize(t *testing.T) {
+	// Push to a zero-capacity buffer must not panic
+	buf := NewCircularBuffer(0)
+	buf.Push(1.0)
+	if buf.Len() != 0 {
+		t.Errorf("zero-size buffer Len() = %d; want 0", buf.Len())
+	}
+}
+
+func TestCircularBufferFullWrap(t *testing.T) {
+	// Fill exactly to capacity then verify Values order when head wraps to 0
+	buf := NewCircularBuffer(3)
+	buf.Push(1)
+	buf.Push(2)
+	buf.Push(3) // full; head wraps to 0
+	buf.Push(4) // overwrites 1; head = 1
+
+	vals := buf.Values()
+	if len(vals) != 3 {
+		t.Fatalf("len = %d; want 3", len(vals))
+	}
+	if vals[0] != 2 || vals[1] != 3 || vals[2] != 4 {
+		t.Errorf("Values() = %v; want [2 3 4]", vals)
+	}
+}
