@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -65,6 +66,12 @@ type Engine struct {
 
 // New creates a fully-wired engine
 func New(cfg Config) (*Engine, error) {
+	if cfg.AuthEnabled && cfg.JWTSecret == "" {
+		return nil, fmt.Errorf("auth_enabled=true requires jwt_secret to be set (use --jwt-secret or OHE_JWT_SECRET env var)")
+	}
+	if cfg.AuthEnabled && cfg.JWTSecret == "change-me-in-production" {
+		return nil, fmt.Errorf("jwt_secret must be changed from the default value before enabling auth")
+	}
 	if err := os.MkdirAll(cfg.StoragePath, 0o750); err != nil {
 		return nil, fmt.Errorf("create storage dir: %w", err)
 	}
@@ -172,19 +179,27 @@ func (e *Engine) collectLocally(ctx context.Context) {
 
 			// Persist to storage
 			for _, m := range metrics {
-				_ = e.store.SaveMetric(m.Host, m.Name, m.Value, m.Timestamp)
+				if err := e.store.SaveMetric(m.Host, m.Name, m.Value, m.Timestamp); err != nil {
+					log.Printf("[store] SaveMetric %s/%s: %v", m.Host, m.Name, err)
+				}
 			}
 
 			// Compute and store KPIs
 			mmap := e.buildMetricsMap(e.cfg.Host)
 			snapshot := e.ana.Update(e.cfg.Host, mmap)
 			now := time.Now()
-			_ = e.store.SaveKPI(e.cfg.Host, "stress", snapshot.Stress.Value, now)
-			_ = e.store.SaveKPI(e.cfg.Host, "fatigue", snapshot.Fatigue.Value, now)
-			_ = e.store.SaveKPI(e.cfg.Host, "mood", snapshot.Mood.Value, now)
-			_ = e.store.SaveKPI(e.cfg.Host, "pressure", snapshot.Pressure.Value, now)
-			_ = e.store.SaveKPI(e.cfg.Host, "humidity", snapshot.Humidity.Value, now)
-			_ = e.store.SaveKPI(e.cfg.Host, "contagion", snapshot.Contagion.Value, now)
+			for kpiName, kpiVal := range map[string]float64{
+				"stress":    snapshot.Stress.Value,
+				"fatigue":   snapshot.Fatigue.Value,
+				"mood":      snapshot.Mood.Value,
+				"pressure":  snapshot.Pressure.Value,
+				"humidity":  snapshot.Humidity.Value,
+				"contagion": snapshot.Contagion.Value,
+			} {
+				if err := e.store.SaveKPI(e.cfg.Host, kpiName, kpiVal, now); err != nil {
+					log.Printf("[store] SaveKPI %s/%s: %v", e.cfg.Host, kpiName, err)
+				}
+			}
 
 			// Feed predictor
 			for _, m := range metrics {
@@ -257,6 +272,7 @@ func pushBatch(ctx context.Context, client *http.Client, url string, batch model
 		return err
 	}
 	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body) //nolint:errcheck — drain for connection reuse
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("central returned %d", resp.StatusCode)
 	}

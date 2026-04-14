@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/benfradjselim/ohe/pkg/models"
@@ -14,6 +15,7 @@ import (
 
 // SystemCollector reads metrics from /proc on Linux, or uses runtime on other platforms.
 type SystemCollector struct {
+	mu          sync.Mutex // protects all mutable fields below
 	host        string
 	prevNetStat netStat
 	prevCPUStat cpuStat
@@ -39,6 +41,9 @@ func NewSystemCollector(host string) *SystemCollector {
 
 // Collect gathers all system metrics and returns them as a slice
 func (sc *SystemCollector) Collect() ([]models.Metric, error) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+
 	now := time.Now()
 	elapsed := now.Sub(sc.prevTime).Seconds()
 	if elapsed < 0.001 {
@@ -86,14 +91,17 @@ func (sc *SystemCollector) Collect() ([]models.Metric, error) {
 	// Network
 	curNet, err := readNetStat()
 	if err == nil && elapsed > 0 {
-		rxBps := float64(curNet.rxBytes-sc.prevNetStat.rxBytes) / elapsed
-		txBps := float64(curNet.txBytes-sc.prevNetStat.txBytes) / elapsed
-		if rxBps < 0 {
-			rxBps = 0
+		// Use signed arithmetic to handle counter wrap-around
+		rxDelta := int64(curNet.rxBytes) - int64(sc.prevNetStat.rxBytes)
+		txDelta := int64(curNet.txBytes) - int64(sc.prevNetStat.txBytes)
+		if rxDelta < 0 {
+			rxDelta = 0
 		}
-		if txBps < 0 {
-			txBps = 0
+		if txDelta < 0 {
+			txDelta = 0
 		}
+		rxBps := float64(rxDelta) / elapsed
+		txBps := float64(txDelta) / elapsed
 		metrics = append(metrics,
 			models.Metric{Name: "net_rx_bps", Value: rxBps, Timestamp: now, Host: sc.host},
 			models.Metric{Name: "net_tx_bps", Value: txBps, Timestamp: now, Host: sc.host},

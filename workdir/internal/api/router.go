@@ -14,22 +14,24 @@ func NewRouter(h *Handlers, jwtSecret string, authEnabled bool) http.Handler {
 	r.Use(LoggingMiddleware)
 	r.Use(CORSMiddleware)
 	r.Use(mux.MiddlewareFunc(AuthMiddleware(jwtSecret, authEnabled)))
+	r.Use(mux.MiddlewareFunc(RateLimitLogin))
 
 	api := r.PathPrefix("/api/v1").Subrouter()
 
 	// System
 	api.HandleFunc("/health", h.HealthHandler).Methods(http.MethodGet)
 	api.HandleFunc("/config", h.ConfigHandler).Methods(http.MethodGet)
-	api.HandleFunc("/reload", h.ReloadHandler).Methods(http.MethodPost)
 
 	// Auth
 	api.HandleFunc("/auth/login", h.LoginHandler).Methods(http.MethodPost)
 	api.HandleFunc("/auth/logout", h.LogoutHandler).Methods(http.MethodPost)
 	api.HandleFunc("/auth/refresh", h.RefreshHandler).Methods(http.MethodPost)
-	api.HandleFunc("/auth/users", h.UserListHandler).Methods(http.MethodGet)
-	api.HandleFunc("/auth/users", h.UserCreateHandler).Methods(http.MethodPost)
-	api.HandleFunc("/auth/users/{id}", h.UserGetHandler).Methods(http.MethodGet)
-	api.HandleFunc("/auth/users/{id}", h.UserDeleteHandler).Methods(http.MethodDelete)
+	adminOnly := RequireRole("admin")
+	api.Handle("/auth/users", adminOnly(http.HandlerFunc(h.UserListHandler))).Methods(http.MethodGet)
+	api.Handle("/auth/users", adminOnly(http.HandlerFunc(h.UserCreateHandler))).Methods(http.MethodPost)
+	api.Handle("/auth/users/{id}", adminOnly(http.HandlerFunc(h.UserGetHandler))).Methods(http.MethodGet)
+	api.Handle("/auth/users/{id}", adminOnly(http.HandlerFunc(h.UserDeleteHandler))).Methods(http.MethodDelete)
+	api.Handle("/reload", adminOnly(http.HandlerFunc(h.ReloadHandler))).Methods(http.MethodPost)
 
 	// Metrics
 	api.HandleFunc("/metrics", h.MetricsListHandler).Methods(http.MethodGet)

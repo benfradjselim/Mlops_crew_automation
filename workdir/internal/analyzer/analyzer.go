@@ -15,7 +15,8 @@ type Analyzer struct {
 	mu sync.RWMutex
 
 	// Per-host accumulated state
-	hosts map[string]*hostState
+	hosts     map[string]*hostState
+	snapshots map[string]models.KPISnapshot // last computed snapshot per host
 }
 
 type hostState struct {
@@ -42,7 +43,8 @@ type hostState struct {
 // NewAnalyzer creates a new holistic analyzer
 func NewAnalyzer() *Analyzer {
 	return &Analyzer{
-		hosts: make(map[string]*hostState),
+		hosts:     make(map[string]*hostState),
+		snapshots: make(map[string]models.KPISnapshot),
 	}
 }
 
@@ -88,6 +90,11 @@ func (a *Analyzer) Update(host string, metrics map[string]float64) models.KPISna
 
 	// --- Fatigue ---
 	// F += (S - R) * dt, R = recovery rate = 0.1 when S < 0.3
+	// Cap dt to 2× expected interval (30s) to prevent first-call fatigue spike on restart
+	const maxDt = 30.0
+	if dt > maxDt {
+		dt = maxDt
+	}
 	recovery := 0.0
 	if stress < 0.3 {
 		recovery = 0.1
@@ -134,7 +141,7 @@ func (a *Analyzer) Update(host string, metrics map[string]float64) models.KPISna
 	hs.lastStress = stress
 	hs.lastUpdate = now
 
-	return models.KPISnapshot{
+	snap := models.KPISnapshot{
 		Host:      host,
 		Timestamp: now,
 		Stress: models.KPI{
@@ -180,6 +187,16 @@ func (a *Analyzer) Update(host string, metrics map[string]float64) models.KPISna
 			Host:      host,
 		},
 	}
+	a.snapshots[host] = snap
+	return snap
+}
+
+// Snapshot returns the last computed KPI snapshot without mutating state (safe for GET handlers)
+func (a *Analyzer) Snapshot(host string) (models.KPISnapshot, bool) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	snap, ok := a.snapshots[host]
+	return snap, ok
 }
 
 // RecordRestart increments the restart count for a host

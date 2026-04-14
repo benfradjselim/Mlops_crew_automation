@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -116,7 +118,78 @@ func CORSMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// RateLimitMiddleware is a simple in-memory token bucket per IP (production use an external store)
+// RequireRole returns a middleware that enforces the minimum role level.
+// Roles: viewer < operator < admin
+func RequireRole(role string) func(http.Handler) http.Handler {
+	roleLevel := map[string]int{"viewer": 1, "operator": 2, "admin": 3}
+	required := roleLevel[role]
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims, ok := claimsFromContext(r.Context())
+			if !ok {
+				respondError(w, http.StatusForbidden, "FORBIDDEN", "insufficient permissions")
+				return
+			}
+			if roleLevel[claims.Role] < required {
+				respondError(w, http.StatusForbidden, "FORBIDDEN", "insufficient permissions")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// ipLimiter holds per-IP token-bucket state
+type ipLimiter struct {
+	mu      sync.Mutex
+	buckets map[string]*bucket
+}
+
+type bucket struct {
+	tokens   float64
+	lastSeen time.Time
+}
+
+var loginLimiter = &ipLimiter{buckets: make(map[string]*bucket)}
+
+// RateLimitLogin allows up to 5 login attempts per minute per IP
+func RateLimitLogin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/auth/login" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		if ip == "" {
+			ip = r.RemoteAddr
+		}
+		loginLimiter.mu.Lock()
+		b, ok := loginLimiter.buckets[ip]
+		if !ok {
+			b = &bucket{tokens: 5, lastSeen: time.Now()}
+			loginLimiter.buckets[ip] = b
+		}
+		// Refill: 5 tokens per minute
+		elapsed := time.Since(b.lastSeen).Seconds()
+		b.tokens += elapsed * (5.0 / 60.0)
+		if b.tokens > 5 {
+			b.tokens = 5
+		}
+		b.lastSeen = time.Now()
+		allow := b.tokens >= 1
+		if allow {
+			b.tokens--
+		}
+		loginLimiter.mu.Unlock()
+
+		if !allow {
+			respondError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many login attempts, try again later")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 type responseWriter struct {
 	http.ResponseWriter
 	status int

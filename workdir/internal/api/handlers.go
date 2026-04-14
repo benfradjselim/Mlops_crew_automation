@@ -4,8 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"net"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	oheproc "github.com/benfradjselim/ohe/internal/processor"
@@ -145,17 +150,19 @@ func (h *Handlers) MetricAggregateHandler(w http.ResponseWriter, r *http.Request
 	respondSuccess(w, agg)
 }
 
-// KPIListHandler GET /api/v1/kpis
+// KPIListHandler GET /api/v1/kpis — read-only, returns last computed snapshot
 func (h *Handlers) KPIListHandler(w http.ResponseWriter, r *http.Request) {
 	host := r.URL.Query().Get("host")
 	if host == "" {
 		host = "localhost"
 	}
 
-	// Get current normalized values and compute KPIs
-	metrics := h.buildMetricsMap(host)
-	snapshot := h.analyzer.Update(host, metrics)
-	respondSuccess(w, snapshot)
+	snap, ok := h.analyzer.Snapshot(host)
+	if !ok {
+		respondError(w, http.StatusNotFound, "NO_DATA", "no KPI data available yet for host")
+		return
+	}
+	respondSuccess(w, snap)
 }
 
 // KPIGetHandler GET /api/v1/kpis/{name}
@@ -390,24 +397,39 @@ func (h *Handlers) IngestHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sanitize host to prevent Badger key namespace injection
+	batch.Host = sanitizeKey(batch.Host)
+	for i := range batch.Metrics {
+		batch.Metrics[i].Host = sanitizeKey(batch.Metrics[i].Host)
+		batch.Metrics[i].Name = sanitizeKey(batch.Metrics[i].Name)
+	}
+
 	h.processor.Ingest(batch.Metrics)
 
 	// Store metrics in Badger
 	for _, m := range batch.Metrics {
-		_ = h.store.SaveMetric(m.Host, m.Name, m.Value, m.Timestamp)
+		if err := h.store.SaveMetric(m.Host, m.Name, m.Value, m.Timestamp); err != nil {
+			log.Printf("[store] SaveMetric %s/%s: %v", m.Host, m.Name, err)
+		}
 	}
 
 	// Build metrics map and run KPI analysis
 	metrics := h.buildMetricsMap(batch.Host)
 	snapshot := h.analyzer.Update(batch.Host, metrics)
 
-	// Store KPIs
-	_ = h.store.SaveKPI(batch.Host, "stress", snapshot.Stress.Value, snapshot.Timestamp)
-	_ = h.store.SaveKPI(batch.Host, "fatigue", snapshot.Fatigue.Value, snapshot.Timestamp)
-	_ = h.store.SaveKPI(batch.Host, "mood", snapshot.Mood.Value, snapshot.Timestamp)
-	_ = h.store.SaveKPI(batch.Host, "pressure", snapshot.Pressure.Value, snapshot.Timestamp)
-	_ = h.store.SaveKPI(batch.Host, "humidity", snapshot.Humidity.Value, snapshot.Timestamp)
-	_ = h.store.SaveKPI(batch.Host, "contagion", snapshot.Contagion.Value, snapshot.Timestamp)
+	// Store KPIs (log errors, don't abort)
+	for kpiName, kpiVal := range map[string]float64{
+		"stress":    snapshot.Stress.Value,
+		"fatigue":   snapshot.Fatigue.Value,
+		"mood":      snapshot.Mood.Value,
+		"pressure":  snapshot.Pressure.Value,
+		"humidity":  snapshot.Humidity.Value,
+		"contagion": snapshot.Contagion.Value,
+	} {
+		if err := h.store.SaveKPI(batch.Host, kpiName, kpiVal, snapshot.Timestamp); err != nil {
+			log.Printf("[store] SaveKPI %s/%s: %v", batch.Host, kpiName, err)
+		}
+	}
 
 	// Feed predictor
 	now := time.Now()
@@ -537,14 +559,21 @@ func (h *Handlers) DataSourceTestHandler(w http.ResponseWriter, r *http.Request)
 		respondError(w, http.StatusNotFound, "NOT_FOUND", "datasource not found")
 		return
 	}
-	// Attempt an HTTP GET to the datasource URL
+	if err := validateDataSourceURL(ds.URL); err != nil {
+		respondError(w, http.StatusBadRequest, "INVALID_URL", "datasource URL is not allowed")
+		return
+	}
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(ds.URL)
 	if err != nil {
-		respondSuccess(w, map[string]interface{}{"status": "error", "message": err.Error()})
+		// Do not leak raw error (may contain internal hostnames/IPs)
+		respondSuccess(w, map[string]interface{}{"status": "error", "message": "connection failed"})
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		io.Copy(io.Discard, resp.Body) //nolint:errcheck — drain for connection reuse
+		resp.Body.Close()
+	}()
 	respondSuccess(w, map[string]interface{}{"status": "ok", "http_status": resp.StatusCode})
 }
 
@@ -580,11 +609,19 @@ func (h *Handlers) UserCreateHandler(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
 		return
 	}
-	if req.Username == "" || req.Password == "" {
-		respondError(w, http.StatusBadRequest, "BAD_REQUEST", "username and password required")
+	if err := validateUsername(req.Username); err != nil {
+		respondError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if len(req.Password) < 8 {
+		respondError(w, http.StatusBadRequest, "BAD_REQUEST", "password must be at least 8 characters")
+		return
+	}
+	if len(req.Password) > 72 {
+		respondError(w, http.StatusBadRequest, "BAD_REQUEST", "password must not exceed 72 characters (bcrypt limit)")
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12) // OWASP: cost≥12
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "HASH_ERROR", "could not hash password")
 		return
@@ -783,6 +820,62 @@ func decodeBody(r *http.Request, dest interface{}) error {
 	}
 	if err := json.Unmarshal(body, dest); err != nil {
 		return fmt.Errorf("decode JSON: %w", err)
+	}
+	return nil
+}
+
+// validateDataSourceURL enforces scheme allowlist and blocks SSRF targets
+func validateDataSourceURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL")
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("scheme not allowed: %s", u.Scheme)
+	}
+	host, _, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		host = u.Host
+	}
+	addrs, err := net.LookupHost(host)
+	if err != nil {
+		return fmt.Errorf("hostname resolution failed")
+	}
+	for _, addr := range addrs {
+		ip := net.ParseIP(addr)
+		if ip == nil {
+			continue
+		}
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return fmt.Errorf("target IP is in a private/reserved range")
+		}
+		// Block AWS/GCP/Azure metadata endpoints
+		for _, blocked := range []string{"169.254.169.254", "metadata.google.internal"} {
+			if addr == blocked || host == blocked {
+				return fmt.Errorf("metadata endpoint not allowed")
+			}
+		}
+	}
+	return nil
+}
+
+// sanitizeKey replaces characters that corrupt Badger key namespacing
+var keyUnsafe = regexp.MustCompile(`[^a-zA-Z0-9._\-]`)
+
+func sanitizeKey(s string) string {
+	return keyUnsafe.ReplaceAllString(s, "_")
+}
+
+// validateUsername enforces safe username characters
+func validateUsername(username string) error {
+	if username == "" {
+		return fmt.Errorf("username is required")
+	}
+	if len(username) > 64 {
+		return fmt.Errorf("username too long")
+	}
+	if strings.ContainsAny(username, ":/\\") {
+		return fmt.Errorf("username contains invalid characters")
 	}
 	return nil
 }
