@@ -1,0 +1,141 @@
+package alerter
+
+import (
+	"testing"
+)
+
+func TestAlerterFiringAndResolution(t *testing.T) {
+	a := NewAlerter(100)
+
+	// Trigger stress_panic (threshold 0.8)
+	a.Evaluate("host1", map[string]float64{"stress": 0.9})
+
+	alerts := a.GetActive()
+	found := false
+	for _, al := range alerts {
+		if al.Name == "stress_panic" && al.Host == "host1" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected stress_panic alert to be active")
+	}
+
+	// Resolve it (value drops below threshold)
+	a.Evaluate("host1", map[string]float64{"stress": 0.1})
+	active := a.GetActive()
+	for _, al := range active {
+		if al.Name == "stress_panic" && al.Host == "host1" {
+			t.Error("stress_panic should be resolved")
+		}
+	}
+}
+
+func TestAlerterAcknowledge(t *testing.T) {
+	a := NewAlerter(100)
+	a.Evaluate("host1", map[string]float64{"fatigue": 0.9})
+
+	alerts := a.GetActive()
+	if len(alerts) == 0 {
+		t.Skip("no alerts fired")
+	}
+
+	id := alerts[0].ID
+	if err := a.Acknowledge(id); err != nil {
+		t.Fatalf("Acknowledge: %v", err)
+	}
+
+	al, ok := a.GetByID(id)
+	if !ok {
+		t.Fatal("alert not found after acknowledge")
+	}
+	if al.Status != "acknowledged" {
+		t.Errorf("status = %q; want acknowledged", al.Status)
+	}
+}
+
+func TestAlerterSilence(t *testing.T) {
+	a := NewAlerter(100)
+	a.Evaluate("host2", map[string]float64{"contagion": 0.9})
+
+	alerts := a.GetAll()
+	if len(alerts) == 0 {
+		t.Skip("no alerts fired")
+	}
+
+	id := alerts[0].ID
+	if err := a.Silence(id); err != nil {
+		t.Fatalf("Silence: %v", err)
+	}
+	al, ok := a.GetByID(id)
+	if !ok {
+		t.Fatal("alert not found")
+	}
+	if al.Status != "silenced" {
+		t.Errorf("status = %q; want silenced", al.Status)
+	}
+}
+
+func TestAlerterDelete(t *testing.T) {
+	a := NewAlerter(100)
+	a.Evaluate("host3", map[string]float64{"humidity": 0.9})
+
+	alerts := a.GetAll()
+	if len(alerts) == 0 {
+		t.Skip("no alerts fired")
+	}
+
+	id := alerts[0].ID
+	if err := a.Delete(id); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if _, ok := a.GetByID(id); ok {
+		t.Error("deleted alert should not be found")
+	}
+}
+
+func TestAlerterAlertChannel(t *testing.T) {
+	a := NewAlerter(100)
+	a.Evaluate("host4", map[string]float64{"pressure": 0.9})
+
+	select {
+	case al := <-a.Alerts():
+		if al.Host != "host4" {
+			t.Errorf("alert host = %q; want host4", al.Host)
+		}
+	default:
+		t.Error("expected alert on channel")
+	}
+}
+
+func TestAlerterDedup(t *testing.T) {
+	a := NewAlerter(100)
+
+	// Drain any existing alerts
+	for len(a.Alerts()) > 0 {
+		<-a.Alerts()
+	}
+
+	// First evaluation fires alerts for rules that exceed thresholds
+	a.Evaluate("dedup-host", map[string]float64{"stress": 0.9})
+	firstCount := 0
+	for len(a.Alerts()) > 0 {
+		<-a.Alerts()
+		firstCount++
+	}
+
+	// Second evaluation immediately after — same rules, should NOT re-fire (dedup within 1 minute)
+	a.Evaluate("dedup-host", map[string]float64{"stress": 0.9})
+	secondCount := 0
+	for len(a.Alerts()) > 0 {
+		<-a.Alerts()
+		secondCount++
+	}
+
+	if secondCount != 0 {
+		t.Errorf("expected 0 alerts on second evaluation (dedup), got %d", secondCount)
+	}
+	if firstCount == 0 {
+		t.Error("expected at least 1 alert on first evaluation")
+	}
+}

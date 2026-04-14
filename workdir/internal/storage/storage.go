@@ -55,7 +55,10 @@ func (s *Store) set(key string, value interface{}, ttl time.Duration) error {
 		return fmt.Errorf("marshal: %w", err)
 	}
 	return s.db.Update(func(txn *badger.Txn) error {
-		entry := badger.NewEntry([]byte(key), data).WithTTL(ttl)
+		entry := badger.NewEntry([]byte(key), data)
+		if ttl > 0 {
+			entry = entry.WithTTL(ttl)
+		}
 		return txn.SetEntry(entry)
 	})
 }

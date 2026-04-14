@@ -20,14 +20,24 @@ func NewRouter(h *Handlers, jwtSecret string, authEnabled bool) http.Handler {
 	// System
 	api.HandleFunc("/health", h.HealthHandler).Methods(http.MethodGet)
 	api.HandleFunc("/config", h.ConfigHandler).Methods(http.MethodGet)
+	api.HandleFunc("/reload", h.ReloadHandler).Methods(http.MethodPost)
 
 	// Auth
 	api.HandleFunc("/auth/login", h.LoginHandler).Methods(http.MethodPost)
+	api.HandleFunc("/auth/logout", h.LogoutHandler).Methods(http.MethodPost)
+	api.HandleFunc("/auth/refresh", h.RefreshHandler).Methods(http.MethodPost)
+	api.HandleFunc("/auth/users", h.UserListHandler).Methods(http.MethodGet)
+	api.HandleFunc("/auth/users", h.UserCreateHandler).Methods(http.MethodPost)
+	api.HandleFunc("/auth/users/{id}", h.UserGetHandler).Methods(http.MethodGet)
+	api.HandleFunc("/auth/users/{id}", h.UserDeleteHandler).Methods(http.MethodDelete)
 
 	// Metrics
 	api.HandleFunc("/metrics", h.MetricsListHandler).Methods(http.MethodGet)
 	api.HandleFunc("/metrics/{name}", h.MetricGetHandler).Methods(http.MethodGet)
 	api.HandleFunc("/metrics/{name}/aggregate", h.MetricAggregateHandler).Methods(http.MethodGet)
+
+	// Query (QQL)
+	api.HandleFunc("/query", h.QueryHandler).Methods(http.MethodPost)
 
 	// KPIs
 	api.HandleFunc("/kpis", h.KPIListHandler).Methods(http.MethodGet)
@@ -45,14 +55,27 @@ func NewRouter(h *Handlers, jwtSecret string, authEnabled bool) http.Handler {
 	// Dashboards
 	api.HandleFunc("/dashboards", h.DashboardListHandler).Methods(http.MethodGet)
 	api.HandleFunc("/dashboards", h.DashboardCreateHandler).Methods(http.MethodPost)
+	api.HandleFunc("/dashboards/import", h.DashboardImportHandler).Methods(http.MethodPost)
 	api.HandleFunc("/dashboards/{id}", h.DashboardGetHandler).Methods(http.MethodGet)
 	api.HandleFunc("/dashboards/{id}", h.DashboardUpdateHandler).Methods(http.MethodPut)
 	api.HandleFunc("/dashboards/{id}", h.DashboardDeleteHandler).Methods(http.MethodDelete)
+	api.HandleFunc("/dashboards/{id}/export", h.DashboardExportHandler).Methods(http.MethodGet)
+
+	// DataSources
+	api.HandleFunc("/datasources", h.DataSourceListHandler).Methods(http.MethodGet)
+	api.HandleFunc("/datasources", h.DataSourceCreateHandler).Methods(http.MethodPost)
+	api.HandleFunc("/datasources/{id}", h.DataSourceGetHandler).Methods(http.MethodGet)
+	api.HandleFunc("/datasources/{id}", h.DataSourceUpdateHandler).Methods(http.MethodPut)
+	api.HandleFunc("/datasources/{id}", h.DataSourceDeleteHandler).Methods(http.MethodDelete)
+	api.HandleFunc("/datasources/{id}/test", h.DataSourceTestHandler).Methods(http.MethodPost)
 
 	// Ingest (agent → central push endpoint)
 	api.HandleFunc("/ingest", h.IngestHandler).Methods(http.MethodPost)
 
-	// Embedded UI — serve static files if present
+	// WebSocket streaming
+	api.HandleFunc("/ws", h.WebSocketHandler)
+
+	// Embedded UI
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./web")))
 
 	return r
