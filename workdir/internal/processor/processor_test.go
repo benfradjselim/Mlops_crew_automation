@@ -80,6 +80,71 @@ func TestNormalizeCPU(t *testing.T) {
 	}
 }
 
+func TestNormalizeAllMetricTypes(t *testing.T) {
+	cases := []struct {
+		name  string
+		value float64
+		lo    float64
+		hi    float64
+	}{
+		// percent-based
+		{"memory_percent", 50, 0.49, 0.51},
+		{"disk_percent", 100, 0.99, 1.01},
+		// load avg (relative to NumCPU; result ∈ [0,1])
+		{"load_avg_1", 0, 0, 0.001},
+		{"load_avg_5", 1e9, 0.99, 1.01},  // clamp to 1
+		{"load_avg_15", 1e9, 0.99, 1.01}, // clamp to 1
+		// network
+		{"net_rx_bps", 1e9, 0.99, 1.01},   // 1 Gbps → 1.0
+		{"net_tx_bps", 5e8, 0.49, 0.51},   // 500 Mbps → 0.5
+		{"net_rx_bps", 0, 0, 0.001},
+		// memory raw
+		{"memory_used_mb", 65536, 0.99, 1.01}, // 64 GB → 1.0
+		{"memory_total_mb", 0, 0, 0.001},
+		// disk raw
+		{"disk_used_gb", 10240, 0.99, 1.01}, // 10 TB → 1.0
+		{"disk_total_gb", 0, 0, 0.001},
+		// uptime
+		{"uptime_seconds", 2592000, 0.99, 1.01}, // 30 days → 1.0
+		{"uptime_seconds", 0, 0, 0.001},
+		// processes
+		{"processes", 1000, 0.99, 1.01},
+		{"processes", 500, 0.49, 0.51},
+		// default: value ≤ 1 → pass through
+		{"unknown_metric", 0.4, 0.39, 0.41},
+		// default: value > 1 → treated as percentage
+		{"unknown_big", 50, 0.49, 0.51},
+	}
+
+	for _, tc := range cases {
+		got := normalize(tc.name, tc.value)
+		if got < tc.lo || got > tc.hi {
+			t.Errorf("normalize(%q, %v) = %v; want [%v, %v]", tc.name, tc.value, got, tc.lo, tc.hi)
+		}
+	}
+}
+
+func TestNormalizeClampsBounds(t *testing.T) {
+	// All results must stay within [0, 1]
+	inputs := []struct {
+		name  string
+		value float64
+	}{
+		{"cpu_percent", 200},
+		{"cpu_percent", -10},
+		{"net_rx_bps", 1e12},
+		{"processes", 99999},
+		{"uptime_seconds", 1e9},
+		{"unknown_metric", 2.0},
+	}
+	for _, tc := range inputs {
+		got := normalize(tc.name, tc.value)
+		if got < 0 || got > 1 {
+			t.Errorf("normalize(%q, %v) = %v; want in [0,1]", tc.name, tc.value, got)
+		}
+	}
+}
+
 func TestProcessorHistoryIsolation(t *testing.T) {
 	p := NewProcessor(10)
 	p.Ingest([]models.Metric{{Name: "cpu_percent", Value: 50, Host: "hostA"}})

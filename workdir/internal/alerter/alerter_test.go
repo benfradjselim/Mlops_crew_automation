@@ -108,6 +108,44 @@ func TestAlerterAlertChannel(t *testing.T) {
 	}
 }
 
+func TestAlerterAddRule(t *testing.T) {
+	a := NewAlerter(100)
+	a.AddRule(Rule{
+		Name:      "custom_high",
+		Metric:    "custom_metric",
+		Threshold: 0.5,
+		Severity:  "warning",
+		Message:   "custom metric high",
+	})
+
+	// Fire the new custom rule
+	a.Evaluate("hostX", map[string]float64{"custom_metric": 0.9})
+
+	found := false
+	for _, al := range a.GetActive() {
+		if al.Name == "custom_high" && al.Host == "hostX" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected custom_high alert to be active after AddRule")
+	}
+}
+
+func TestAlerterDroppedCount(t *testing.T) {
+	// Buffer size 1 — second alert should be dropped
+	a := NewAlerter(1)
+
+	// Fill the buffer with first evaluation
+	a.Evaluate("hostD1", map[string]float64{"stress": 0.9})
+	// Second host fires into a full channel
+	a.Evaluate("hostD2", map[string]float64{"stress": 0.9})
+
+	if a.DroppedCount() == 0 {
+		t.Error("expected at least one dropped alert with buffer size 1")
+	}
+}
+
 func TestAlerterDedup(t *testing.T) {
 	a := NewAlerter(100)
 
