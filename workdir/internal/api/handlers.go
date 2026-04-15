@@ -34,6 +34,7 @@ type Handlers struct {
 	store       *storage.Store
 	processor   *oheproc.Processor
 	analyzer    *analyzer.Analyzer
+	topology    *analyzer.TopologyAnalyzer
 	predictor   *predictor.Predictor
 	alerter     *alerter.Alerter
 	hub         *Hub
@@ -76,6 +77,7 @@ func NewHandlers(
 		store:       store,
 		processor:   proc,
 		analyzer:    ana,
+		topology:    analyzer.NewTopologyAnalyzer(10 * time.Minute),
 		predictor:   pred,
 		alerter:     alrt,
 		hub:         NewHub(origins),
@@ -84,6 +86,11 @@ func NewHandlers(
 		startTime:   time.Now(),
 		authEnabled: authEnabled,
 	}
+}
+
+// TopologyAnalyzer returns the topology analyzer (used by orchestrator to wire receivers)
+func (h *Handlers) TopologyAnalyzer() *analyzer.TopologyAnalyzer {
+	return h.topology
 }
 
 // HealthHandler GET /api/v1/health
@@ -486,14 +493,33 @@ func (h *Handlers) IngestHandler(w http.ResponseWriter, r *http.Request) {
 	h.predictor.Feed(batch.Host, "stress", snapshot.Stress.Value, now)
 	h.predictor.Feed(batch.Host, "fatigue", snapshot.Fatigue.Value, now)
 
+	// Store new ETF KPIs
+	for kpiName, kpiVal := range map[string]float64{
+		"resilience":   snapshot.Resilience.Value,
+		"entropy":      snapshot.Entropy.Value,
+		"velocity":     snapshot.Velocity.Value,
+		"health_score": snapshot.HealthScore.Value,
+	} {
+		if err := h.store.SaveKPI(batch.Host, kpiName, kpiVal, snapshot.Timestamp); err != nil {
+			log.Printf("[store] SaveKPI %s/%s: %v", batch.Host, kpiName, err)
+		}
+	}
+	// Feed predictor with new KPIs
+	h.predictor.Feed(batch.Host, "resilience", snapshot.Resilience.Value, now)
+	h.predictor.Feed(batch.Host, "health_score", snapshot.HealthScore.Value, now)
+
 	// Evaluate alerts
 	kpiMap := map[string]float64{
-		"stress":    snapshot.Stress.Value,
-		"fatigue":   snapshot.Fatigue.Value,
-		"mood":      snapshot.Mood.Value,
-		"pressure":  snapshot.Pressure.Value,
-		"humidity":  snapshot.Humidity.Value,
-		"contagion": snapshot.Contagion.Value,
+		"stress":       snapshot.Stress.Value,
+		"fatigue":      snapshot.Fatigue.Value,
+		"mood":         snapshot.Mood.Value,
+		"pressure":     snapshot.Pressure.Value,
+		"humidity":     snapshot.Humidity.Value,
+		"contagion":    snapshot.Contagion.Value,
+		"resilience":   snapshot.Resilience.Value,
+		"entropy":      snapshot.Entropy.Value,
+		"velocity":     snapshot.Velocity.Value,
+		"health_score": snapshot.HealthScore.Value / 100.0, // normalize to [0,1] for rules
 	}
 	h.alerter.Evaluate(batch.Host, kpiMap)
 
@@ -933,6 +959,22 @@ var builtinTemplates = []dashboardTemplate{
 		},
 	},
 	{
+		ID:          "kpi-etf",
+		Name:        "ETF Composite KPIs",
+		Description: "4 composed ETF-style KPIs: HealthScore, Resilience, Entropy, Velocity",
+		Tags:        []string{"kpi", "etf", "composite", "ohe"},
+		Dashboard: models.Dashboard{
+			Name:    "ETF Composite KPIs",
+			Refresh: 15,
+			Widgets: []models.Widget{
+				{Title: "Health Score (0-100)", Type: "gauge", KPI: "health_score"},
+				{Title: "Resilience", Type: "gauge", KPI: "resilience"},
+				{Title: "System Entropy", Type: "timeseries", KPI: "entropy"},
+				{Title: "Change Velocity", Type: "timeseries", KPI: "velocity"},
+			},
+		},
+	},
+	{
 		ID:          "container-overview",
 		Name:        "Container Overview",
 		Description: "Per-container CPU and memory usage",
@@ -946,6 +988,80 @@ var builtinTemplates = []dashboardTemplate{
 				{Title: "Container Memory MB", Type: "timeseries", Metric: "container_mem_used_mb"},
 				{Title: "Net RX Bytes", Type: "timeseries", Metric: "container_net_rx_bytes"},
 				{Title: "Net TX Bytes", Type: "timeseries", Metric: "container_net_tx_bytes"},
+			},
+		},
+	},
+	{
+		ID:          "k8s-node",
+		Name:        "Kubernetes Node Health",
+		Description: "Per-node holistic health for K8s deployments — works with the OHE DaemonSet agent",
+		Tags:        []string{"kubernetes", "k8s", "node", "ohe"},
+		Dashboard: models.Dashboard{
+			Name:    "Kubernetes Node Health",
+			Refresh: 15,
+			Widgets: []models.Widget{
+				{Title: "Node Health Score", Type: "gauge", KPI: "health_score"},
+				{Title: "Node Stress", Type: "timeseries", KPI: "stress"},
+				{Title: "Node Fatigue", Type: "timeseries", KPI: "fatigue"},
+				{Title: "Contagion (pod errors spreading)", Type: "gauge", KPI: "contagion"},
+				{Title: "CPU %", Type: "timeseries", Metric: "cpu_percent"},
+				{Title: "Memory %", Type: "timeseries", Metric: "memory_percent"},
+				{Title: "Load Avg 1m", Type: "timeseries", Metric: "load_avg_1"},
+				{Title: "Active Alerts", Type: "alerts"},
+			},
+		},
+	},
+	{
+		ID:          "k8s-cluster-fleet",
+		Name:        "Kubernetes Cluster Fleet",
+		Description: "Multi-node fleet overview — aggregate health across all K8s nodes",
+		Tags:        []string{"kubernetes", "k8s", "fleet", "ohe"},
+		Dashboard: models.Dashboard{
+			Name:    "Kubernetes Cluster Fleet",
+			Refresh: 30,
+			Widgets: []models.Widget{
+				{Title: "Fleet Health Matrix", Type: "stat", KPI: "health_score"},
+				{Title: "Cluster Stress", Type: "timeseries", KPI: "stress"},
+				{Title: "Cluster Resilience", Type: "gauge", KPI: "resilience"},
+				{Title: "Cluster Entropy", Type: "timeseries", KPI: "entropy"},
+				{Title: "Contagion Spread", Type: "gauge", KPI: "contagion"},
+				{Title: "Active Cluster Alerts", Type: "alerts"},
+			},
+		},
+	},
+	{
+		ID:          "sre-golden-signals",
+		Name:        "SRE Golden Signals",
+		Description: "Latency, Traffic, Errors, Saturation — mapped to OHE KPIs",
+		Tags:        []string{"sre", "golden-signals", "reliability"},
+		Dashboard: models.Dashboard{
+			Name:    "SRE Golden Signals",
+			Refresh: 15,
+			Widgets: []models.Widget{
+				{Title: "Latency (Load Avg)", Type: "timeseries", Metric: "load_avg_1"},
+				{Title: "Traffic (Request Rate)", Type: "timeseries", Metric: "request_rate"},
+				{Title: "Errors (Error Rate)", Type: "timeseries", Metric: "error_rate"},
+				{Title: "Saturation (CPU + RAM)", Type: "gauge", KPI: "stress"},
+				{Title: "Error Humidity (compound error score)", Type: "gauge", KPI: "humidity"},
+				{Title: "System Mood (reliability index)", Type: "timeseries", KPI: "mood"},
+			},
+		},
+	},
+	{
+		ID:          "incident-response",
+		Name:        "Incident Response",
+		Description: "Storm detection, contagion spread, pressure spikes — for on-call engineers",
+		Tags:        []string{"incident", "oncall", "sre"},
+		Dashboard: models.Dashboard{
+			Name:    "Incident Response",
+			Refresh: 10,
+			Widgets: []models.Widget{
+				{Title: "Pressure (storm indicator)", Type: "gauge", KPI: "pressure"},
+				{Title: "Contagion (blast radius)", Type: "gauge", KPI: "contagion"},
+				{Title: "Humidity (error storm)", Type: "gauge", KPI: "humidity"},
+				{Title: "Fatigue (burnout risk)", Type: "timeseries", KPI: "fatigue"},
+				{Title: "Velocity (rate of change)", Type: "timeseries", KPI: "velocity"},
+				{Title: "Active Alerts", Type: "alerts"},
 			},
 		},
 	},

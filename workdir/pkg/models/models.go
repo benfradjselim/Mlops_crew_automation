@@ -30,14 +30,53 @@ type KPI struct {
 
 // KPISnapshot holds all current KPIs for a host
 type KPISnapshot struct {
-	Host      string    `json:"host"`
-	Timestamp time.Time `json:"timestamp"`
-	Stress    KPI       `json:"stress"`
-	Fatigue   KPI       `json:"fatigue"`
-	Mood      KPI       `json:"mood"`
-	Pressure  KPI       `json:"pressure"`
-	Humidity  KPI       `json:"humidity"`
-	Contagion KPI       `json:"contagion"`
+	Host        string    `json:"host"`
+	Timestamp   time.Time `json:"timestamp"`
+	Stress      KPI       `json:"stress"`
+	Fatigue     KPI       `json:"fatigue"`
+	Mood        KPI       `json:"mood"`
+	Pressure    KPI       `json:"pressure"`
+	Humidity    KPI       `json:"humidity"`
+	Contagion   KPI       `json:"contagion"`
+	// ETF-style composed KPIs
+	Resilience  KPI       `json:"resilience"`   // ability to absorb disruption
+	Entropy     KPI       `json:"entropy"`      // system disorder level
+	Velocity    KPI       `json:"velocity"`     // rate of change (momentum)
+	HealthScore KPI       `json:"health_score"` // single composite executive KPI [0-100]
+}
+
+// NotificationChannel is a configured alert delivery target
+type NotificationChannel struct {
+	ID       string            `json:"id"`
+	Name     string            `json:"name"`
+	Type     string            `json:"type"`    // "webhook", "slack", "pagerduty"
+	URL      string            `json:"url"`
+	Headers  map[string]string `json:"headers,omitempty"`
+	Enabled  bool              `json:"enabled"`
+	// Routing: only fire for severities in this list (empty = all)
+	Severities []string        `json:"severities,omitempty"`
+}
+
+// FleetStatus is the aggregated health summary for all known hosts
+type FleetStatus struct {
+	Timestamp    time.Time              `json:"timestamp"`
+	TotalHosts   int                    `json:"total_hosts"`
+	HealthyHosts int                    `json:"healthy_hosts"`
+	DegradedHosts int                   `json:"degraded_hosts"`
+	CriticalHosts int                   `json:"critical_hosts"`
+	Hosts        []HostSummary          `json:"hosts"`
+}
+
+// HostSummary is a lightweight per-host health view for fleet overview
+type HostSummary struct {
+	Host        string    `json:"host"`
+	HealthScore float64   `json:"health_score"`
+	State       string    `json:"state"`   // "healthy", "degraded", "critical"
+	Stress      float64   `json:"stress"`
+	Fatigue     float64   `json:"fatigue"`
+	Contagion   float64   `json:"contagion"`
+	ActiveAlerts int      `json:"active_alerts"`
+	LastSeen    time.Time `json:"last_seen"`
 }
 
 // Prediction is a forecasted value for a metric/KPI

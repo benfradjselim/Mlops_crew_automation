@@ -29,12 +29,16 @@ type hostState struct {
 	timeoutHistory *utils.CircularBuffer
 	// Request history
 	requestHistory *utils.CircularBuffer
+	// KPI velocity: rolling history of composite health for entropy/velocity
+	healthHistory *utils.CircularBuffer
 	// Restart count
 	restartCount float64
 	// Accumulated fatigue (integral of stress - recovery)
 	fatigue float64
 	// Last stress for pressure derivative
 	lastStress float64
+	// Last KPI vector for velocity (rate of change)
+	lastHealthScore float64
 	// Last update time
 	lastUpdate time.Time
 	// Uptime in seconds (always updated, including 0)
@@ -60,6 +64,7 @@ func (a *Analyzer) getOrCreate(host string) *hostState {
 		errorHistory:   utils.NewCircularBuffer(600),
 		timeoutHistory: utils.NewCircularBuffer(600),
 		requestHistory: utils.NewCircularBuffer(600),
+		healthHistory:  utils.NewCircularBuffer(60), // last 60 samples for entropy
 		lastUpdate:     time.Now(),
 		firstUpdate:    true,
 	}
@@ -150,8 +155,59 @@ func (a *Analyzer) Update(host string, metrics map[string]float64) models.KPISna
 	// C = Σ(E_ij × D_ij) — simplified: use average error × load as proxy
 	contagion := utils.Clamp(errors*cpu, 0, 1)
 
+	// --- ETF-style Composed KPIs ---
+
+	// Resilience: ability to absorb disruption without failing
+	// High mood + low fatigue + low contagion = resilient
+	// R = mood × (1 - fatigue) × (1 - contagion)
+	resilience := utils.Clamp(mood*(1-hs.fatigue)*(1-contagion), 0, 1)
+
+	// HealthScore: single executive composite [0, 1] (mapped to [0,100] in API)
+	// Weighted average: stress inverted (calm is healthy), mood positive, fatigue inverted,
+	// pressure inverted, humidity inverted, contagion inverted
+	healthScore := utils.Clamp(
+		0.25*(1-stress)+
+			0.20*mood+
+			0.20*(1-hs.fatigue)+
+			0.15*(1-pressureNorm)+
+			0.10*(1-humidity)+
+			0.10*(1-contagion),
+		0, 1)
+
+	// Entropy: system disorder — how much KPI values deviate from their rolling mean
+	// Computed as mean absolute deviation of health history (normalized)
+	hs.healthHistory.Push(healthScore)
+	healthVals := hs.healthHistory.Values()
+	entropy := 0.0
+	if len(healthVals) > 1 {
+		// mean
+		sum := 0.0
+		for _, v := range healthVals {
+			sum += v
+		}
+		mean := sum / float64(len(healthVals))
+		// mean absolute deviation
+		mad := 0.0
+		for _, v := range healthVals {
+			mad += math.Abs(v - mean)
+		}
+		mad /= float64(len(healthVals))
+		// normalize: max theoretical MAD for [0,1] values is 0.5
+		entropy = utils.Clamp(mad/0.5, 0, 1)
+	}
+
+	// Velocity: rate of change of HealthScore (momentum)
+	// High velocity = system changing fast (could be recovering or crashing)
+	velocity := 0.0
+	if !hs.firstUpdate && dt > 0 {
+		delta := math.Abs(healthScore - hs.lastHealthScore)
+		// normalize by expected max change rate: 0.1 per second = extreme
+		velocity = utils.Clamp(delta/(0.1*dt), 0, 1)
+	}
+
 	// Update last state
 	hs.lastStress = stress
+	hs.lastHealthScore = healthScore
 	hs.lastUpdate = now
 	hs.firstUpdate = false
 
@@ -197,6 +253,34 @@ func (a *Analyzer) Update(host string, metrics map[string]float64) models.KPISna
 			Name:      "contagion",
 			Value:     utils.RoundTo(contagion, 4),
 			State:     contagionState(contagion),
+			Timestamp: now,
+			Host:      host,
+		},
+		Resilience: models.KPI{
+			Name:      "resilience",
+			Value:     utils.RoundTo(resilience, 4),
+			State:     resilienceState(resilience),
+			Timestamp: now,
+			Host:      host,
+		},
+		Entropy: models.KPI{
+			Name:      "entropy",
+			Value:     utils.RoundTo(entropy, 4),
+			State:     entropyState(entropy),
+			Timestamp: now,
+			Host:      host,
+		},
+		Velocity: models.KPI{
+			Name:      "velocity",
+			Value:     utils.RoundTo(velocity, 4),
+			State:     velocityState(velocity),
+			Timestamp: now,
+			Host:      host,
+		},
+		HealthScore: models.KPI{
+			Name:      "health_score",
+			Value:     utils.RoundTo(healthScore*100, 2), // expose as 0-100
+			State:     healthScoreState(healthScore),
 			Timestamp: now,
 			Host:      host,
 		},
@@ -318,4 +402,70 @@ func contagionState(c float64) string {
 	default:
 		return "pandemic"
 	}
+}
+
+func resilienceState(r float64) string {
+	switch {
+	case r > 0.7:
+		return "robust"
+	case r > 0.4:
+		return "stable"
+	case r > 0.2:
+		return "fragile"
+	default:
+		return "critical"
+	}
+}
+
+func entropyState(e float64) string {
+	switch {
+	case e < 0.1:
+		return "ordered"
+	case e < 0.3:
+		return "fluctuating"
+	case e < 0.6:
+		return "chaotic"
+	default:
+		return "turbulent"
+	}
+}
+
+func velocityState(v float64) string {
+	switch {
+	case v < 0.1:
+		return "steady"
+	case v < 0.3:
+		return "shifting"
+	case v < 0.6:
+		return "accelerating"
+	default:
+		return "volatile"
+	}
+}
+
+func healthScoreState(h float64) string {
+	// h is in [0,1] (raw, before *100 scaling)
+	switch {
+	case h > 0.80:
+		return "excellent"
+	case h > 0.60:
+		return "good"
+	case h > 0.40:
+		return "fair"
+	case h > 0.20:
+		return "poor"
+	default:
+		return "critical"
+	}
+}
+
+// AllHosts returns all known host names
+func (a *Analyzer) AllHosts() []string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	hosts := make([]string, 0, len(a.snapshots))
+	for h := range a.snapshots {
+		hosts = append(hosts, h)
+	}
+	return hosts
 }

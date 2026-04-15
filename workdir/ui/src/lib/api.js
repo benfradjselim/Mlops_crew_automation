@@ -74,4 +74,24 @@ export const api = {
     if (metric) path += `&metric=${encodeURIComponent(metric)}`
     return req('GET', path)
   },
+
+  // Fleet overview — all hosts aggregate
+  fleet: () => req('GET', '/fleet'),
+
+  // Multi-host KPI snapshot
+  kpisMulti: (hosts) => {
+    const q = hosts.map(h => 'host=' + encodeURIComponent(h)).join('&')
+    return req('GET', '/kpis/multi' + (q ? '?' + q : ''))
+  },
+
+  // Notification channels
+  notifications: () => req('GET', '/notifications'),
+  notificationCreate: (ch) => req('POST', '/notifications', ch),
+  notificationUpdate: (id, ch) => req('PUT', `/notifications/${id}`, ch),
+  notificationDelete: (id) => req('DELETE', `/notifications/${id}`),
+  notificationTest: (id) => req('POST', `/notifications/${id}/test`),
+
+  // Alert rules
+  alertRules: () => req('GET', '/alert-rules'),
+  alertRuleCreate: (rule) => req('POST', '/alert-rules', rule),
 }

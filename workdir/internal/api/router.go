@@ -90,6 +90,59 @@ func NewRouter(h *Handlers, jwtSecret string, authEnabled bool, allowedOrigins [
 	// WebSocket streaming (requires at least viewer role — enforced by AuthMiddleware)
 	api.HandleFunc("/ws", h.WebSocketHandler)
 
+	// Fleet overview (all hosts aggregate)
+	api.HandleFunc("/fleet", h.FleetHandler).Methods(http.MethodGet)
+
+	// Multi-host KPI snapshot
+	api.HandleFunc("/kpis/multi", h.KPIMultiHandler).Methods(http.MethodGet)
+
+	// Alert rules CRUD
+	api.HandleFunc("/alert-rules", h.AlertRuleListHandler).Methods(http.MethodGet)
+	api.Handle("/alert-rules", operatorOnly(http.HandlerFunc(h.AlertRuleCreateHandler))).Methods(http.MethodPost)
+
+	// Notification channels
+	api.HandleFunc("/notifications", h.NotificationChannelListHandler).Methods(http.MethodGet)
+	api.Handle("/notifications", operatorOnly(http.HandlerFunc(h.NotificationChannelCreateHandler))).Methods(http.MethodPost)
+	api.HandleFunc("/notifications/{id}", h.NotificationChannelGetHandler).Methods(http.MethodGet)
+	api.Handle("/notifications/{id}", operatorOnly(http.HandlerFunc(h.NotificationChannelUpdateHandler))).Methods(http.MethodPut)
+	api.Handle("/notifications/{id}", operatorOnly(http.HandlerFunc(h.NotificationChannelDeleteHandler))).Methods(http.MethodDelete)
+	api.Handle("/notifications/{id}/test", operatorOnly(http.HandlerFunc(h.NotificationChannelTestHandler))).Methods(http.MethodPost)
+
+	// Prometheus exposition — served at /metrics (outside /api/v1 prefix for standard compat)
+	r.HandleFunc("/metrics", h.PrometheusMetricsHandler).Methods(http.MethodGet)
+
+	// Topology (APM-style service dependency graph)
+	api.HandleFunc("/topology", h.TopologyHandler).Methods(http.MethodGet)
+
+	// Logs query
+	api.HandleFunc("/logs", h.LogQueryHandler).Methods(http.MethodGet)
+
+	// Traces / APM
+	api.HandleFunc("/traces/{traceID}", h.TraceQueryHandler).Methods(http.MethodGet)
+
+	// OTLP HTTP receiver — replaces Grafana Agent / Datadog OTEL collector
+	r.HandleFunc("/otlp/v1/traces", h.OTLPTraceHandler).Methods(http.MethodPost)
+	r.HandleFunc("/otlp/v1/metrics", h.OTLPMetricsHandler).Methods(http.MethodPost)
+	r.HandleFunc("/otlp/v1/logs", h.OTLPLogsHandler).Methods(http.MethodPost)
+	r.HandleFunc("/opentelemetry/api/v1/traces", h.OTLPTraceHandler).Methods(http.MethodPost)
+
+	// Loki-compatible log ingestion — replaces Grafana Loki
+	r.HandleFunc("/loki/api/v1/push", h.LokiPushHandler).Methods(http.MethodPost)
+	r.HandleFunc("/loki/api/v1/query_range", h.LokiQueryRangeHandler).Methods(http.MethodGet)
+	r.HandleFunc("/loki/api/v1/labels", h.LokiLabelsHandler).Methods(http.MethodGet)
+	r.HandleFunc("/loki/api/v1/label/{name}/values", h.LokiLabelValuesHandler).Methods(http.MethodGet)
+
+	// Elasticsearch-compatible API — replaces ELK (Filebeat/Logstash/Beats/Vector)
+	r.HandleFunc("/_bulk", h.ESBulkHandler).Methods(http.MethodPost)
+	r.HandleFunc("/{index}/_bulk", h.ESBulkHandler).Methods(http.MethodPost)
+	r.HandleFunc("/_cat/indices", h.ESCatIndicesHandler).Methods(http.MethodGet)
+	r.HandleFunc("/_search", h.ESSearchHandler).Methods(http.MethodGet, http.MethodPost)
+	r.HandleFunc("/{index}/_search", h.ESSearchHandler).Methods(http.MethodGet, http.MethodPost)
+
+	// Datadog-compatible metrics/logs API — replaces Datadog agent
+	r.HandleFunc("/api/v1/series", h.DDMetricsHandler).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/logs", h.DDLogsHandler).Methods(http.MethodPost)
+
 	// Embedded UI
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./web")))
 

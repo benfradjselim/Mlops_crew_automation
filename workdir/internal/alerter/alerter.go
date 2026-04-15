@@ -35,6 +35,14 @@ var defaultRules = []Rule{
 	{Name: "contagion_pandemic", Metric: "contagion", Threshold: 0.8, Severity: models.SeverityEmergency, Message: "Pandemic — global response required"},
 	{Name: "cpu_high", Metric: "cpu_percent", Threshold: 0.85, Severity: models.SeverityWarning, Message: "CPU usage critical"},
 	{Name: "memory_high", Metric: "memory_percent", Threshold: 0.90, Severity: models.SeverityWarning, Message: "Memory usage critical"},
+	// ETF composed KPI rules
+	{Name: "resilience_fragile", Metric: "resilience", Threshold: 0.3, Severity: models.SeverityWarning, Message: "System fragile — capacity to absorb disruption low"},
+	{Name: "resilience_critical", Metric: "resilience", Threshold: 0.1, Severity: models.SeverityCritical, Message: "System critically fragile — any additional load may cascade"},
+	{Name: "entropy_chaotic", Metric: "entropy", Threshold: 0.5, Severity: models.SeverityWarning, Message: "High entropy — system in chaotic state, metrics unstable"},
+	{Name: "entropy_turbulent", Metric: "entropy", Threshold: 0.8, Severity: models.SeverityCritical, Message: "Turbulent entropy — extreme instability detected"},
+	{Name: "velocity_volatile", Metric: "velocity", Threshold: 0.6, Severity: models.SeverityWarning, Message: "High velocity change — system state shifting rapidly"},
+	{Name: "health_score_poor", Metric: "health_score", Threshold: 0.3, Severity: models.SeverityWarning, Message: "Health score degraded — system performance below baseline"},
+	{Name: "health_score_critical", Metric: "health_score", Threshold: 0.15, Severity: models.SeverityCritical, Message: "Health score critical — immediate attention required"},
 }
 
 // Alerter evaluates KPI snapshots against rules and fires alerts
@@ -223,4 +231,13 @@ func (a *Alerter) AddRule(rule Rule) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.rules = append(a.rules, rule)
+}
+
+// GetRules returns a copy of all rules (safe for concurrent use)
+func (a *Alerter) GetRules() []Rule {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	cp := make([]Rule, len(a.rules))
+	copy(cp, a.rules)
+	return cp
 }

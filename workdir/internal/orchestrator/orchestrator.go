@@ -20,6 +20,7 @@ import (
 	"github.com/benfradjselim/ohe/internal/collector"
 	"github.com/benfradjselim/ohe/internal/predictor"
 	"github.com/benfradjselim/ohe/internal/processor"
+	"github.com/benfradjselim/ohe/internal/receiver"
 	"github.com/benfradjselim/ohe/internal/storage"
 	"github.com/benfradjselim/ohe/pkg/models"
 	"golang.org/x/crypto/bcrypt"
@@ -37,6 +38,7 @@ type Config struct {
 	CollectInterval time.Duration `yaml:"collect_interval"` // default 15s
 	BufferSize      int           `yaml:"buffer_size"`      // circular buffer size
 	AllowedOrigins  []string      `yaml:"allowed_origins"`  // CORS origins; empty = wildcard
+	DogStatsDAddr   string        `yaml:"dogstatsd_addr"`   // UDP addr for DogStatsD; empty = disabled
 }
 
 // DefaultConfig returns sensible production defaults
@@ -51,6 +53,7 @@ func DefaultConfig() Config {
 		AuthEnabled:     false,
 		CollectInterval: 15 * time.Second,
 		BufferSize:      10000,
+		DogStatsDAddr:   ":8125", // DogStatsD on by default (UDP)
 	}
 }
 
@@ -152,6 +155,19 @@ func (e *Engine) Run(ctx context.Context) error {
 		log.Printf("[central] started on :%d", e.cfg.Port)
 	}
 
+	// Start DogStatsD UDP receiver (drop-in for Datadog StatsD endpoint)
+	if e.cfg.DogStatsDAddr != "" {
+		bus := receiver.NewBus(e.store, e.handlers.TopologyAnalyzer())
+		dsd := receiver.NewDogStatsDReceiver(e.cfg.DogStatsDAddr, e.store, bus, e.cfg.Host)
+		e.wg.Add(1)
+		go func() {
+			defer e.wg.Done()
+			if err := dsd.Run(ctx); err != nil {
+				log.Printf("[dogstatsd] %v", err)
+			}
+		}()
+	}
+
 	// HTTP server (both modes expose API)
 	errCh := make(chan error, 1)
 	go func() {
@@ -224,12 +240,16 @@ func (e *Engine) collectLocally(ctx context.Context) {
 			snapshot := e.ana.Update(e.cfg.Host, mmap)
 			now := time.Now()
 			for kpiName, kpiVal := range map[string]float64{
-				"stress":    snapshot.Stress.Value,
-				"fatigue":   snapshot.Fatigue.Value,
-				"mood":      snapshot.Mood.Value,
-				"pressure":  snapshot.Pressure.Value,
-				"humidity":  snapshot.Humidity.Value,
-				"contagion": snapshot.Contagion.Value,
+				"stress":       snapshot.Stress.Value,
+				"fatigue":      snapshot.Fatigue.Value,
+				"mood":         snapshot.Mood.Value,
+				"pressure":     snapshot.Pressure.Value,
+				"humidity":     snapshot.Humidity.Value,
+				"contagion":    snapshot.Contagion.Value,
+				"resilience":   snapshot.Resilience.Value,
+				"entropy":      snapshot.Entropy.Value,
+				"velocity":     snapshot.Velocity.Value,
+				"health_score": snapshot.HealthScore.Value,
 			} {
 				if err := e.store.SaveKPI(e.cfg.Host, kpiName, kpiVal, now); err != nil {
 					log.Printf("[store] SaveKPI %s/%s: %v", e.cfg.Host, kpiName, err)
@@ -242,15 +262,21 @@ func (e *Engine) collectLocally(ctx context.Context) {
 			}
 			e.pred.Feed(e.cfg.Host, "stress", snapshot.Stress.Value, now)
 			e.pred.Feed(e.cfg.Host, "fatigue", snapshot.Fatigue.Value, now)
+			e.pred.Feed(e.cfg.Host, "health_score", snapshot.HealthScore.Value, now)
+			e.pred.Feed(e.cfg.Host, "resilience", snapshot.Resilience.Value, now)
 
 			// Evaluate alerts
 			kpiMap := map[string]float64{
-				"stress":    snapshot.Stress.Value,
-				"fatigue":   snapshot.Fatigue.Value,
-				"mood":      snapshot.Mood.Value,
-				"pressure":  snapshot.Pressure.Value,
-				"humidity":  snapshot.Humidity.Value,
-				"contagion": snapshot.Contagion.Value,
+				"stress":       snapshot.Stress.Value,
+				"fatigue":      snapshot.Fatigue.Value,
+				"mood":         snapshot.Mood.Value,
+				"pressure":     snapshot.Pressure.Value,
+				"humidity":     snapshot.Humidity.Value,
+				"contagion":    snapshot.Contagion.Value,
+				"resilience":   snapshot.Resilience.Value,
+				"entropy":      snapshot.Entropy.Value,
+				"velocity":     snapshot.Velocity.Value,
+				"health_score": snapshot.HealthScore.Value / 100.0,
 			}
 			for _, m := range metrics {
 				kpiMap[m.Name] = m.Value
@@ -335,6 +361,8 @@ func (e *Engine) logAlerts(ctx context.Context) {
 			log.Printf("[ALERT] [%s] [%s] %s — %s=%.4f (threshold=%.2f)",
 				alert.Severity, alert.Host, alert.Description,
 				alert.Metric, alert.Value, alert.Threshold)
+			// Fan out to configured notification channels (Slack, webhook, PagerDuty)
+			e.handlers.DispatchAlertToChannels(alert)
 		}
 	}
 }

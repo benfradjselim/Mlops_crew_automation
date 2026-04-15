@@ -14,6 +14,7 @@
   let pollTimer = null
 
   const KPI_NAMES = ['stress', 'fatigue', 'mood', 'pressure', 'humidity', 'contagion']
+  const ETF_KPI_NAMES = ['resilience', 'entropy', 'velocity', 'health_score']
 
   async function detectHost() {
     try {
@@ -32,7 +33,8 @@
   // Metrics where value is already in 0-100 % range
   const PCT_METRICS = new Set(['cpu_percent','memory_percent','disk_percent'])
   // KPI scores are 0-1; multiply by 100 for display
-  const KPI_METRICS = new Set(['stress','fatigue','mood','pressure','humidity','contagion'])
+  const KPI_METRICS = new Set(['stress','fatigue','mood','pressure','humidity','contagion','resilience','entropy','velocity'])
+  // health_score is already 0-100
   // Only show these in the predictions panel
   const PRED_SHOW = new Set([...PCT_METRICS, ...KPI_METRICS, 'load_avg_1'])
 
@@ -123,6 +125,17 @@
     </div>
   </section>
 
+  <!-- ETF Composed KPIs -->
+  <section class="kpi-strip card etf-card">
+    <h2>ETF Composed KPIs <span class="badge etf-badge">new</span></h2>
+    <div class="gauges">
+      {#each ETF_KPI_NAMES as name}
+        {@const kpi = liveKpis[name] || {}}
+        <KpiGauge {name} value={name === 'health_score' ? (kpi.value ?? 0) / 100 : (kpi.value ?? 0)} state={kpi.state ?? ''} label={name === 'health_score' ? 'Health Score (' + (kpi.value ?? 0).toFixed(1) + ')' : undefined} />
+      {/each}
+    </div>
+  </section>
+
   <!-- Metric sparklines -->
   {#if Object.keys(metricHistory).length > 0}
     <section class="sparklines card">
@@ -208,6 +221,8 @@
   table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
   th { text-align: left; padding: 0.4rem 0.5rem; color: #64748b; font-weight: 500; border-bottom: 1px solid #334155; }
   td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
+  .etf-card { border-color: #38bdf840; }
+  .etf-badge { background: #38bdf820; color: #38bdf8; }
   .badge { background: #334155; border-radius: 10px; padding: 0 6px; font-size: 0.75rem; font-weight: 600; }
   .badge-sev { font-size: 0.7rem; padding: 1px 6px; border-radius: 10px; background: #334155; }
   .sev-critical td { background: rgba(239,68,68,0.05); }

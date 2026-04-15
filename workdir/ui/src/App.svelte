@@ -5,12 +5,16 @@
   import Alerts from './pages/Alerts.svelte'
   import Dashboards from './pages/Dashboards.svelte'
   import Settings from './pages/Settings.svelte'
+  import Fleet from './pages/Fleet.svelte'
+  import Notifications from './pages/Notifications.svelte'
 
   const nav = [
-    { id: 'dashboard', label: 'Overview', icon: '◎' },
-    { id: 'alerts',    label: 'Alerts',   icon: '⚡' },
-    { id: 'dashboards',label: 'Boards',   icon: '⊞' },
-    { id: 'settings',  label: 'Settings', icon: '⚙' },
+    { id: 'dashboard',     label: 'Overview',      icon: '◎' },
+    { id: 'fleet',         label: 'Fleet',          icon: '⬡' },
+    { id: 'alerts',        label: 'Alerts',         icon: '⚡' },
+    { id: 'dashboards',    label: 'Boards',         icon: '⊞' },
+    { id: 'notifications', label: 'Notifications',  icon: '🔔' },
+    { id: 'settings',      label: 'Settings',       icon: '⚙' },
   ]
 </script>
 
@@ -40,10 +44,14 @@
     <main class="content">
       {#if $currentPage === 'dashboard'}
         <Dashboard />
+      {:else if $currentPage === 'fleet'}
+        <Fleet />
       {:else if $currentPage === 'alerts'}
         <Alerts />
       {:else if $currentPage === 'dashboards'}
         <Dashboards />
+      {:else if $currentPage === 'notifications'}
+        <Notifications />
       {:else if $currentPage === 'settings'}
         <Settings />
       {/if}

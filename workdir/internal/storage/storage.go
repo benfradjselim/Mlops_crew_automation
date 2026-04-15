@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
@@ -306,10 +307,136 @@ func (s *Store) ListDataSources(dest func(val []byte) error) error {
 	})
 }
 
+// --- NotificationChannel storage ---
+// Key schema: nc:{id}
+
+// SaveNotificationChannel persists a notification channel
+func (s *Store) SaveNotificationChannel(id string, data interface{}) error {
+	return s.set(fmt.Sprintf("nc:%s", id), data, 0)
+}
+
+// GetNotificationChannel retrieves a notification channel
+func (s *Store) GetNotificationChannel(id string, dest interface{}) error {
+	return s.get(fmt.Sprintf("nc:%s", id), dest)
+}
+
+// DeleteNotificationChannel removes a notification channel
+func (s *Store) DeleteNotificationChannel(id string) error {
+	return s.delete(fmt.Sprintf("nc:%s", id))
+}
+
+// ListNotificationChannels returns all notification channels
+func (s *Store) ListNotificationChannels(dest func(val []byte) error) error {
+	return s.listByPrefix("nc:", func(_, val []byte) error {
+		return dest(val)
+	})
+}
+
 // Healthy returns true if the database is responsive
 func (s *Store) Healthy() bool {
 	err := s.db.View(func(txn *badger.Txn) error {
 		return nil
 	})
 	return err == nil
+}
+
+// --- Log storage ---
+// Key: l:{service}:{20-digit-zero-padded-unix-ns}
+
+// sanitizeKeySegment removes Badger key namespace separators from user-supplied input.
+// Prevents key injection attacks where a crafted service name or trace ID could
+// escape its intended key prefix (e.g. "l::" or "sp:" embedded in a service name).
+func sanitizeKeySegment(s string) string {
+	return strings.NewReplacer(":", "_", "/", "_", "\\", "_").Replace(s)
+}
+
+// SaveLog persists a structured log entry
+func (s *Store) SaveLog(service string, entry interface{}, ts time.Time) error {
+	prefix := fmt.Sprintf("l:%s:", sanitizeKeySegment(service))
+	key := tsKey(prefix, ts)
+	return s.set(key, entry, LogsTTL)
+}
+
+// QueryLogs returns log entries for a service in the given time range (newest first, up to limit).
+// When service is empty, all log namespaces are scanned using the common "l:" prefix.
+func (s *Store) QueryLogs(service string, from, to time.Time, limit int) ([]json.RawMessage, error) {
+	var prefix, startKey, endKey string
+	if service == "" {
+		// Scan all services under the "l:" namespace
+		prefix = "l:"
+		startKey = tsKey("l::", from) // "l::" sorts before any "l:{service}:"
+		endKey = "l:~"               // "~" (0x7E) is the highest printable ASCII, terminates scan
+	} else {
+		svc := sanitizeKeySegment(service)
+		prefix = fmt.Sprintf("l:%s:", svc)
+		startKey = tsKey(prefix, from)
+		endKey = tsKey(prefix, to)
+	}
+
+	var results []json.RawMessage
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchSize = 100
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		for it.Seek([]byte(prefix)); it.Valid(); it.Next() {
+			item := it.Item()
+			key := string(item.Key())
+			if !strings.HasPrefix(key, prefix) {
+				break
+			}
+			if service != "" && (key < startKey || key >= endKey) {
+				if key >= endKey {
+					break
+				}
+				continue
+			}
+			err := item.Value(func(val []byte) error {
+				cp := make([]byte, len(val))
+				copy(cp, val)
+				results = append(results, json.RawMessage(cp))
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+			if limit > 0 && len(results) >= limit {
+				break
+			}
+		}
+		return nil
+	})
+	// Reverse so newest entries are first
+	for i, j := 0, len(results)-1; i < j; i, j = i+1, j-1 {
+		results[i], results[j] = results[j], results[i]
+	}
+	return results, err
+}
+
+// QueryAllLogs returns logs across all services in time range
+func (s *Store) QueryAllLogs(from, to time.Time, limit int) ([]json.RawMessage, error) {
+	return s.QueryLogs("", from, to, limit)
+}
+
+// --- Span/Trace storage ---
+// Key: sp:{trace_id}:{span_id}
+
+// SaveSpan persists a trace span
+func (s *Store) SaveSpan(span interface{}, traceID, spanID string) error {
+	key := fmt.Sprintf("sp:%s:%s", sanitizeKeySegment(traceID), sanitizeKeySegment(spanID))
+	return s.set(key, span, LogsTTL) // reuse 30d TTL
+}
+
+// QuerySpansByTrace returns all spans for a trace ID
+func (s *Store) QuerySpansByTrace(traceID string) ([]json.RawMessage, error) {
+	prefix := fmt.Sprintf("sp:%s:", sanitizeKeySegment(traceID))
+	var results []json.RawMessage
+	err := s.listByPrefix(prefix, func(_, val []byte) error {
+		cp := make([]byte, len(val))
+		copy(cp, val)
+		results = append(results, json.RawMessage(cp))
+		return nil
+	})
+	return results, err
 }
