@@ -386,22 +386,31 @@ func (e *Engine) runGC(ctx context.Context) {
 
 // seedAdminIfEmpty creates the first admin user when the store has no users.
 // The generated password is printed to stdout and logged at startup.
+// If OHE_ADMIN_PASSWORD is set, it is used as the admin password regardless
+// of whether users already exist (allows forced password reset via env var).
 func seedAdminIfEmpty(store *storage.Store) error {
+	forcePwd := os.Getenv("OHE_ADMIN_PASSWORD")
+
 	count := 0
 	_ = store.ListUsers(func([]byte) error {
 		count++
 		return nil
 	})
-	if count > 0 {
+	if count > 0 && forcePwd == "" {
 		return nil
 	}
 
-	// Generate a random 16-byte password
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return fmt.Errorf("generate password: %w", err)
+	// Use OHE_ADMIN_PASSWORD if set, otherwise generate a random one
+	var password string
+	if forcePwd != "" {
+		password = forcePwd
+	} else {
+		b := make([]byte, 16)
+		if _, err := rand.Read(b); err != nil {
+			return fmt.Errorf("generate password: %w", err)
+		}
+		password = hex.EncodeToString(b)
 	}
-	password := hex.EncodeToString(b)
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
