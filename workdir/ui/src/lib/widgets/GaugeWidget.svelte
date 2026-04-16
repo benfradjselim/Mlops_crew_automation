@@ -32,12 +32,14 @@
   onMount(load)
   $: if (refreshTick) load()
 
-  $: isKpi  = KPI_NAMES.has(widget.kpi || '')
+  $: isKpi        = KPI_NAMES.has(widget.kpi || '')
+  $: isHealthScore = widget.kpi === 'health_score'
   $: hv     = isKpi
     ? kpiHumanise(widget.kpi, current)
     : humanise(widget.metric || '', current)
-  $: maxVal = widget.max ?? (isKpi ? 1 : 100)
-  $: pct    = maxVal ? Math.min(100, (current / maxVal) * 100) : current * 100
+  // health_score is 0–100 raw; other KPIs are 0–1 raw; system metrics are 0–100
+  $: maxVal = widget.max ?? (isHealthScore ? 100 : isKpi ? 1 : 100)
+  $: pct    = maxVal ? Math.min(100, (current / maxVal) * 100) : 0
   $: color  = gaugeColor(pct)
 </script>
 

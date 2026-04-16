@@ -32,7 +32,8 @@
 
   $: isKpi = KPI_NAMES.has(widget.kpi || '')
   $: hv    = isKpi ? kpiHumanise(widget.kpi, current) : humanise(widget.metric || '', current)
-  $: pct   = isKpi ? current * 100 : current
+  // health_score is 0–100 raw; other KPIs are 0–1 → multiply by 100 for color
+  $: pct   = isKpi ? (widget.kpi === 'health_score' ? current : current * 100) : current
   $: color = gaugeColor(pct)
 </script>
 

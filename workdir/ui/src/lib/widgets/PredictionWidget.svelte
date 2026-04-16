@@ -3,13 +3,13 @@
   import { api } from '../api.js'
   import { toFromParam } from '../stores/timeRange.js'
   import { humanise } from '../util/format.js'
-  import { buildPath, buildTimeTicks, buildYLabels } from '../util/svgChart.js'
+  import { buildPath, buildArea, buildTimeTicks, buildYLabels, buildHGridLines, buildVGridLines } from '../util/svgChart.js'
 
   export let widget = {}
   export let timeRange = { preset: 60, from: null, to: null }
   export let refreshTick = 0
 
-  const W = 420, H = 110, PX = 12, PY = 10
+  const W = 420, H = 120, PX = 38, PY = 10
 
   let actualPts = []
   let forecastPts = []
@@ -63,13 +63,18 @@
   onMount(load)
   $: if (refreshTick, timeRange) { load() }
 
-  $: allPts    = [...actualPts, ...forecastPts]
-  $: ticks     = buildTimeTicks(allPts, W, PX)
-  $: yLabel    = buildYLabels(allPts)
-  $: actualStr  = buildPath(actualPts, W, H, PX, PY)
-  $: forecastStr= buildPath(forecastPts, W, H, PX, PY)
+  const metricKey = widget.kpi || widget.metric || ''
 
-  function hv(v) { return humanise(widget.metric || widget.kpi || '', v) }
+  $: allPts      = [...actualPts, ...forecastPts]
+  $: ticks       = buildTimeTicks(allPts, W, PX)
+  $: yLabel      = buildYLabels(allPts, metricKey)
+  $: hLines      = buildHGridLines(allPts, H, PY, 4)
+  $: vLines      = buildVGridLines(allPts, W, PX)
+  $: actualStr   = buildPath(actualPts, W, H, PX, PY)
+  $: areaStr     = buildArea(actualPts, W, H, PX, PY)
+  $: forecastStr = buildPath(forecastPts, W, H, PX, PY)
+
+  function hv(v) { return humanise(metricKey, v) }
 
   const TREND_COLOR = { rising: '#ef4444', falling: '#38bdf8', stable: '#94a3b8' }
 </script>
@@ -83,21 +88,53 @@
     <div class="pred-msg">Collecting data…</div>
   {:else}
     <svg viewBox="0 0 {W} {H}" class="pred-svg" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="predGrad{metricKey}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stop-color="#38bdf8" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+
+      <!-- Horizontal grid lines -->
+      {#each hLines as gl}
+        <line x1={PX} y1={gl.y} x2={W - 4} y2={gl.y}
+              stroke="#1e3a5f" stroke-width="0.6" stroke-dasharray="3,3"/>
+      {/each}
+
+      <!-- Vertical grid lines -->
+      {#each vLines as vx}
+        <line x1={vx} y1={PY} x2={vx} y2={H - PY}
+              stroke="#1e3a5f" stroke-width="0.6" stroke-dasharray="3,3"/>
+      {/each}
+
+      <!-- Area fill (actual data) -->
+      <polygon points={areaStr} fill="url(#predGrad{metricKey})" />
+
       <!-- Actual line -->
       <polyline points={actualStr} fill="none" stroke="#38bdf8" stroke-width="1.8" />
+
       <!-- Forecast dashed line -->
       {#if forecastPts.length >= 2}
         <polyline points={forecastStr} fill="none"
           stroke={TREND_COLOR[prediction?.trend] ?? '#94a3b8'}
           stroke-width="1.5" stroke-dasharray="6,4" />
       {/if}
-      <!-- X ticks -->
-      {#each ticks as tk}
-        <text x={tk.x} y={H - 1} fill="#475569" font-size="7" text-anchor="middle">{tk.label}</text>
-      {/each}
+
+      <!-- Y-axis line -->
+      <line x1={PX} y1={PY} x2={PX} y2={H - PY} stroke="#334155" stroke-width="0.5"/>
+
       <!-- Y labels -->
-      <text x={PX - 2} y={PY + 6}     fill="#475569" font-size="7" text-anchor="end">{yLabel.max}</text>
-      <text x={PX - 2} y={H - PY - 1} fill="#475569" font-size="7" text-anchor="end">{yLabel.min}</text>
+      <text x={PX - 3} y={PY + 5}    fill="#64748b" font-size="7" text-anchor="end">{yLabel.max}</text>
+      <text x={PX - 3} y={H / 2 + 3} fill="#64748b" font-size="7" text-anchor="end">{yLabel.mid}</text>
+      <text x={PX - 3} y={H - PY}    fill="#64748b" font-size="7" text-anchor="end">{yLabel.min}</text>
+
+      <!-- X-axis line -->
+      <line x1={PX} y1={H - PY} x2={W - 4} y2={H - PY} stroke="#334155" stroke-width="0.5"/>
+
+      <!-- X-axis time ticks -->
+      {#each ticks as tk}
+        <text x={tk.x} y={H - 1} fill="#475569" font-size="6.5" text-anchor="middle">{tk.label}</text>
+      {/each}
     </svg>
 
     {#if prediction}
@@ -116,7 +153,7 @@
 
 <style>
   .pred-wrap { position: relative; width: 100%; }
-  .pred-svg  { width: 100%; height: 110px; display: block; }
+  .pred-svg  { width: 100%; height: 120px; display: block; }
   .pred-msg  { text-align: center; padding: 20px; color: #475569; font-size: 0.8rem; }
   .err       { color: #ef4444; }
   .pred-footer { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px 0; font-size: 0.78rem; }
