@@ -16,10 +16,10 @@
       const host = widget.host || ''
       if (widget.kpi) {
         const res = await api.kpis(host)
-        current = res?.data?.[widget.kpi] ?? 0
+        current = res?.data?.[widget.kpi]?.value ?? 0
       } else if (widget.metric) {
         const res = await api.metricRange(widget.metric, host, '-5m')
-        const pts = res?.data || []
+        const pts = res?.data?.points || []
         current = pts.length ? (pts[pts.length - 1].value ?? 0) : 0
       }
     } catch (e) { error = e.message }

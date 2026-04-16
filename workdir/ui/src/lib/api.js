@@ -73,8 +73,9 @@ export const api = {
   dashboardImport: (json)   => req('POST', '/dashboards/import', json),
 
   // ── Templates ──────────────────────────────────────────────────────────────
-  templates:     ()   => req('GET', '/templates'),
-  templateApply: (id) => req('POST', `/templates/${id}/apply`),
+  templates:       ()                    => req('GET', '/templates'),
+  templateGet:     (id)                  => req('GET', `/templates/${id}`),
+  templateApply:   (id, name, mode)      => req('POST', `/templates/${id}/apply`, { name: name || undefined, mode: mode || 'current' }),
 
   // ── DataSources ────────────────────────────────────────────────────────────
   datasources:       ()         => req('GET', '/datasources'),

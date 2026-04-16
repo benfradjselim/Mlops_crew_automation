@@ -918,7 +918,26 @@ type dashboardTemplate struct {
 	Name        string           `json:"name"`
 	Description string           `json:"description"`
 	Tags        []string         `json:"tags"`
+	Category    string           `json:"category"`
+	Icon        string           `json:"icon"`
 	Dashboard   models.Dashboard `json:"dashboard"`
+}
+
+// widgetsToPrediction converts timeseries/gauge/stat widgets to prediction widgets
+// so templates can be applied in "predicted" mode.
+func widgetsToPrediction(widgets []models.Widget) []models.Widget {
+	out := make([]models.Widget, len(widgets))
+	for i, w := range widgets {
+		out[i] = w
+		if w.Type == "timeseries" || w.Type == "gauge" || w.Type == "stat" {
+			out[i].Type = "prediction"
+			if out[i].Options == nil {
+				out[i].Options = map[string]string{}
+			}
+			out[i].Options["horizon"] = "60"
+		}
+	}
+	return out
 }
 
 var builtinTemplates = []dashboardTemplate{
@@ -927,6 +946,8 @@ var builtinTemplates = []dashboardTemplate{
 		Name:        "System Overview",
 		Description: "CPU, memory, disk and network metrics for a single host",
 		Tags:        []string{"system", "infrastructure"},
+		Category:    "Infrastructure",
+		Icon:        "server",
 		Dashboard: models.Dashboard{
 			Name:    "System Overview",
 			Refresh: 30,
@@ -934,7 +955,7 @@ var builtinTemplates = []dashboardTemplate{
 				{Title: "CPU Usage", Type: "timeseries", Metric: "cpu_percent"},
 				{Title: "Memory Usage", Type: "timeseries", Metric: "memory_percent"},
 				{Title: "Disk Usage", Type: "gauge", Metric: "disk_percent"},
-				{Title: "Load Average", Type: "timeseries", Metric: "load_avg_1"},
+				{Title: "Load Average 1m", Type: "timeseries", Metric: "load_avg_1"},
 				{Title: "Network RX", Type: "timeseries", Metric: "net_rx_bps"},
 				{Title: "Network TX", Type: "timeseries", Metric: "net_tx_bps"},
 			},
@@ -945,6 +966,8 @@ var builtinTemplates = []dashboardTemplate{
 		Name:        "Holistic KPI Dashboard",
 		Description: "The six OHE vital signs: Stress, Fatigue, Mood, Pressure, Humidity, Contagion",
 		Tags:        []string{"kpi", "holistic", "ohe"},
+		Category:    "OHE KPIs",
+		Icon:        "activity",
 		Dashboard: models.Dashboard{
 			Name:    "Holistic KPI Dashboard",
 			Refresh: 15,
@@ -963,6 +986,8 @@ var builtinTemplates = []dashboardTemplate{
 		Name:        "ETF Composite KPIs",
 		Description: "4 composed ETF-style KPIs: HealthScore, Resilience, Entropy, Velocity",
 		Tags:        []string{"kpi", "etf", "composite", "ohe"},
+		Category:    "OHE KPIs",
+		Icon:        "trending-up",
 		Dashboard: models.Dashboard{
 			Name:    "ETF Composite KPIs",
 			Refresh: 15,
@@ -979,6 +1004,8 @@ var builtinTemplates = []dashboardTemplate{
 		Name:        "Container Overview",
 		Description: "Per-container CPU and memory usage",
 		Tags:        []string{"containers", "docker"},
+		Category:    "Containers",
+		Icon:        "box",
 		Dashboard: models.Dashboard{
 			Name:    "Container Overview",
 			Refresh: 30,
@@ -996,6 +1023,8 @@ var builtinTemplates = []dashboardTemplate{
 		Name:        "Kubernetes Node Health",
 		Description: "Per-node holistic health for K8s deployments — works with the OHE DaemonSet agent",
 		Tags:        []string{"kubernetes", "k8s", "node", "ohe"},
+		Category:    "Kubernetes",
+		Icon:        "layers",
 		Dashboard: models.Dashboard{
 			Name:    "Kubernetes Node Health",
 			Refresh: 15,
@@ -1016,6 +1045,8 @@ var builtinTemplates = []dashboardTemplate{
 		Name:        "Kubernetes Cluster Fleet",
 		Description: "Multi-node fleet overview — aggregate health across all K8s nodes",
 		Tags:        []string{"kubernetes", "k8s", "fleet", "ohe"},
+		Category:    "Kubernetes",
+		Icon:        "globe",
 		Dashboard: models.Dashboard{
 			Name:    "Kubernetes Cluster Fleet",
 			Refresh: 30,
@@ -1034,6 +1065,8 @@ var builtinTemplates = []dashboardTemplate{
 		Name:        "SRE Golden Signals",
 		Description: "Latency, Traffic, Errors, Saturation — mapped to OHE KPIs",
 		Tags:        []string{"sre", "golden-signals", "reliability"},
+		Category:    "SRE",
+		Icon:        "shield",
 		Dashboard: models.Dashboard{
 			Name:    "SRE Golden Signals",
 			Refresh: 15,
@@ -1052,6 +1085,8 @@ var builtinTemplates = []dashboardTemplate{
 		Name:        "Incident Response",
 		Description: "Storm detection, contagion spread, pressure spikes — for on-call engineers",
 		Tags:        []string{"incident", "oncall", "sre"},
+		Category:    "SRE",
+		Icon:        "alert-triangle",
 		Dashboard: models.Dashboard{
 			Name:    "Incident Response",
 			Refresh: 10,
@@ -1065,20 +1100,213 @@ var builtinTemplates = []dashboardTemplate{
 			},
 		},
 	},
+	// ── New Templates ────────────────────────────────────────────────────────
+	{
+		ID:          "capacity-planning",
+		Name:        "Capacity Planning",
+		Description: "Trend-based forecasts for CPU, memory, disk growth — plan before you hit limits",
+		Tags:        []string{"capacity", "planning", "forecast"},
+		Category:    "Infrastructure",
+		Icon:        "bar-chart-2",
+		Dashboard: models.Dashboard{
+			Name:    "Capacity Planning",
+			Refresh: 60,
+			Widgets: []models.Widget{
+				{Title: "CPU Forecast", Type: "prediction", Metric: "cpu_percent", Options: map[string]string{"horizon": "120"}},
+				{Title: "Memory Forecast", Type: "prediction", Metric: "memory_percent", Options: map[string]string{"horizon": "120"}},
+				{Title: "Disk Growth Forecast", Type: "prediction", Metric: "disk_percent", Options: map[string]string{"horizon": "120"}},
+				{Title: "Load Average Trend", Type: "prediction", Metric: "load_avg_15", Options: map[string]string{"horizon": "60"}},
+				{Title: "Health Score Trend", Type: "prediction", KPI: "health_score", Options: map[string]string{"horizon": "60"}},
+				{Title: "Stress Forecast", Type: "prediction", KPI: "stress", Options: map[string]string{"horizon": "60"}},
+			},
+		},
+	},
+	{
+		ID:          "security-anomaly",
+		Name:        "Security & Anomaly Detection",
+		Description: "Entropy spikes, contagion bursts, and sudden metric deviations indicating attacks or anomalies",
+		Tags:        []string{"security", "anomaly", "entropy"},
+		Category:    "Security",
+		Icon:        "eye",
+		Dashboard: models.Dashboard{
+			Name:    "Security & Anomaly Detection",
+			Refresh: 10,
+			Widgets: []models.Widget{
+				{Title: "System Entropy (disorder)", Type: "timeseries", KPI: "entropy"},
+				{Title: "Contagion Index", Type: "gauge", KPI: "contagion"},
+				{Title: "Error Humidity", Type: "timeseries", KPI: "humidity"},
+				{Title: "Pressure Spikes", Type: "timeseries", KPI: "pressure"},
+				{Title: "CPU Anomaly", Type: "timeseries", Metric: "cpu_percent"},
+				{Title: "Active Alerts", Type: "alerts"},
+			},
+		},
+	},
+	{
+		ID:          "executive-health",
+		Name:        "Executive Health Summary",
+		Description: "Single-pane C-level view: Health Score, Resilience, SLA proxies and alert summary",
+		Tags:        []string{"executive", "summary", "health"},
+		Category:    "OHE KPIs",
+		Icon:        "award",
+		Dashboard: models.Dashboard{
+			Name:    "Executive Health Summary",
+			Refresh: 30,
+			Widgets: []models.Widget{
+				{Title: "Overall Health Score", Type: "kpi", KPI: "health_score"},
+				{Title: "Resilience Index", Type: "kpi", KPI: "resilience"},
+				{Title: "System Mood (SLA proxy)", Type: "gauge", KPI: "mood"},
+				{Title: "Change Velocity", Type: "stat", KPI: "velocity"},
+				{Title: "Health Score Trend", Type: "timeseries", KPI: "health_score"},
+				{Title: "Active Alerts", Type: "alerts"},
+			},
+		},
+	},
+	{
+		ID:          "performance-deep-dive",
+		Name:        "Performance Deep Dive",
+		Description: "Detailed CPU, memory, I/O and load breakdown for deep performance analysis",
+		Tags:        []string{"performance", "cpu", "memory", "io"},
+		Category:    "Infrastructure",
+		Icon:        "zap",
+		Dashboard: models.Dashboard{
+			Name:    "Performance Deep Dive",
+			Refresh: 15,
+			Widgets: []models.Widget{
+				{Title: "CPU %", Type: "timeseries", Metric: "cpu_percent"},
+				{Title: "Memory %", Type: "timeseries", Metric: "memory_percent"},
+				{Title: "Disk I/O Read", Type: "timeseries", Metric: "disk_read_bps"},
+				{Title: "Disk I/O Write", Type: "timeseries", Metric: "disk_write_bps"},
+				{Title: "Load Avg 1m", Type: "timeseries", Metric: "load_avg_1"},
+				{Title: "Load Avg 5m", Type: "timeseries", Metric: "load_avg_5"},
+				{Title: "Load Avg 15m", Type: "timeseries", Metric: "load_avg_15"},
+				{Title: "Process Count", Type: "stat", Metric: "processes"},
+			},
+		},
+	},
+	{
+		ID:          "network-analysis",
+		Name:        "Network Analysis",
+		Description: "Bandwidth, packet rates, and network health for infrastructure monitoring",
+		Tags:        []string{"network", "bandwidth", "traffic"},
+		Category:    "Infrastructure",
+		Icon:        "wifi",
+		Dashboard: models.Dashboard{
+			Name:    "Network Analysis",
+			Refresh: 15,
+			Widgets: []models.Widget{
+				{Title: "RX Bandwidth", Type: "timeseries", Metric: "net_rx_bps"},
+				{Title: "TX Bandwidth", Type: "timeseries", Metric: "net_tx_bps"},
+				{Title: "RX Packets", Type: "timeseries", Metric: "net_rx_packets"},
+				{Title: "TX Packets", Type: "timeseries", Metric: "net_tx_packets"},
+				{Title: "Contagion (network errors propagating)", Type: "gauge", KPI: "contagion"},
+				{Title: "Active Alerts", Type: "alerts"},
+			},
+		},
+	},
+	{
+		ID:          "database-health",
+		Name:        "Database Health",
+		Description: "Memory pressure, connection pool, query latency and error rate for database services",
+		Tags:        []string{"database", "db", "postgres", "mysql"},
+		Category:    "Applications",
+		Icon:        "database",
+		Dashboard: models.Dashboard{
+			Name:    "Database Health",
+			Refresh: 15,
+			Widgets: []models.Widget{
+				{Title: "DB Memory %", Type: "timeseries", Metric: "memory_percent"},
+				{Title: "CPU (query load)", Type: "timeseries", Metric: "cpu_percent"},
+				{Title: "Disk Usage", Type: "gauge", Metric: "disk_percent"},
+				{Title: "Error Rate", Type: "timeseries", Metric: "error_rate"},
+				{Title: "Stress (overall load)", Type: "gauge", KPI: "stress"},
+				{Title: "Fatigue (sustained load)", Type: "timeseries", KPI: "fatigue"},
+			},
+		},
+	},
+	{
+		ID:          "full-stack-prediction",
+		Name:        "Full-Stack Prediction",
+		Description: "Forecast for all major KPIs — stress, fatigue, resilience, entropy and health score",
+		Tags:        []string{"prediction", "forecast", "ohe", "ml"},
+		Category:    "Prediction",
+		Icon:        "cpu",
+		Dashboard: models.Dashboard{
+			Name:    "Full-Stack Prediction",
+			Refresh: 60,
+			Widgets: []models.Widget{
+				{Title: "Stress Forecast", Type: "prediction", KPI: "stress", Options: map[string]string{"horizon": "60"}},
+				{Title: "Fatigue Forecast", Type: "prediction", KPI: "fatigue", Options: map[string]string{"horizon": "60"}},
+				{Title: "Mood Forecast", Type: "prediction", KPI: "mood", Options: map[string]string{"horizon": "60"}},
+				{Title: "Resilience Forecast", Type: "prediction", KPI: "resilience", Options: map[string]string{"horizon": "60"}},
+				{Title: "Entropy Forecast", Type: "prediction", KPI: "entropy", Options: map[string]string{"horizon": "60"}},
+				{Title: "Health Score Forecast", Type: "prediction", KPI: "health_score", Options: map[string]string{"horizon": "60"}},
+			},
+		},
+	},
+	{
+		ID:          "sre-error-budget",
+		Name:        "SRE Error Budget",
+		Description: "Error budget consumption: error rate, timeout rate, mood degradation and humidity burn",
+		Tags:        []string{"sre", "error-budget", "reliability"},
+		Category:    "SRE",
+		Icon:        "percent",
+		Dashboard: models.Dashboard{
+			Name:    "SRE Error Budget",
+			Refresh: 15,
+			Widgets: []models.Widget{
+				{Title: "Error Rate", Type: "timeseries", Metric: "error_rate"},
+				{Title: "Timeout Rate", Type: "timeseries", Metric: "timeout_rate"},
+				{Title: "Error Humidity (compound)", Type: "gauge", KPI: "humidity"},
+				{Title: "System Mood (SLA index)", Type: "timeseries", KPI: "mood"},
+				{Title: "Contagion (error blast radius)", Type: "gauge", KPI: "contagion"},
+				{Title: "Active Alerts", Type: "alerts"},
+			},
+		},
+	},
+	{
+		ID:          "devops-pipeline",
+		Name:        "DevOps Pipeline Health",
+		Description: "CI/CD pipeline proxy: velocity, entropy, deploy-triggered stress spikes",
+		Tags:        []string{"devops", "cicd", "pipeline"},
+		Category:    "Applications",
+		Icon:        "git-branch",
+		Dashboard: models.Dashboard{
+			Name:    "DevOps Pipeline Health",
+			Refresh: 20,
+			Widgets: []models.Widget{
+				{Title: "Change Velocity", Type: "timeseries", KPI: "velocity"},
+				{Title: "System Entropy", Type: "timeseries", KPI: "entropy"},
+				{Title: "Deploy Stress Spike", Type: "gauge", KPI: "stress"},
+				{Title: "CPU (build load)", Type: "timeseries", Metric: "cpu_percent"},
+				{Title: "Memory (build load)", Type: "timeseries", Metric: "memory_percent"},
+				{Title: "Active Alerts", Type: "alerts"},
+			},
+		},
+	},
 }
 
 // TemplateListHandler GET /api/v1/templates
 func (h *Handlers) TemplateListHandler(w http.ResponseWriter, r *http.Request) {
-	// Return lightweight list (no full dashboard payload)
 	type entry struct {
 		ID          string   `json:"id"`
 		Name        string   `json:"name"`
 		Description string   `json:"description"`
 		Tags        []string `json:"tags"`
+		Category    string   `json:"category"`
+		Icon        string   `json:"icon"`
+		WidgetCount int      `json:"widget_count"`
 	}
 	list := make([]entry, 0, len(builtinTemplates))
 	for _, t := range builtinTemplates {
-		list = append(list, entry{ID: t.ID, Name: t.Name, Description: t.Description, Tags: t.Tags})
+		list = append(list, entry{
+			ID:          t.ID,
+			Name:        t.Name,
+			Description: t.Description,
+			Tags:        t.Tags,
+			Category:    t.Category,
+			Icon:        t.Icon,
+			WidgetCount: len(t.Dashboard.Widgets),
+		})
 	}
 	respondSuccess(w, list)
 }
@@ -1096,6 +1324,7 @@ func (h *Handlers) TemplateGetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // TemplateApplyHandler POST /api/v1/templates/{id}/apply — instantiates a template as a new dashboard
+// Body: {"name": "optional override", "mode": "current"|"predicted"}
 func (h *Handlers) TemplateApplyHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	var tmpl *dashboardTemplate
@@ -1110,9 +1339,9 @@ func (h *Handlers) TemplateApplyHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Allow caller to override the dashboard name
 	var opts struct {
 		Name string `json:"name"`
+		Mode string `json:"mode"` // "current" (default) or "predicted"
 	}
 	_ = decodeBody(r, &opts)
 
@@ -1122,6 +1351,13 @@ func (h *Handlers) TemplateApplyHandler(w http.ResponseWriter, r *http.Request) 
 	d.UpdatedAt = d.CreatedAt
 	if opts.Name != "" {
 		d.Name = opts.Name
+	}
+	// In "predicted" mode, swap timeseries/gauge/stat widgets for prediction widgets
+	if opts.Mode == "predicted" {
+		d.Widgets = widgetsToPrediction(d.Widgets)
+		if opts.Name == "" {
+			d.Name = d.Name + " (Predicted)"
+		}
 	}
 
 	if err := h.store.SaveDashboard(d.ID, d); err != nil {
@@ -1160,6 +1396,9 @@ func parseTimeRange(r *http.Request) (from, to time.Time) {
 	if fromStr != "" {
 		if t, err := time.Parse(time.RFC3339, fromStr); err == nil {
 			from = t
+		} else {
+			// Handle relative offsets: -5m, -1h, -6h, -24h, -7d, -30d
+			from = parseRelativeOffset(fromStr, now)
 		}
 	}
 	if from.IsZero() {
@@ -1171,6 +1410,32 @@ func parseTimeRange(r *http.Request) (from, to time.Time) {
 		}
 	}
 	return from, to
+}
+
+// parseRelativeOffset parses strings like "-5m", "-1h", "-6h", "-24h", "-7d", "-30d"
+func parseRelativeOffset(s string, now time.Time) time.Time {
+	if len(s) < 2 || s[0] != '-' {
+		return time.Time{}
+	}
+	rest := s[1:]
+	if len(rest) < 2 {
+		return time.Time{}
+	}
+	unit := rest[len(rest)-1]
+	numStr := rest[:len(rest)-1]
+	n, err := strconv.Atoi(numStr)
+	if err != nil || n <= 0 {
+		return time.Time{}
+	}
+	switch unit {
+	case 'm':
+		return now.Add(-time.Duration(n) * time.Minute)
+	case 'h':
+		return now.Add(-time.Duration(n) * time.Hour)
+	case 'd':
+		return now.Add(-time.Duration(n) * 24 * time.Hour)
+	}
+	return time.Time{}
 }
 
 func decodeBody(r *http.Request, dest interface{}) error {

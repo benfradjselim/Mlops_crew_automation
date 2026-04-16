@@ -26,13 +26,13 @@
       if (widget.kpi) {
         // KPI timeseries
         const res = await api.kpi(widget.kpi, host)
-        raw = (res?.data?.history || res?.data || []).map(p => ({
+        raw = (res?.data?.points || []).map(p => ({
           t: new Date(p.timestamp || p.t).getTime(),
           v: p.value ?? p.v ?? 0,
         }))
       } else if (widget.metric) {
         const res = await api.metricRange(widget.metric, host, fromParam)
-        raw = (res?.data || []).map(p => ({
+        raw = (res?.data?.points || []).map(p => ({
           t: new Date(p.timestamp || p.t).getTime(),
           v: p.value ?? p.v ?? 0,
         }))
