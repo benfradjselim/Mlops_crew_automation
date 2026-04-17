@@ -146,7 +146,8 @@ type User struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
 	Password string `json:"password,omitempty"` // bcrypt hash — omitempty ensures it is never serialised when cleared
-	Role     string `json:"role"` // admin, viewer, operator
+	Role     string `json:"role"`               // admin, viewer, operator
+	OrgID    string `json:"org_id,omitempty"`   // "" = default org (global)
 }
 
 // Dashboard configuration
@@ -156,8 +157,19 @@ type Dashboard struct {
 	Description string    `json:"description"`
 	Widgets     []Widget  `json:"widgets"`
 	Refresh     int       `json:"refresh_seconds"`
+	OrgID       string    `json:"org_id,omitempty"` // "" = default org (global)
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// RetentionStats exposes storage tier counts
+type RetentionStats struct {
+	RawMetrics    int64 `json:"raw_metrics"`
+	RawKPIs       int64 `json:"raw_kpis"`
+	Rollup5mMetrics int64 `json:"rollup_5m_metrics"`
+	Rollup5mKPIs  int64 `json:"rollup_5m_kpis"`
+	Rollup1hMetrics int64 `json:"rollup_1h_metrics"`
+	Rollup1hKPIs  int64 `json:"rollup_1h_kpis"`
 }
 
 // Widget types
@@ -185,12 +197,13 @@ type Widget struct {
 
 // DataSource represents an external data source
 type DataSource struct {
-	ID       string            `json:"id"`
-	Name     string            `json:"name"`
-	Type     string            `json:"type"` // prometheus, loki, custom
-	URL      string            `json:"url"`
-	Headers  map[string]string `json:"headers,omitempty"`
-	Enabled  bool              `json:"enabled"`
+	ID      string            `json:"id"`
+	Name    string            `json:"name"`
+	Type    string            `json:"type"` // prometheus, loki, custom
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers,omitempty"`
+	Enabled bool              `json:"enabled"`
+	OrgID   string            `json:"org_id,omitempty"` // "" = default org (global)
 }
 
 // SystemMetrics holds all raw collected system metrics

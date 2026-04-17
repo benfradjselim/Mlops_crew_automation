@@ -39,11 +39,17 @@ func NewRouter(h *Handlers, jwtSecret string, authEnabled bool, allowedOrigins [
 	api.Handle("/auth/users", adminOnly(http.HandlerFunc(h.UserCreateHandler))).Methods(http.MethodPost)
 	api.Handle("/auth/users/{id}", adminOnly(http.HandlerFunc(h.UserGetHandler))).Methods(http.MethodGet)
 	api.Handle("/auth/users/{id}", adminOnly(http.HandlerFunc(h.UserDeleteHandler))).Methods(http.MethodDelete)
+	api.Handle("/auth/users/{id}/org", adminOnly(http.HandlerFunc(h.UserAssignOrgHandler))).Methods(http.MethodPut)
 	api.Handle("/reload", adminOnly(http.HandlerFunc(h.ReloadHandler))).Methods(http.MethodPost)
+
+	// Retention
+	api.HandleFunc("/retention/stats", h.RetentionStatsHandler).Methods(http.MethodGet)
+	api.Handle("/retention/compact", operatorOnly(http.HandlerFunc(h.RetentionCompactHandler))).Methods(http.MethodPost)
 
 	// Metrics
 	api.HandleFunc("/metrics", h.MetricsListHandler).Methods(http.MethodGet)
 	api.HandleFunc("/metrics/{name}", h.MetricGetHandler).Methods(http.MethodGet)
+	api.HandleFunc("/metrics/{name}/range", h.MetricRangeTieredHandler).Methods(http.MethodGet)
 	api.HandleFunc("/metrics/{name}/aggregate", h.MetricAggregateHandler).Methods(http.MethodGet)
 
 	// Query (QQL)
@@ -86,6 +92,8 @@ func NewRouter(h *Handlers, jwtSecret string, authEnabled bool, allowedOrigins [
 	api.HandleFunc("/orgs/{id}", h.OrgGetHandler).Methods(http.MethodGet)
 	api.Handle("/orgs/{id}", operatorOnly(http.HandlerFunc(h.OrgUpdateHandler))).Methods(http.MethodPut)
 	api.Handle("/orgs/{id}", operatorOnly(http.HandlerFunc(h.OrgDeleteHandler))).Methods(http.MethodDelete)
+	api.HandleFunc("/orgs/{id}/members", h.OrgMemberListHandler).Methods(http.MethodGet)
+	api.Handle("/orgs/{id}/members", operatorOnly(http.HandlerFunc(h.OrgInviteHandler))).Methods(http.MethodPost)
 
 	// Templates
 	api.HandleFunc("/templates", h.TemplateListHandler).Methods(http.MethodGet)

@@ -93,6 +93,32 @@ Override with env var: `OHE_ADMIN_PASSWORD=yourpassword`
 
 ---
 
+## v4.3.0 — What's New
+
+### Long-term Retention + Downsampling
+Tiered storage — data no longer expires after 7 days of raw retention:
+
+| Tier | Key prefix | Retention | Resolution |
+|------|------------|-----------|------------|
+| Raw  | `m:` / `k:` | 7 days | as-collected |
+| 5-min rollup | `r5:` / `kr5:` | 35 days | 5-min avg |
+| 1-hour rollup | `r1h:` / `kr1h:` | 400 days | 1-hour avg |
+
+- Compaction goroutine runs every 30 min — raw→5m after 2h, 5m→1h after 12h
+- `GET /api/v1/metrics/{name}/range` — tiered query (auto-selects tier by window)
+- `GET /api/v1/retention/stats` — live count of data points per tier
+- `POST /api/v1/retention/compact` — on-demand compaction (operator+)
+
+### Full RBAC within Orgs
+- User model extended with `org_id` field
+- JWT claims carry `org_id` — propagated as request context
+- `PUT /api/v1/auth/users/{id}/org` — assign user to org (admin only)
+- `GET /api/v1/orgs/{id}/members` — list members of an org
+- `POST /api/v1/orgs/{id}/members` — invite user directly into an org
+- Dashboard and DataSource models carry `org_id` for future resource isolation
+
+---
+
 ## v4.2.0 — What's New
 
 ### PromQL Passthrough
@@ -145,7 +171,7 @@ Notification channels are now end-to-end functional:
 | 3 | Alert delivery (webhook / Slack / PagerDuty) | ✅ v4.1.0 |
 | 4 | PromQL passthrough to Prometheus datasource | ✅ v4.2.0 |
 | 5 | Multi-tenancy (orgs, teams, RBAC) | ✅ v4.2.0 (foundation) |
-| 6 | Long-term retention + downsampling | 🔜 v4.3.0 |
+| 6 | Long-term retention + downsampling | ✅ v4.3.0 |
 
 ---
 

@@ -142,6 +142,10 @@ func (e *Engine) Run(ctx context.Context) error {
 	e.wg.Add(1)
 	go e.runGC(ctx)
 
+	// Start retention/downsampling compaction goroutine
+	e.wg.Add(1)
+	go e.runCompaction(ctx)
+
 	// In agent mode, collect and push to central
 	// In central mode, collect locally AND serve API
 	switch e.cfg.Mode {
@@ -380,6 +384,24 @@ func (e *Engine) runGC(ctx context.Context) {
 				// ErrNoRewrite is expected when nothing to GC
 				log.Printf("[gc] %v", err)
 			}
+		}
+	}
+}
+
+// runCompaction periodically downsizes raw time-series into 5m and 1h rollups.
+func (e *Engine) runCompaction(ctx context.Context) {
+	defer e.wg.Done()
+	// Run after startup to compact any existing data, then every 30 minutes
+	ticker := time.NewTicker(30 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			log.Printf("[compaction] starting retention pass")
+			e.store.Compact()
+			log.Printf("[compaction] done")
 		}
 	}
 }

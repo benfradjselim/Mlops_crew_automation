@@ -15,13 +15,25 @@ import (
 
 type contextKey string
 
-const claimsKey contextKey = "claims"
+const (
+	claimsKey contextKey = "claims"
+	orgIDKey  contextKey = "org_id"
+)
 
 // JWTClaims represents JWT payload
 type JWTClaims struct {
 	Username string `json:"username"`
 	Role     string `json:"role"`
+	OrgID    string `json:"org_id,omitempty"`
 	jwt.RegisteredClaims
+}
+
+// orgIDFromContext returns the org ID from context, defaulting to "default".
+func orgIDFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(orgIDKey).(string); ok && v != "" {
+		return v
+	}
+	return "default"
 }
 
 // respondJSON writes a JSON response with the given status code
@@ -93,6 +105,9 @@ func AuthMiddleware(jwtSecret string, enabled bool) func(http.Handler) http.Hand
 			}
 
 			ctx := context.WithValue(r.Context(), claimsKey, claims)
+			if claims.OrgID != "" {
+				ctx = context.WithValue(ctx, orgIDKey, claims.OrgID)
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
