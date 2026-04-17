@@ -1580,7 +1580,21 @@ func decodeBody(r *http.Request, dest interface{}) error {
 	return nil
 }
 
-// validateDataSourceURL enforces scheme allowlist and blocks SSRF targets
+// isClusterInternalHost returns true for Kubernetes in-cluster service DNS names
+// (e.g. prometheus.monitoring.svc.cluster.local, prometheus.monitoring.svc).
+// These are trusted because they can only resolve inside the cluster network.
+func isClusterInternalHost(host string) bool {
+	internal := []string{".svc.cluster.local", ".svc"}
+	for _, suffix := range internal {
+		if strings.HasSuffix(host, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// validateDataSourceURL enforces scheme allowlist and blocks SSRF targets.
+// Kubernetes in-cluster service DNS names are explicitly allowed.
 func validateDataSourceURL(rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -1592,6 +1606,11 @@ func validateDataSourceURL(rawURL string) error {
 	host, _, err := net.SplitHostPort(u.Host)
 	if err != nil {
 		host = u.Host
+	}
+	// Allow Kubernetes cluster-internal service DNS — these can only be reached
+	// from within the same cluster and are safe from external SSRF.
+	if isClusterInternalHost(host) {
+		return nil
 	}
 	addrs, err := net.LookupHost(host)
 	if err != nil {
