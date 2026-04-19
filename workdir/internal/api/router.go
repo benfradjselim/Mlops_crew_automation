@@ -25,6 +25,7 @@ func NewRouter(h *Handlers, jwtSecret string, authEnabled bool, allowedOrigins [
 	api.HandleFunc("/health/live", h.LivenessHandler).Methods(http.MethodGet)
 	api.HandleFunc("/health/ready", h.ReadinessHandler).Methods(http.MethodGet)
 	api.HandleFunc("/config", h.ConfigHandler).Methods(http.MethodGet)
+	api.HandleFunc("/openapi.yaml", h.OpenAPIHandler).Methods(http.MethodGet)
 
 	// Auth — setup endpoint only active when no users exist
 	api.HandleFunc("/auth/setup", h.SetupHandler).Methods(http.MethodPost)
@@ -60,6 +61,9 @@ func NewRouter(h *Handlers, jwtSecret string, authEnabled bool, allowedOrigins [
 	api.HandleFunc("/kpis/{name}", h.KPIGetHandler).Methods(http.MethodGet)
 	api.HandleFunc("/kpis/{name}/predict", h.PredictHandler).Methods(http.MethodGet)
 	api.HandleFunc("/predict", h.PredictHandler).Methods(http.MethodGet)
+
+	// v5.0 XAI — per-KPI explainability
+	api.HandleFunc("/explain/{kpi}", h.ExplainHandler).Methods(http.MethodGet)
 
 	// Alerts
 	api.HandleFunc("/alerts", h.AlertListHandler).Methods(http.MethodGet)
@@ -138,6 +142,14 @@ func NewRouter(h *Handlers, jwtSecret string, authEnabled bool, allowedOrigins [
 	api.Handle("/slos/{id}", operatorOnly(http.HandlerFunc(h.SLODeleteHandler))).Methods(http.MethodDelete)
 	api.HandleFunc("/slos/{id}/status", h.SLOStatusHandler).Methods(http.MethodGet)
 
+	// API keys — programmatic access tokens (alternative to JWT for CI/CD integrations)
+	api.HandleFunc("/api-keys", h.APIKeyListHandler).Methods(http.MethodGet)
+	api.Handle("/api-keys", operatorOnly(http.HandlerFunc(h.APIKeyCreateHandler))).Methods(http.MethodPost)
+	api.Handle("/api-keys/{id}", operatorOnly(http.HandlerFunc(h.APIKeyDeleteHandler))).Methods(http.MethodDelete)
+
+	// Audit log (admin only — compliance trail for all write operations)
+	api.Handle("/audit", adminOnly(http.HandlerFunc(h.AuditLogHandler))).Methods(http.MethodGet)
+
 	// Topology (APM-style service dependency graph)
 	api.HandleFunc("/topology", h.TopologyHandler).Methods(http.MethodGet)
 
@@ -171,6 +183,9 @@ func NewRouter(h *Handlers, jwtSecret string, authEnabled bool, allowedOrigins [
 	// Datadog-compatible metrics/logs API — replaces Datadog agent
 	r.HandleFunc("/api/v1/series", h.DDMetricsHandler).Methods(http.MethodPost)
 	r.HandleFunc("/api/v2/logs", h.DDLogsHandler).Methods(http.MethodPost)
+
+	// Prometheus remote_write — receives snappy+protobuf WriteRequest payloads
+	r.HandleFunc("/api/v1/write", h.RemoteWriteHandler).Methods(http.MethodPost)
 
 	// Embedded UI
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./web")))

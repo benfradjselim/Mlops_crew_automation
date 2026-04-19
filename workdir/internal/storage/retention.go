@@ -14,11 +14,11 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
+	"github.com/benfradjselim/ohe/pkg/logger"
 )
 
 const (
@@ -70,19 +70,19 @@ func (s *Store) Compact() {
 
 	// raw → 5m (metrics)
 	if err := s.compactTier("m:", "r5:", 5*time.Minute, cutRaw, Rollup5mTTL); err != nil {
-		log.Printf("compact raw→5m metrics: %v", err)
+		logger.Default.Error("compact raw->5m metrics", "err", err)
 	}
 	// raw → 5m (KPIs)
 	if err := s.compactTier("k:", "kr5:", 5*time.Minute, cutRaw, Rollup5mTTL); err != nil {
-		log.Printf("compact raw→5m kpis: %v", err)
+		logger.Default.Error("compact raw->5m kpis", "err", err)
 	}
 	// 5m → 1h (metrics)
 	if err := s.compactTier("r5:", "r1h:", time.Hour, cut5m, Rollup1hTTL); err != nil {
-		log.Printf("compact 5m→1h metrics: %v", err)
+		logger.Default.Error("compact 5m->1h metrics", "err", err)
 	}
 	// 5m → 1h (KPIs)
 	if err := s.compactTier("kr5:", "kr1h:", time.Hour, cut5m, Rollup1hTTL); err != nil {
-		log.Printf("compact 5m→1h kpis: %v", err)
+		logger.Default.Error("compact 5m->1h kpis", "err", err)
 	}
 }
 
@@ -165,7 +165,7 @@ func (s *Store) compactTier(srcPrefix, destPrefix string, bucketSize time.Durati
 
 		// Write rollup
 		if err := s.set(destKey, avg, destTTL); err != nil {
-			log.Printf("write rollup %s: %v", destKey, err)
+			logger.Default.Error("write rollup", "key", destKey, "err", err)
 			continue
 		}
 
@@ -178,7 +178,7 @@ func (s *Store) compactTier(srcPrefix, destPrefix string, bucketSize time.Durati
 			}
 			return nil
 		}); err != nil {
-			log.Printf("delete source keys for bucket %s: %v", destKey, err)
+			logger.Default.Error("delete source keys", "key", destKey, "err", err)
 		}
 	}
 	return nil

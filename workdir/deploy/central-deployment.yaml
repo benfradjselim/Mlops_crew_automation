@@ -30,6 +30,36 @@ spec:
         fsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        # Litestream restore: if the data directory is empty (first boot or new PVC),
+        # restore the latest snapshot from the replica before OHE starts.
+        # Set LITESTREAM_REPLICA_URL to activate (e.g. s3://mybucket/ohe-data).
+        # If the env var is absent, the init container exits immediately (no-op).
+        - name: litestream-restore
+          image: litestream/litestream:0.3.13
+          args:
+            - sh
+            - -c
+            - |
+              if [ -z "$LITESTREAM_REPLICA_URL" ]; then
+                echo "No replica URL set — skipping restore"; exit 0
+              fi
+              if [ -d /var/lib/ohe/data ] && [ "$(ls -A /var/lib/ohe/data)" ]; then
+                echo "Data directory not empty — skipping restore"; exit 0
+              fi
+              echo "Restoring from $LITESTREAM_REPLICA_URL ..."
+              litestream restore -replica "$LITESTREAM_REPLICA_URL" /var/lib/ohe/data
+          env:
+            - name: LITESTREAM_REPLICA_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ohe-secrets
+                  key: litestream-replica-url
+                  optional: true   # secret key absent = no replication
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/ohe/data
+
       containers:
         - name: ohe
           image: ghcr.io/benfradjselim/ohe:4.0.0
@@ -80,6 +110,51 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
+
+        # Litestream sidecar: continuously replicates Badger WAL to the replica URL.
+        # Runs alongside OHE in the same pod, sharing the /var/lib/ohe/data volume.
+        # Omit this container (or set LITESTREAM_REPLICA_URL to empty) for single-node mode.
+        - name: litestream
+          image: litestream/litestream:0.3.13
+          args:
+            - sh
+            - -c
+            - |
+              if [ -z "$LITESTREAM_REPLICA_URL" ]; then
+                echo "No replica URL — sidecar exiting"; exit 0
+              fi
+              litestream replicate /var/lib/ohe/data "$LITESTREAM_REPLICA_URL"
+          env:
+            - name: LITESTREAM_REPLICA_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ohe-secrets
+                  key: litestream-replica-url
+                  optional: true
+            # AWS credentials — set if using S3 replica
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: ohe-secrets
+                  key: aws-access-key-id
+                  optional: true
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ohe-secrets
+                  key: aws-secret-access-key
+                  optional: true
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/ohe/data
+          resources:
+            requests:
+              cpu: "20m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+
       volumes:
         - name: data
           persistentVolumeClaim:

@@ -142,6 +142,45 @@ func (a *Alerter) Evaluate(host string, kpis map[string]float64) {
 	}
 }
 
+// FireRupture emits an ExponentialFailure alert for a CA-ILR rupture event (v5.0).
+// Deduplicates: fires at most once per minute per host:metric pair.
+func (a *Alerter) FireRupture(ev models.RuptureEvent) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	fireKey := "exponential_failure:" + ev.Host + ":" + ev.Metric
+	now := time.Now()
+	if last, fired := a.fired[fireKey]; fired && now.Sub(last) < time.Minute {
+		return
+	}
+
+	id := utils.GenerateID(8)
+	alert := models.Alert{
+		ID:          id,
+		Name:        "exponential_failure",
+		Description: fmt.Sprintf("Exponential acceleration on %s (R=%.2f) — crash imminent before saturation threshold", ev.Metric, ev.RuptureIndex),
+		Severity:    models.SeverityCritical,
+		Status:      models.StatusActive,
+		Host:        ev.Host,
+		Metric:      ev.Metric,
+		Value:       ev.RuptureIndex,
+		Threshold:   3.0,
+		Prediction:  "exponential_failure",
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	a.active[id] = &alert
+	a.ruleHostIdx[fireKey] = id
+	a.fired[fireKey] = now
+
+	select {
+	case a.ch <- alert:
+	default:
+		a.dropped++
+	}
+}
+
 // GetActive returns copies of all currently active alerts (safe for concurrent use)
 func (a *Alerter) GetActive() []*models.Alert {
 	a.mu.RLock()

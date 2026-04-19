@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"sync"
@@ -17,11 +16,14 @@ import (
 	"github.com/benfradjselim/ohe/internal/alerter"
 	"github.com/benfradjselim/ohe/internal/analyzer"
 	"github.com/benfradjselim/ohe/internal/api"
+	"github.com/benfradjselim/ohe/internal/billing"
 	"github.com/benfradjselim/ohe/internal/collector"
+	"github.com/benfradjselim/ohe/internal/grpcserver"
 	"github.com/benfradjselim/ohe/internal/predictor"
 	"github.com/benfradjselim/ohe/internal/processor"
 	"github.com/benfradjselim/ohe/internal/receiver"
 	"github.com/benfradjselim/ohe/internal/storage"
+	"github.com/benfradjselim/ohe/pkg/logger"
 	"github.com/benfradjselim/ohe/pkg/models"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -39,6 +41,11 @@ type Config struct {
 	BufferSize      int           `yaml:"buffer_size"`      // circular buffer size
 	AllowedOrigins  []string      `yaml:"allowed_origins"`  // CORS origins; empty = wildcard
 	DogStatsDAddr   string        `yaml:"dogstatsd_addr"`   // UDP addr for DogStatsD; empty = disabled
+	TLSCertFile        string        `yaml:"tls_cert"`            // path to TLS certificate (PEM); enables HTTPS when both set
+	TLSKeyFile         string        `yaml:"tls_key"`             // path to TLS private key (PEM)
+	ReplicaURL         string        `yaml:"replica_url"`         // Litestream replica URL (s3://bucket/path, gcs://, etc.); empty = no replication
+	BillingWebhookURL  string        `yaml:"billing_webhook_url"` // optional webhook for usage metering (Stripe, Lago, etc.)
+	GRPCAddr           string        `yaml:"grpc_addr"`           // gRPC agent ingest address, e.g. ":9090"; empty = disabled
 }
 
 // DefaultConfig returns sensible production defaults
@@ -65,6 +72,7 @@ type Engine struct {
 	ana             *analyzer.Analyzer
 	pred            *predictor.Predictor
 	alrt            *alerter.Alerter
+	meter           *billing.Meter
 	sysColl         *collector.SystemCollector
 	containerColl   *collector.ContainerCollector
 	logColl         *collector.LogCollector
@@ -95,16 +103,54 @@ func New(cfg Config) (*Engine, error) {
 	ana := analyzer.NewAnalyzer()
 	pred := predictor.NewPredictor()
 	alrt := alerter.NewAlerter(1000)
+	meter := billing.New(cfg.BillingWebhookURL, 10000, time.Minute)
 	sysColl := collector.NewSystemCollector(cfg.Host)
 	containerColl := collector.NewContainerCollector(cfg.Host)
 	logColl := collector.NewLogCollector(cfg.Host, nil) // nil = default log sources
 
 	// Seed admin user on first boot if no users exist
 	if err := seedAdminIfEmpty(store); err != nil {
-		log.Printf("[ohe] admin seed warning: %v", err)
+		logger.Default.Warn("admin seed warning", "err", err)
 	}
 
 	handlers := api.NewHandlers(store, proc, ana, pred, alrt, cfg.Host, cfg.JWTSecret, cfg.AuthEnabled, cfg.AllowedOrigins)
+
+	// Wire API key lookup so AuthMiddleware can validate ohe_* tokens.
+	// The lookup scans the key's org (encoded in its prefix) to find and verify the key.
+	api.SetAPIKeyLookup(func(_ string, rawKey string) (*api.JWTClaims, bool) {
+		// The org is unknown at lookup time — we scan all orgs' "ak:" namespaces.
+		// In practice, the key prefix encodes enough entropy that collisions are impossible.
+		// For high-scale deployments, include the orgID in the key itself (e.g. ohe_{orgSlug}_{secret}).
+		// For now, scan the default org first, then all registered orgs.
+		orgs, _ := store.ListOrgIDs()
+		orgs = append([]string{"default"}, orgs...)
+		for _, orgID := range orgs {
+			os := store.ForOrg(orgID)
+			if claims, ok := api.ValidateAPIKey(os, rawKey); ok {
+				return claims, true
+			}
+		}
+		return nil, false
+	})
+
+	// Wire JWT revocation checker so AuthMiddleware rejects logged-out tokens.
+	api.SetTokenRevokedChecker(store.IsTokenRevoked)
+
+	// Wire billing meter into handlers so ingest/predict events are metered.
+	handlers.SetUsageRecorder(func(orgID, eventType string, value float64) {
+		meter.Record(orgID, billing.EventType(eventType), value)
+	})
+
+	// Log replication status. The Go process itself does not run Litestream —
+	// it must be deployed as a sidecar container that replicates Badger's
+	// data directory to the configured replica URL (S3, GCS, Azure Blob, SFTP).
+	// See deploy/central-deployment.yaml for the sidecar spec.
+	if cfg.ReplicaURL != "" {
+		logger.Default.Info("HA replication configured", "replica_url", cfg.ReplicaURL, "note", "Litestream sidecar required")
+	} else {
+		logger.Default.Warn("no replica_url configured — single-node mode, data loss on pod restart")
+	}
+
 	router := api.NewRouter(handlers, cfg.JWTSecret, cfg.AuthEnabled, cfg.AllowedOrigins)
 
 	srv := &http.Server{
@@ -122,6 +168,7 @@ func New(cfg Config) (*Engine, error) {
 		ana:           ana,
 		pred:          pred,
 		alrt:          alrt,
+		meter:         meter,
 		sysColl:       sysColl,
 		containerColl: containerColl,
 		logColl:       logColl,
@@ -138,6 +185,32 @@ func (e *Engine) Run(ctx context.Context) error {
 	e.wg.Add(1)
 	go e.logAlerts(ctx)
 
+	// Start billing meter flush goroutine
+	e.wg.Add(1)
+	go func() {
+		defer e.wg.Done()
+		e.meter.Run(ctx)
+	}()
+
+	// Start gRPC agent ingest server (optional — enabled when GRPCAddr is set)
+	if e.cfg.GRPCAddr != "" {
+		grpcSrv, err := grpcserver.New(e.store, grpcserver.Config{
+			TLSCert:    e.cfg.TLSCertFile,
+			TLSKey:     e.cfg.TLSKeyFile,
+			DefaultOrg: "default",
+		})
+		if err != nil {
+			return fmt.Errorf("grpc: %w", err)
+		}
+		e.wg.Add(1)
+		go func() {
+			defer e.wg.Done()
+			if err := grpcSrv.Serve(ctx, e.cfg.GRPCAddr); err != nil {
+				logger.Default.Error("grpc serve", "err", err)
+			}
+		}()
+	}
+
 	// Start GC goroutine
 	e.wg.Add(1)
 	go e.runGC(ctx)
@@ -152,11 +225,11 @@ func (e *Engine) Run(ctx context.Context) error {
 	case "agent":
 		e.wg.Add(1)
 		go e.collectAndPush(ctx)
-		log.Printf("[agent] started on %s, pushing to %s every %s", e.cfg.Host, e.cfg.CentralURL, e.cfg.CollectInterval)
+		logger.Default.Info("agent started", "host", e.cfg.Host, "central_url", e.cfg.CentralURL, "interval", e.cfg.CollectInterval)
 	default: // central
 		e.wg.Add(1)
 		go e.collectLocally(ctx)
-		log.Printf("[central] started on :%d", e.cfg.Port)
+		logger.Default.Info("central started", "port", e.cfg.Port)
 	}
 
 	// Start DogStatsD UDP receiver (drop-in for Datadog StatsD endpoint)
@@ -167,25 +240,40 @@ func (e *Engine) Run(ctx context.Context) error {
 		go func() {
 			defer e.wg.Done()
 			if err := dsd.Run(ctx); err != nil {
-				log.Printf("[dogstatsd] %v", err)
+				logger.Default.Error("dogstatsd error", "err", err)
 			}
 		}()
 	}
 
 	// HTTP server (both modes expose API)
+	// When --tls-cert and --tls-key are both provided the server uses HTTPS.
+	// Providing only one of the two is a configuration error and causes an
+	// immediate fatal shutdown.
+	tlsEnabled := e.cfg.TLSCertFile != "" || e.cfg.TLSKeyFile != ""
+	if tlsEnabled && (e.cfg.TLSCertFile == "" || e.cfg.TLSKeyFile == "") {
+		return fmt.Errorf("TLS requires both --tls-cert and --tls-key; only one was provided")
+	}
+
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("[ohe] HTTP server listening on :%d", e.cfg.Port)
 		e.handlers.SetReady(true)
-		if err := e.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		var serveErr error
+		if tlsEnabled {
+			logger.Default.Info("HTTPS server started", "port", e.cfg.Port, "tls", true)
+			serveErr = e.server.ListenAndServeTLS(e.cfg.TLSCertFile, e.cfg.TLSKeyFile)
+		} else {
+			logger.Default.Info("HTTP server started", "port", e.cfg.Port)
+			serveErr = e.server.ListenAndServe()
+		}
+		if serveErr != nil && serveErr != http.ErrServerClosed {
 			e.handlers.SetReady(false)
-			errCh <- err
+			errCh <- serveErr
 		}
 	}()
 
 	select {
 	case <-ctx.Done():
-		log.Println("[ohe] shutting down...")
+		logger.Default.Info("shutting down")
 		shutCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		_ = e.server.Shutdown(shutCtx)
@@ -211,7 +299,7 @@ func (e *Engine) collectLocally(ctx context.Context) {
 		case <-ticker.C:
 			metrics, err := e.sysColl.Collect()
 			if err != nil {
-				log.Printf("[collector] system: %v", err)
+				logger.Default.Error("collector system error", "err", err)
 				continue
 			}
 
@@ -235,7 +323,7 @@ func (e *Engine) collectLocally(ctx context.Context) {
 			// Persist to storage
 			for _, m := range metrics {
 				if err := e.store.SaveMetric(m.Host, m.Name, m.Value, m.Timestamp); err != nil {
-					log.Printf("[store] SaveMetric %s/%s: %v", m.Host, m.Name, err)
+					logger.Default.Error("SaveMetric failed", "host", m.Host, "metric", m.Name, "err", err)
 				}
 			}
 
@@ -256,7 +344,7 @@ func (e *Engine) collectLocally(ctx context.Context) {
 				"health_score": snapshot.HealthScore.Value,
 			} {
 				if err := e.store.SaveKPI(e.cfg.Host, kpiName, kpiVal, now); err != nil {
-					log.Printf("[store] SaveKPI %s/%s: %v", e.cfg.Host, kpiName, err)
+					logger.Default.Error("SaveKPI failed", "host", e.cfg.Host, "kpi", kpiName, "err", err)
 				}
 			}
 
@@ -286,6 +374,11 @@ func (e *Engine) collectLocally(ctx context.Context) {
 				kpiMap[m.Name] = m.Value
 			}
 			e.alrt.Evaluate(e.cfg.Host, kpiMap)
+
+			// v5.0: CA-ILR rupture detection — fire ExponentialFailure alerts
+			for _, ev := range e.pred.AcceleratingMetrics(e.cfg.Host) {
+				e.alrt.FireRupture(ev)
+			}
 		}
 	}
 }
@@ -304,7 +397,7 @@ func (e *Engine) collectAndPush(ctx context.Context) {
 		case <-ticker.C:
 			metrics, err := e.sysColl.Collect()
 			if err != nil {
-				log.Printf("[agent] collect error: %v", err)
+				logger.Default.Error("agent collect error", "err", err)
 				continue
 			}
 			if containerMetrics, err := e.containerColl.Collect(); err == nil {
@@ -327,7 +420,7 @@ func (e *Engine) collectAndPush(ctx context.Context) {
 			}
 
 			if err := pushBatch(ctx, client, e.cfg.CentralURL+"/api/v1/ingest", batch); err != nil {
-				log.Printf("[agent] push error: %v", err)
+				logger.Default.Error("agent push error", "err", err)
 			}
 		}
 	}
@@ -362,9 +455,14 @@ func (e *Engine) logAlerts(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case alert := <-e.alrt.Alerts():
-			log.Printf("[ALERT] [%s] [%s] %s — %s=%.4f (threshold=%.2f)",
-				alert.Severity, alert.Host, alert.Description,
-				alert.Metric, alert.Value, alert.Threshold)
+			logger.Default.Warn("alert fired",
+				"severity", alert.Severity,
+				"host", alert.Host,
+				"description", alert.Description,
+				"metric", alert.Metric,
+				"value", alert.Value,
+				"threshold", alert.Threshold,
+			)
 			// Fan out to configured notification channels (Slack, webhook, PagerDuty)
 			e.handlers.DispatchAlertToChannels(alert)
 		}
@@ -382,7 +480,7 @@ func (e *Engine) runGC(ctx context.Context) {
 		case <-ticker.C:
 			if err := e.store.RunGC(); err != nil {
 				// ErrNoRewrite is expected when nothing to GC
-				log.Printf("[gc] %v", err)
+				logger.Default.Warn("gc", "err", err)
 			}
 		}
 	}
@@ -399,9 +497,9 @@ func (e *Engine) runCompaction(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			log.Printf("[compaction] starting retention pass")
+			logger.Default.Info("compaction started")
 			e.store.Compact()
-			log.Printf("[compaction] done")
+			logger.Default.Info("compaction done")
 		}
 	}
 }
@@ -449,12 +547,11 @@ func seedAdminIfEmpty(store *storage.Store) error {
 		return fmt.Errorf("save admin: %w", err)
 	}
 
-	log.Printf("╔══════════════════════════════════════════════════╗")
-	log.Printf("║  FIRST BOOT — admin credentials generated         ║")
-	log.Printf("║  Username : admin                                  ║")
-	log.Printf("║  Password : %-35s ║", password)
-	log.Printf("║  Change this password immediately after login!     ║")
-	log.Printf("╚══════════════════════════════════════════════════╝")
+	logger.Default.Warn("FIRST BOOT — admin credentials generated",
+		"username", "admin",
+		"password", password,
+		"action", "change this password immediately after login",
+	)
 	return nil
 }
 

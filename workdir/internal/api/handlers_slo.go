@@ -34,6 +34,10 @@ func (h *Handlers) SLOListHandler(w http.ResponseWriter, r *http.Request) {
 
 // SLOCreateHandler POST /api/v1/slos
 func (h *Handlers) SLOCreateHandler(w http.ResponseWriter, r *http.Request) {
+	if err := h.orgStore(r).CheckSLOQuota(h.orgQuota(r).MaxSLOs); err != nil {
+		respondError(w, http.StatusPaymentRequired, "QUOTA_EXCEEDED", err.Error())
+		return
+	}
 	var s models.SLO
 	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
 		respondError(w, http.StatusBadRequest, "INVALID_BODY", err.Error())

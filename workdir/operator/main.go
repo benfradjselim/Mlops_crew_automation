@@ -14,11 +14,11 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+	"github.com/benfradjselim/ohe/pkg/logger"
 )
 
 func main() {
@@ -27,13 +27,14 @@ func main() {
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmsgprefix)
 	log.SetPrefix("[ohe-operator] ")
-	log.Printf("starting — reconcile every %s", *interval)
+	logger.Default.Info("operator starting", "interval", *interval)
 
 	c, err := newK8sClient()
 	if err != nil {
-		log.Fatalf("init K8s client: %v", err)
+		logger.Default.Error("init K8s client failed", "err", err)
+	os.Exit(1)
 	}
-	log.Printf("in-cluster client ready (namespace: %s)", c.ns)
+	logger.Default.Info("in-cluster client ready", "namespace", c.ns)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -46,7 +47,7 @@ func main() {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("shutting down")
+			logger.Default.Info("shutting down")
 			return
 		case <-ticker.C:
 			runReconcileLoop(c)
@@ -59,10 +60,10 @@ func runReconcileLoop(c *k8sClient) {
 	var list OHEClusterList
 	// List across all namespaces
 	if err := c.get("/apis/ohe.io/v1alpha1/oheclusters", &list); err != nil {
-		log.Printf("list OHEClusters: %v", err)
+		logger.Default.Error("list OHEClusters error", "err", err)
 		return
 	}
-	log.Printf("found %d OHECluster(s)", len(list.Items))
+	logger.Default.Info("OHEClusters found", "count", len(list.Items))
 	for _, cluster := range list.Items {
 		reconcile(c, cluster)
 	}

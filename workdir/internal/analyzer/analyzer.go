@@ -21,6 +21,8 @@ type Analyzer struct {
 }
 
 type hostState struct {
+	// Last raw metric inputs (stored for /explain endpoint)
+	lastMetrics map[string]float64
 	// Stress history for fatigue integration
 	stressHistory *utils.CircularBuffer
 	// Error history for humidity/pressure
@@ -33,8 +35,11 @@ type hostState struct {
 	healthHistory *utils.CircularBuffer
 	// Restart count
 	restartCount float64
-	// Accumulated fatigue (integral of stress - recovery)
+	// Accumulated fatigue — v5.0 dissipative formula
 	fatigue float64
+	// v5.0 fatigue config (defaults applied at creation)
+	fatigueRThreshold float64
+	fatigueLambda     float64
 	// Last stress for pressure derivative
 	lastStress float64
 	// Last KPI vector for velocity (rate of change)
@@ -60,13 +65,15 @@ func (a *Analyzer) getOrCreate(host string) *hostState {
 		return hs
 	}
 	hs := &hostState{
-		stressHistory:  utils.NewCircularBuffer(600), // 10 min at 1s
-		errorHistory:   utils.NewCircularBuffer(600),
-		timeoutHistory: utils.NewCircularBuffer(600),
-		requestHistory: utils.NewCircularBuffer(600),
-		healthHistory:  utils.NewCircularBuffer(60), // last 60 samples for entropy
-		lastUpdate:     time.Now(),
-		firstUpdate:    true,
+		stressHistory:     utils.NewCircularBuffer(600), // 10 min at 1s
+		errorHistory:      utils.NewCircularBuffer(600),
+		timeoutHistory:    utils.NewCircularBuffer(600),
+		requestHistory:    utils.NewCircularBuffer(600),
+		healthHistory:     utils.NewCircularBuffer(60), // last 60 samples for entropy
+		lastUpdate:        time.Now(),
+		firstUpdate:       true,
+		fatigueRThreshold: 0.3,  // canonical v5.0 default
+		fatigueLambda:     0.05, // canonical v5.0 default
 	}
 	a.hosts[host] = hs
 	return hs
@@ -78,6 +85,12 @@ func (a *Analyzer) Update(host string, metrics map[string]float64) models.KPISna
 	defer a.mu.Unlock()
 
 	hs := a.getOrCreate(host)
+	// Store raw inputs for /explain endpoint
+	last := make(map[string]float64, len(metrics))
+	for k, v := range metrics {
+		last[k] = v
+	}
+	hs.lastMetrics = last
 	now := time.Now()
 	dt := now.Sub(hs.lastUpdate).Seconds()
 	if dt < 0.001 {
@@ -97,18 +110,19 @@ func (a *Analyzer) Update(host string, metrics map[string]float64) models.KPISna
 
 	hs.stressHistory.Push(stress)
 
-	// --- Fatigue ---
-	// F += (S - R) * dt, R = recovery rate = 0.1 when S < 0.3
-	// Cap dt to 2× expected interval (30s) to prevent first-call fatigue spike on restart
-	const maxDt = 30.0
+	// --- Fatigue (v5.0 — Dissipative) ---
+	// F_t = max(0, F_{t−1} + (S_t − R_threshold) − λ_eff)
+	// λ is specified per 15s interval; scale by actual dt for variable-rate robustness.
+	// Cap dt to avoid first-call spike on restart.
+	const (
+		maxDt          = 30.0  // cap to 2× expected interval
+		nominalInterval = 15.0 // seconds per collection cycle
+	)
 	if dt > maxDt {
 		dt = maxDt
 	}
-	recovery := 0.0
-	if stress < 0.3 {
-		recovery = 0.1
-	}
-	hs.fatigue += (stress - recovery) * dt / 3600.0 // normalize to hourly
+	lambdaEff := hs.fatigueLambda * (dt / nominalInterval)
+	hs.fatigue = math.Max(0, hs.fatigue+(stress-hs.fatigueRThreshold)-lambdaEff)
 	hs.fatigue = utils.Clamp(hs.fatigue, 0, 1)
 
 	// --- Mood ---
@@ -311,6 +325,33 @@ func (a *Analyzer) ResetFatigue(host string) {
 	defer a.mu.Unlock()
 	hs := a.getOrCreate(host)
 	hs.fatigue = 0
+}
+
+// LastMetrics returns the most recent raw metric inputs for a host.
+// Used by the /explain/:kpi endpoint to compute input contributions.
+func (a *Analyzer) LastMetrics(host string) (map[string]float64, bool) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	hs, ok := a.hosts[host]
+	if !ok || hs.lastMetrics == nil {
+		return nil, false
+	}
+	cp := make(map[string]float64, len(hs.lastMetrics))
+	for k, v := range hs.lastMetrics {
+		cp[k] = v
+	}
+	return cp, true
+}
+
+// SetFatigueConfig overrides the dissipative fatigue parameters for a host.
+// Call before the first Update() for a host to take effect from the start.
+// If not called, canonical v5.0 defaults (RThreshold=0.3, Lambda=0.05) are used.
+func (a *Analyzer) SetFatigueConfig(host string, rThreshold, lambda float64) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	hs := a.getOrCreate(host)
+	hs.fatigueRThreshold = rThreshold
+	hs.fatigueLambda = lambda
 }
 
 func getMetric(metrics map[string]float64, name string) float64 {

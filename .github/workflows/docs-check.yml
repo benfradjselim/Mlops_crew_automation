@@ -1,0 +1,49 @@
+name: Docs Check
+
+on:
+  push:
+    branches: ["**"]
+
+jobs:
+  metrics-sync-check:
+    name: METRICS.md sync warning
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check formula/METRICS.md sync
+        run: |
+          # Files changed in this push
+          changed=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only HEAD 2>/dev/null)
+
+          # Check if any formula-related Go files changed
+          formula_changed=0
+          while IFS= read -r f; do
+            if [[ "$f" == workdir/internal/analyzer/*.go || "$f" == workdir/internal/predictor/*.go ]]; then
+              formula_changed=1
+              echo "Formula-related change detected: $f"
+            fi
+          done <<< "$changed"
+
+          # Check if METRICS.md was also updated
+          metrics_changed=0
+          while IFS= read -r f; do
+            if [[ "$f" == "workdir/docs/v5.0.0/METRICS.md" ]]; then
+              metrics_changed=1
+            fi
+          done <<< "$changed"
+
+          if [[ "$formula_changed" -eq 1 && "$metrics_changed" -eq 0 ]]; then
+            echo "⚠️ Formula-related code changed without updating METRICS.md — is this intentional?"
+            echo ""
+            echo "Files changed in internal/analyzer/ or internal/predictor/:"
+            echo "$changed" | grep -E "workdir/internal/(analyzer|predictor)/.*\.go" || true
+            echo ""
+            echo "If you changed a KPI formula weight or threshold, update docs/v5.0.0/METRICS.md in the same commit."
+            echo "This is a warning only — the build is not blocked."
+          else
+            echo "✅ METRICS.md sync check passed."
+          fi

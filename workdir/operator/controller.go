@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"time"
+	"github.com/benfradjselim/ohe/pkg/logger"
 )
 
 const (
@@ -19,7 +19,7 @@ func reconcile(c *k8sClient, cluster OHECluster) {
 	name := cluster.Metadata.Name
 	spec := cluster.Spec
 
-	log.Printf("[reconcile] %s/%s mode=%s replicas=%d", ns, name, spec.Mode, replicas(spec))
+	logger.Default.Info("reconcile", "ns", ns, "name", name, "mode", spec.Mode, "replicas", replicas(spec))
 
 	image := spec.Image
 	if image == "" {
@@ -39,7 +39,7 @@ func reconcile(c *k8sClient, cluster OHECluster) {
 	phase, msg := "Running", ""
 	if err != nil {
 		phase, msg = "Failed", err.Error()
-		log.Printf("[reconcile] %s/%s error: %v", ns, name, err)
+		logger.Default.Error("reconcile error", "ns", ns, "name", name, "err", err)
 	}
 
 	// Read ready replica count from the managed Deployment
@@ -56,7 +56,7 @@ func reconcile(c *k8sClient, cluster OHECluster) {
 
 	path := fmt.Sprintf("/apis/ohe.io/v1alpha1/namespaces/%s/oheclusters/%s", ns, name)
 	if err := c.patchStatus(path, status); err != nil {
-		log.Printf("[reconcile] status update %s/%s: %v", ns, name, err)
+		logger.Default.Error("status update error", "ns", ns, "name", name, "err", err)
 	}
 }
 

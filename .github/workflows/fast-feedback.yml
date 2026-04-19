@@ -1,0 +1,89 @@
+name: Fast Feedback
+
+# Runs on feature branches — quick lint + test of affected packages only.
+# Full matrix CI still validates everything on push; this gives <60s signal.
+on:
+  push:
+    branches-ignore:
+      - main
+      - "v*.*.*"
+
+env:
+  GO_VERSION: "1.22"
+
+jobs:
+  quick:
+    name: Quick check (linux/amd64)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workdir
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: workdir/go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Detect changed packages
+        id: changed
+        run: |
+          # Find Go packages that have changed files since the previous commit
+          changed_files=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only HEAD 2>/dev/null)
+          pkgs=""
+          while IFS= read -r f; do
+            if [[ "$f" == workdir/*.go ]] || [[ "$f" == workdir/**/*.go ]]; then
+              dir=$(dirname "$f" | sed 's|^workdir/||')
+              pkg="github.com/benfradjselim/ohe/$dir"
+              if [[ "$pkgs" != *"$pkg"* ]]; then
+                pkgs="$pkgs $pkg"
+              fi
+            fi
+          done <<< "$changed_files"
+          echo "pkgs=$pkgs" >> $GITHUB_OUTPUT
+          echo "Changed packages: $pkgs"
+
+      - name: Test changed packages
+        run: |
+          pkgs="${{ steps.changed.outputs.pkgs }}"
+          if [[ -z "$pkgs" ]]; then
+            echo "No Go packages changed — skipping tests"
+            exit 0
+          fi
+          go test -timeout=90s $pkgs
+
+      - name: Coverage gate on changed packages
+        run: |
+          pkgs="${{ steps.changed.outputs.pkgs }}"
+          if [[ -z "$pkgs" ]]; then
+            exit 0
+          fi
+          go test -coverprofile=/tmp/fast.out -timeout=90s $pkgs
+          failed=0
+          while IFS= read -r line; do
+            pkg=$(echo "$line" | awk '{print $1}')
+            pct=$(echo "$line" | awk '{print $3}' | tr -d '%')
+            [[ "$pkg" == "total:" ]] || [[ -z "$pct" ]] && continue
+            result=$(awk -v p="$pct" 'BEGIN { print (p+0 < 60) ? "fail" : "ok" }')
+            if [[ "$result" == "fail" ]]; then
+              echo "WARN: $pkg — ${pct}% (below 60%)"
+              failed=1
+            fi
+          done < <(go tool cover -func=/tmp/fast.out)
+          [[ "$failed" -eq 1 ]] && exit 1
+          echo "Coverage gate passed."

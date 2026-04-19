@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	"github.com/benfradjselim/ohe/pkg/models"
 	"github.com/benfradjselim/ohe/pkg/utils"
 	"github.com/gorilla/mux"
+	"github.com/benfradjselim/ohe/pkg/logger"
 )
 
 // ---------------------------------------------------------------------------
@@ -372,7 +372,7 @@ func (h *Handlers) DispatchAlertToChannels(alert models.Alert) {
 		}
 		go func(c models.NotificationChannel) {
 			if err := fireWebhook(c, payload); err != nil {
-				log.Printf("[notify] channel %s (%s): %v", c.Name, c.ID, err)
+				logger.Default.Error("notify channel error", "name", c.Name, "id", c.ID, "err", err)
 			}
 		}(*ch)
 	}
@@ -411,6 +411,10 @@ func (h *Handlers) AlertRuleListHandler(w http.ResponseWriter, r *http.Request) 
 
 // AlertRuleCreateHandler POST /api/v1/alert-rules
 func (h *Handlers) AlertRuleCreateHandler(w http.ResponseWriter, r *http.Request) {
+	if err := h.orgStore(r).CheckAlertRuleQuota(h.orgQuota(r).MaxAlertRules); err != nil {
+		respondError(w, http.StatusPaymentRequired, "QUOTA_EXCEEDED", err.Error())
+		return
+	}
 	var rule struct {
 		Name      string  `json:"name"`
 		Metric    string  `json:"metric"`

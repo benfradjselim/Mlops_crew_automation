@@ -1,12 +1,12 @@
 package api
 
 import (
-	"log"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/benfradjselim/ohe/pkg/logger"
 )
 
 // newUpgrader returns a WebSocket upgrader that enforces the CORS origin allowlist.
@@ -109,7 +109,7 @@ func (hub *Hub) unregister(c *wsClient) {
 func (h *Handlers) WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := h.hub.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("[ws] upgrade: %v", err)
+		logger.Default.ErrorCtx(r.Context(), "ws upgrade error", "err", err)
 		return
 	}
 

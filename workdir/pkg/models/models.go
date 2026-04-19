@@ -43,6 +43,8 @@ type KPISnapshot struct {
 	Entropy     KPI       `json:"entropy"`      // system disorder level
 	Velocity    KPI       `json:"velocity"`     // rate of change (momentum)
 	HealthScore KPI       `json:"health_score"` // single composite executive KPI [0-100]
+	// v5.0: dual-scale CA-ILR rupture events (omitted when none detected)
+	RuptureEvents []RuptureEvent `json:"rupture_events,omitempty"`
 }
 
 // NotificationChannel is a configured alert delivery target
@@ -57,16 +59,39 @@ type NotificationChannel struct {
 	Severities []string        `json:"severities,omitempty"`
 }
 
+// QuotaConfig defines resource limits for an org. Zero values mean unlimited.
+type QuotaConfig struct {
+	MaxDashboards  int `json:"max_dashboards,omitempty"`   // 0 = unlimited
+	MaxDataSources int `json:"max_datasources,omitempty"`  // 0 = unlimited
+	MaxAPIKeys     int `json:"max_api_keys,omitempty"`     // 0 = unlimited
+	MaxAlertRules  int `json:"max_alert_rules,omitempty"`  // 0 = unlimited
+	MaxSLOs        int `json:"max_slos,omitempty"`         // 0 = unlimited
+	IngestRateRPM  int `json:"ingest_rate_rpm,omitempty"`  // requests/min; 0 = unlimited
+}
+
+// DefaultQuota returns sensible limits for a free-tier org.
+func DefaultQuota() QuotaConfig {
+	return QuotaConfig{
+		MaxDashboards:  10,
+		MaxDataSources: 5,
+		MaxAPIKeys:     5,
+		MaxAlertRules:  20,
+		MaxSLOs:        5,
+		IngestRateRPM:  300,
+	}
+}
+
 // Org is a tenant workspace. Resources (dashboards, datasources, etc.) can be
 // scoped to an org. The built-in "default" org always exists and holds legacy
 // resources that predate multi-tenancy.
 type Org struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Slug        string    `json:"slug"`             // URL-safe identifier
-	Description string    `json:"description,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Slug        string      `json:"slug"`            // URL-safe identifier
+	Description string      `json:"description,omitempty"`
+	Quota       QuotaConfig `json:"quota"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
 }
 
 // OrgMember binds a user to an org with a role.
@@ -98,6 +123,36 @@ type HostSummary struct {
 	LastSeen    time.Time `json:"last_seen"`
 }
 
+// ModelContribution is a single model's contribution inside an ensemble forecast
+type ModelContribution struct {
+	Name   string  `json:"name"`
+	Weight float64 `json:"weight"`
+	Mean   float64 `json:"mean"`
+}
+
+// ForecastPoint is a single step in a multi-step forecast
+type ForecastPoint struct {
+	OffsetMinutes int     `json:"offset_minutes"`
+	Mean          float64 `json:"mean"`
+	Lower80       float64 `json:"lower_80"`
+	Upper80       float64 `json:"upper_80"`
+	Lower95       float64 `json:"lower_95"`
+	Upper95       float64 `json:"upper_95"`
+}
+
+// ForecastResult is the full ensemble forecast response
+type ForecastResult struct {
+	Host      string              `json:"host"`
+	Metric    string              `json:"metric"`
+	Current   float64             `json:"current"`
+	Trend     string              `json:"trend"`
+	Confidence float64            `json:"confidence"`
+	Models    []ModelContribution `json:"models"`
+	Points    []ForecastPoint     `json:"points"`
+	Timestamp time.Time           `json:"timestamp"`
+	WarmingUp bool                `json:"warming_up,omitempty"`
+}
+
 // Prediction is a forecasted value for a metric/KPI
 type Prediction struct {
 	Target    string    `json:"target"`
@@ -106,13 +161,100 @@ type Prediction struct {
 	Horizon   int       `json:"horizon_minutes"`
 	Trend     string    `json:"trend"` // "rising", "stable", "falling"
 	Timestamp time.Time `json:"timestamp"`
+	// v4.5.0: confidence intervals and ensemble metadata (additive, backwards-compatible)
+	Lower80    float64            `json:"lower_80,omitempty"`
+	Upper80    float64            `json:"upper_80,omitempty"`
+	Lower95    float64            `json:"lower_95,omitempty"`
+	Upper95    float64            `json:"upper_95,omitempty"`
+	Confidence float64            `json:"confidence,omitempty"`
+	Method     string             `json:"method,omitempty"`
+	Models     []ModelContribution `json:"models,omitempty"`
+}
+
+// AnomalyEvent is a detected anomaly from the multi-method engine
+type AnomalyEvent struct {
+	Host      string    `json:"host"`
+	Metric    string    `json:"metric"`
+	Value     float64   `json:"value"`
+	Expected  float64   `json:"expected"`
+	Score     float64   `json:"score"`
+	Method    string    `json:"method"` // "zscore" | "mad" | "seasonal"
+	Severity  string    `json:"severity"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// BurstEvent records a detected log error burst
+type BurstEvent struct {
+	ID           string    `json:"id"`
+	Service      string    `json:"service"`
+	StartTS      time.Time `json:"start_ts"`
+	EndTS        time.Time `json:"end_ts"`
+	Count        int64     `json:"count"`
+	BaselineRate float64   `json:"baseline_rate"`
+	Level        string    `json:"level"` // "error" | "warn"
+}
+
+// CorrelationEvent links a log burst to a KPI degradation
+type CorrelationEvent struct {
+	ID         string    `json:"id"`
+	Host       string    `json:"host"`
+	BurstID    string    `json:"burst_id"`
+	AlertID    string    `json:"alert_id,omitempty"`
+	KPIName    string    `json:"kpi_name"`
+	KPIDelta   float64   `json:"kpi_delta"`
+	Confidence float64   `json:"confidence"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// AlertGroup groups related alerts by topology dependency
+type AlertGroup struct {
+	ID             string    `json:"id"`
+	Representative string    `json:"representative_id"`
+	AlertIDs       []string  `json:"alert_ids"`
+	SuppressedIDs  []string  `json:"suppressed_ids"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// CostSnapshot is a point-in-time cost attribution record
+type CostSnapshot struct {
+	OrgID          string    `json:"org_id"`
+	Team           string    `json:"team"`
+	Service        string    `json:"service"`
+	Env            string    `json:"env"`
+	PointsIngested int64     `json:"points_ingested"`
+	BytesStored    int64     `json:"bytes_stored"`
+	QueriesServed  int64     `json:"queries_served"`
+	CostUSD        float64   `json:"cost_usd"`
+	Period         time.Time `json:"period"` // start of hour
+}
+
+// FatigueConfig holds the parameters for dissipative fatigue (v5.0).
+// Defaults applied when zero-value: RThreshold=0.3, Lambda=0.05.
+type FatigueConfig struct {
+	RThreshold float64 `yaml:"r_threshold" json:"r_threshold"` // rest threshold (default 0.3)
+	Lambda     float64 `yaml:"lambda"      json:"lambda"`      // recovery coefficient per 15s interval (default 0.05)
+}
+
+// DefaultFatigueConfig returns the canonical v5.0 defaults.
+func DefaultFatigueConfig() FatigueConfig {
+	return FatigueConfig{RThreshold: 0.3, Lambda: 0.05}
+}
+
+// RuptureEvent records a detected acceleration event from the dual-scale CA-ILR.
+type RuptureEvent struct {
+	Host         string    `json:"host"`
+	Metric       string    `json:"metric"`
+	RuptureIndex float64   `json:"rupture_index"` // α_burst / α_stable
+	AlphaStable  float64   `json:"alpha_stable"`
+	AlphaBurst   float64   `json:"alpha_burst"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 // Alert severity levels
 const (
-	SeverityInfo     = "info"
-	SeverityWarning  = "warning"
-	SeverityCritical = "critical"
+	SeverityInfo      = "info"
+	SeverityWarning   = "warning"
+	SeverityCritical  = "critical"
 	SeverityEmergency = "emergency"
 )
 
@@ -126,19 +268,24 @@ const (
 
 // Alert represents a triggered observability alert
 type Alert struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Severity    string    `json:"severity"`
-	Status      string    `json:"status"`
-	Host        string    `json:"host"`
-	Metric      string    `json:"metric"`
-	Value       float64   `json:"value"`
-	Threshold   float64   `json:"threshold"`
-	Prediction  string    `json:"prediction,omitempty"` // e.g. "Storm in 2 hours"
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	ResolvedAt  *time.Time `json:"resolved_at,omitempty"`
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	Severity       string    `json:"severity"`
+	Status         string    `json:"status"`
+	Host           string    `json:"host"`
+	Metric         string    `json:"metric"`
+	Value          float64   `json:"value"`
+	Threshold      float64   `json:"threshold"`
+	Prediction     string    `json:"prediction,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
+	// v4.5.0: correlation and grouping metadata
+	CorrelationIDs []string  `json:"correlation_ids,omitempty"`
+	Suppressed     bool      `json:"suppressed,omitempty"`
+	SuppressedBy   string    `json:"suppressed_by,omitempty"`
+	GroupID        string    `json:"group_id,omitempty"`
 }
 
 // User for auth
@@ -306,4 +453,33 @@ type HealthResponse struct {
 	Uptime    float64           `json:"uptime_seconds"`
 	Checks    map[string]string `json:"checks"`
 	Timestamp time.Time         `json:"timestamp"`
+}
+
+// APIKey represents a long-lived API key for programmatic access.
+// The full key (prefix + secret) is only returned once at creation time;
+// only the bcrypt hash is persisted so the server cannot reconstruct it.
+type APIKey struct {
+	ID        string    `json:"id"`
+	OrgID     string    `json:"org_id"`
+	Name      string    `json:"name"`        // human-readable label
+	Role      string    `json:"role"`        // role granted (viewer/operator/admin)
+	KeyHash   string    `json:"key_hash"`    // bcrypt hash of the full key — never returned to clients
+	Prefix    string    `json:"prefix"`      // first 8 chars of key for display (e.g. "ohe_a1b2")
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`  // zero = no expiry
+	LastUsed  time.Time `json:"last_used"`
+	Active    bool      `json:"active"`
+}
+
+// APIKeyCreateRequest is the request body for POST /api/v1/api-keys.
+type APIKeyCreateRequest struct {
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	ExpiresIn string `json:"expires_in"` // duration string e.g. "30d", "90d", "" = never
+}
+
+// APIKeyCreateResponse is returned once at creation — includes the full plaintext key.
+type APIKeyCreateResponse struct {
+	APIKey
+	PlaintextKey string `json:"key"` // only present in create response; store it — it won't be shown again
 }

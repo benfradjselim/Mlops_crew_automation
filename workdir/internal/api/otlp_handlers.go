@@ -6,13 +6,13 @@ package api
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/benfradjselim/ohe/pkg/models"
+	"github.com/benfradjselim/ohe/pkg/logger"
 )
 
 const otlpMaxBodyBytes = 32 << 20 // 32 MB
@@ -42,7 +42,7 @@ func (h *Handlers) OTLPTraceHandler(w http.ResponseWriter, r *http.Request) {
 				span := otlpToSpan(s, service, host)
 				h.topology.IngestSpan(span)
 				if err := h.store.SaveSpan(span, span.TraceID, span.SpanID); err != nil {
-					log.Printf("[otlp/traces] save: %v", err)
+					logger.Default.ErrorCtx(r.Context(), "otlp traces save error", "err", err)
 				}
 				count++
 			}
@@ -51,7 +51,7 @@ func (h *Handlers) OTLPTraceHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"partialSuccess":{}}`)) //nolint:errcheck
-	log.Printf("[otlp/traces] ingested %d spans", count)
+	logger.Default.InfoCtx(r.Context(), "otlp traces ingested", "count", count)
 }
 
 // OTLPMetricsHandler handles POST /otlp/v1/metrics
@@ -76,7 +76,7 @@ func (h *Handlers) OTLPMetricsHandler(w http.ResponseWriter, r *http.Request) {
 				for _, dp := range dps {
 					name := otlpSanitize(m.Name)
 					if err := h.store.SaveMetric(host, name, dp.value, dp.ts); err != nil {
-						log.Printf("[otlp/metrics] save: %v", err)
+						logger.Default.ErrorCtx(r.Context(), "otlp metrics save error", "err", err)
 					}
 					count++
 				}
@@ -86,7 +86,7 @@ func (h *Handlers) OTLPMetricsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"partialSuccess":{}}`)) //nolint:errcheck
-	log.Printf("[otlp/metrics] ingested %d data points", count)
+	logger.Default.InfoCtx(r.Context(), "otlp metrics ingested", "count", count)
 }
 
 // OTLPLogsHandler handles POST /otlp/v1/logs
@@ -113,7 +113,7 @@ func (h *Handlers) OTLPLogsHandler(w http.ResponseWriter, r *http.Request) {
 			for _, rec := range sl.LogRecords {
 				entry := otlpToLogEntry(rec, service, host)
 				if err := h.store.SaveLog(service, entry, entry.Timestamp); err != nil {
-					log.Printf("[otlp/logs] save: %v", err)
+					logger.Default.ErrorCtx(r.Context(), "otlp logs save error", "err", err)
 				}
 				count++
 			}
@@ -122,7 +122,7 @@ func (h *Handlers) OTLPLogsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"partialSuccess":{}}`)) //nolint:errcheck
-	log.Printf("[otlp/logs] ingested %d records", count)
+	logger.Default.InfoCtx(r.Context(), "otlp logs ingested", "count", count)
 }
 
 // --- conversion helpers ---

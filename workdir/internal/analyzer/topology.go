@@ -157,6 +157,21 @@ func (t *TopologyAnalyzer) Graph() models.TopologyGraph {
 	}
 }
 
+// UpstreamDeps returns all services that host directly depends on (i.e. services
+// that host calls), based on edges seen within the rolling window.
+func (t *TopologyAnalyzer) UpstreamDeps(host string) []string {
+	cutoff := time.Now().Add(-t.window)
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	var deps []string
+	for _, e := range t.edges {
+		if e.From == host && !e.LastSeen.Before(cutoff) {
+			deps = append(deps, e.To)
+		}
+	}
+	return deps
+}
+
 // ContagionIndex computes the service-aware contagion from the topology graph.
 // It is the sum of error_rate × dependency_weight for all edges.
 func (t *TopologyAnalyzer) ContagionIndex() float64 {

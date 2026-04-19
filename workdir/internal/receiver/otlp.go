@@ -6,13 +6,13 @@ package receiver
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/benfradjselim/ohe/pkg/models"
+	"github.com/benfradjselim/ohe/pkg/logger"
 )
 
 // MetricSink accepts parsed metrics from any receiver
@@ -79,7 +79,7 @@ func (r *OTLPReceiver) TraceHandler(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"partialSuccess":{}}`)
-	log.Printf("[otlp/traces] ingested %d spans", count)
+	logger.Default.Info("otlp traces ingested", "count", count)
 }
 
 // MetricsHandler handles POST /otlp/v1/metrics
@@ -121,7 +121,7 @@ func (r *OTLPReceiver) MetricsHandler(w http.ResponseWriter, req *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"partialSuccess":{}}`)
-	log.Printf("[otlp/metrics] ingested %d data points", count)
+	logger.Default.Info("otlp metrics ingested", "count", count)
 }
 
 // LogsHandler handles POST /otlp/v1/logs
@@ -158,7 +158,7 @@ func (r *OTLPReceiver) LogsHandler(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"partialSuccess":{}}`)
-	log.Printf("[otlp/logs] ingested %d records", count)
+	logger.Default.Info("otlp logs ingested", "count", count)
 }
 
 // --- helpers ---

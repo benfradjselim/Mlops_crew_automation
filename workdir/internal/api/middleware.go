@@ -2,14 +2,16 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
-	"log"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/benfradjselim/ohe/pkg/logger"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -41,7 +43,7 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("encode response: %v", err)
+		logger.Default.Error("encode response", "err", err)
 	}
 }
 
@@ -66,7 +68,41 @@ func respondSuccess(w http.ResponseWriter, data interface{}) {
 	})
 }
 
-// AuthMiddleware validates Bearer JWT tokens when auth is enabled
+// apiKeyStore is the minimal interface needed by AuthMiddleware to validate API keys.
+// It is satisfied by *storage.OrgStore but decoupled to avoid an import cycle.
+type apiKeyStore interface {
+	LookupAPIKeyByPrefix(prefix string, dest interface{}) error
+}
+
+// authMiddlewareMu guards the two pluggable auth functions below.
+var authMiddlewareMu sync.RWMutex
+
+// apiKeyLookupFn is set by the orchestrator after wiring storage so AuthMiddleware
+// can validate API keys without a direct import of the storage package.
+var apiKeyLookupFn func(orgID, rawKey string) (*JWTClaims, bool)
+
+// tokenRevokedFn is set by the orchestrator to check the JWT revocation blocklist.
+var tokenRevokedFn func(jti string) bool
+
+// SetAPIKeyLookup wires the API key validation function used by AuthMiddleware.
+// Must be called before the HTTP server starts.
+func SetAPIKeyLookup(fn func(orgID, rawKey string) (*JWTClaims, bool)) {
+	authMiddlewareMu.Lock()
+	defer authMiddlewareMu.Unlock()
+	apiKeyLookupFn = fn
+}
+
+// SetTokenRevokedChecker wires the JTI blocklist checker used by AuthMiddleware.
+// Must be called before the HTTP server starts.
+func SetTokenRevokedChecker(fn func(jti string) bool) {
+	authMiddlewareMu.Lock()
+	defer authMiddlewareMu.Unlock()
+	tokenRevokedFn = fn
+}
+
+// AuthMiddleware validates Bearer tokens when auth is enabled.
+// It first attempts JWT validation; if the token starts with the "ohe_" prefix
+// it is treated as an API key and validated against the key store instead.
 func AuthMiddleware(jwtSecret string, enabled bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +128,35 @@ func AuthMiddleware(jwtSecret string, enabled bool) func(http.Handler) http.Hand
 			}
 
 			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+
+			// API key path: tokens starting with "ohe_" are not JWTs
+			if strings.HasPrefix(tokenStr, apiKeyPrefix) {
+				authMiddlewareMu.RLock()
+				lookup := apiKeyLookupFn
+				authMiddlewareMu.RUnlock()
+
+				if lookup == nil {
+					respondError(w, http.StatusUnauthorized, "INVALID_TOKEN", "api key authentication not available")
+					return
+				}
+				// API keys are org-scoped; we need the org from the key prefix itself.
+				// The lookup function resolves org internally via the key prefix.
+				claims, ok := lookup("", tokenStr)
+				if !ok {
+					respondError(w, http.StatusUnauthorized, "INVALID_TOKEN", "invalid or expired api key")
+					return
+				}
+				ctx := context.WithValue(r.Context(), claimsKey, claims)
+				if claims.OrgID != "" {
+					ctx = context.WithValue(ctx, orgIDKey, claims.OrgID)
+					ctx = logger.WithOrgID(ctx, claims.OrgID)
+				}
+				ctx = logger.WithUsername(ctx, claims.Username)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			// JWT path
 			claims := &JWTClaims{}
 			token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
 				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -104,23 +169,51 @@ func AuthMiddleware(jwtSecret string, enabled bool) func(http.Handler) http.Hand
 				return
 			}
 
+			// Check revocation blocklist (populated by LogoutHandler)
+			authMiddlewareMu.RLock()
+			revoked := tokenRevokedFn
+			authMiddlewareMu.RUnlock()
+			if revoked != nil && claims.ID != "" && revoked(claims.ID) {
+				respondError(w, http.StatusUnauthorized, "TOKEN_REVOKED", "token has been revoked")
+				return
+			}
+
 			ctx := context.WithValue(r.Context(), claimsKey, claims)
 			if claims.OrgID != "" {
 				ctx = context.WithValue(ctx, orgIDKey, claims.OrgID)
+				ctx = logger.WithOrgID(ctx, claims.OrgID)
 			}
+			ctx = logger.WithUsername(ctx, claims.Username)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// LoggingMiddleware logs incoming requests
+// LoggingMiddleware injects a unique request_id into the context and logs each request.
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rid := newRequestID()
+		ctx := logger.WithRequestID(r.Context(), rid)
+		r = r.WithContext(ctx)
+		w.Header().Set("X-Request-ID", rid)
+
 		start := time.Now()
 		rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rw, r)
-		log.Printf("%s %s %d %s", r.Method, r.URL.Path, rw.status, time.Since(start))
+
+		logger.Default.InfoCtx(r.Context(), "request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", rw.status,
+			"duration_ms", time.Since(start).Milliseconds(),
+		)
 	})
+}
+
+func newRequestID() string {
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // CORSMiddleware returns a middleware that enforces the CORS allowlist.

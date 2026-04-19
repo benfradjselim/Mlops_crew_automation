@@ -1,13 +1,13 @@
 package processor
 
 import (
-	"log"
 	"runtime"
 	"sync"
 	"time"
 
 	"github.com/benfradjselim/ohe/pkg/models"
 	"github.com/benfradjselim/ohe/pkg/utils"
+	"github.com/benfradjselim/ohe/pkg/logger"
 )
 
 // Processor normalizes and aggregates raw metrics
@@ -162,7 +162,7 @@ func normalize(name string, value float64) float64 {
 		// Unknown metric: clamp to [0,1]. If value > 1.0, assume it's a percentage
 		// and divide by 100. Log a warning to aid debugging of misclassified metrics.
 		if value > 1 {
-			log.Printf("[processor] unknown metric %q value=%.3f treated as percentage", name, value)
+			logger.Default.Debug("processor unknown metric treated as percentage", "name", name, "value", value)
 			return utils.NormalizePercent(value)
 		}
 		return utils.Clamp(value, 0, 1)

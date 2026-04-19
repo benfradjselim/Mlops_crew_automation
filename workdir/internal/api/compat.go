@@ -21,7 +21,6 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/benfradjselim/ohe/pkg/models"
 	"github.com/gorilla/mux"
+	"github.com/benfradjselim/ohe/pkg/logger"
 )
 
 // ============================================================
@@ -89,13 +89,13 @@ func (h *Handlers) LokiPushHandler(w http.ResponseWriter, r *http.Request) {
 				Source:    "loki",
 			}
 			if err := h.store.SaveLog(service, entry, ts); err != nil {
-				log.Printf("[loki/push] save: %v", err)
+				logger.Default.ErrorCtx(r.Context(), "loki push save error", "err", err)
 			}
 			count++
 		}
 	}
 
-	log.Printf("[loki/push] ingested %d log entries", count)
+	logger.Default.InfoCtx(r.Context(), "loki push ingested", "count", count)
 	w.WriteHeader(http.StatusNoContent) // Loki expects 204
 }
 
@@ -127,7 +127,7 @@ func (h *Handlers) LokiQueryRangeHandler(w http.ResponseWriter, r *http.Request)
 
 	entries, err := h.store.QueryLogs(service, from, to, limit)
 	if err != nil {
-		log.Printf("[loki/query_range] query: %v", err)
+		logger.Default.ErrorCtx(r.Context(), "loki query error", "err", err)
 		entries = nil
 	}
 
@@ -238,7 +238,7 @@ func (h *Handlers) ESBulkHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.store.SaveLog(service, entry, entry.Timestamp); err != nil {
-			log.Printf("[es/bulk] save: %v", err)
+			logger.Default.ErrorCtx(r.Context(), "es bulk save error", "err", err)
 		}
 		ingested++
 
@@ -252,7 +252,7 @@ func (h *Handlers) ESBulkHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	log.Printf("[es/bulk] ingested %d documents", ingested)
+	logger.Default.InfoCtx(r.Context(), "es bulk ingested", "count", ingested)
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"took":   1,
@@ -374,7 +374,7 @@ func (h *Handlers) DDMetricsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			ts := time.Unix(int64(point[0]), 0)
 			if err := h.store.SaveMetric(host, sanitizeMetricName(s.Metric), point[1], ts); err != nil {
-				log.Printf("[dd/metrics] save: %v", err)
+				logger.Default.ErrorCtx(r.Context(), "dd metrics save error", "err", err)
 			}
 		}
 	}
@@ -415,7 +415,7 @@ func (h *Handlers) DDLogsHandler(w http.ResponseWriter, r *http.Request) {
 			Source:    "datadog",
 		}
 		if err := h.store.SaveLog(service, entry, entry.Timestamp); err != nil {
-			log.Printf("[dd/logs] save: %v", err)
+			logger.Default.ErrorCtx(r.Context(), "dd logs save error", "err", err)
 		}
 	}
 

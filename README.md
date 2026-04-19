@@ -678,4 +678,57 @@ The operator module (`workdir/operator/`) has **no external dependencies** — o
 
 ---
 
+---
+
+## Commercialization Roadmap
+
+> Audit date: 2026-04-17 — Platform is ~35–40% production-SaaS ready.  
+> Strong ML/KPI foundation; work below must be completed before paid customers.
+
+### Tier 1 — Hard Blockers *(fix before first paying customer)*
+
+| # | Item | Why it blocks revenue |
+|---|------|-----------------------|
+| 1 | **Multi-tenant data isolation** | All orgs share the same Badger keyspace — one bug leaks data across customers. Needs org-prefixed keys at storage layer. |
+| 2 | **TLS / HTTPS** | No `--tls-cert / --tls-key` flags. No enterprise buyer ships plaintext. |
+| 3 | **API key provisioning** | JWT-only auth blocks CI/CD integrations and programmatic SDK access. |
+| 4 | **JWT logout revocation** | `LogoutHandler` is a no-op — stolen tokens work indefinitely. |
+| 5 | **HA / clustering** | Badger is single-node embedded. One restart = full outage. Needs PostgreSQL backend option or Badger replication sidecar. |
+| 6 | **Audit logging** | SOC 2 / GDPR require an immutable "who changed what, when" trail. Currently absent. |
+
+### Tier 2 — Growth Blockers *(needed within 90 days of first sales)*
+
+| # | Item | Impact |
+|---|------|--------|
+| 7 | **OpenAPI / Swagger spec** | Without a machine-readable spec enterprise buyers can't self-integrate; support cost explodes. |
+| 8 | **Per-org quotas & rate limiting** | Required before pricing tiers (starter / pro / enterprise) are enforceable. |
+| 9 | **Billing / metering hooks** | Even a simple usage-event emitter (ingest bytes, active seats, alert evaluations) unblocks all pricing models. |
+| 10 | **Structured logging (slog / zap)** | Correlation IDs, request tracing — essential for diagnosing customer issues in production. |
+| 11 | **Test coverage ≥ 60 %** | Current estimate ~1 %. Regressions ship constantly without a CI coverage gate. |
+| 12 | **CI/CD pipeline** | No `.github/workflows` — every release is manual. Blocks developer velocity. |
+
+### Tier 3 — Competitive Differentiators *(6–12 month horizon)*
+
+| # | Item | Opportunity |
+|---|------|-------------|
+| 13 | **Go + Python SDK** | Turns OHE from a product into a platform; drives bottoms-up adoption. |
+| 14 | **Prometheus `remote_write` endpoint** | Unlocks every Prometheus-native agent without any code change. |
+| 15 | **gRPC agent protocol** | HTTP polling is expensive at scale — a gRPC stream halves agent bandwidth. |
+| 16 | **Secret management (Vault integration)** | JWT secret stored in flags fails enterprise security reviews. |
+| 17 | **Custom plugin system** | Datasource connectors + alert actions turns OHE into an extensible platform. |
+| 18 | **Event streaming (NATS / Kafka)** | In-memory event bus won't survive > 10 k metrics/s. |
+
+### Recommended Sequence
+
+```
+Month 1:  #1 data isolation → #2 TLS → #3 API keys → #4 JWT revocation
+Month 2:  #5 HA backend   → #6 audit log → #10 structured logging → #12 CI/CD
+Month 3:  #7 OpenAPI      → #8 quotas   → #9 billing hooks       → #11 test coverage
+```
+
+> **Highest-ROI single item:** #1 multi-tenant data isolation.  
+> Every other investment is moot if customers can see each other's data.
+
+---
+
 **Author:** Selim Benfradj · **License:** MIT · **Version:** 4.0.0

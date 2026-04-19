@@ -1,11 +1,11 @@
 package receiver
 
 import (
-	"log"
 
 	"github.com/benfradjselim/ohe/internal/analyzer"
 	"github.com/benfradjselim/ohe/internal/storage"
 	"github.com/benfradjselim/ohe/pkg/models"
+	"github.com/benfradjselim/ohe/pkg/logger"
 )
 
 // Bus wires ingested data from all receivers into the OHE pipeline.
@@ -23,7 +23,7 @@ func NewBus(store *storage.Store, topology *analyzer.TopologyAnalyzer) *Bus {
 // IngestMetric satisfies MetricSink — forwards metric to the store
 func (b *Bus) IngestMetric(m models.Metric) {
 	if err := b.store.SaveMetric(m.Host, m.Name, m.Value, m.Timestamp); err != nil {
-		log.Printf("[bus] metric %s/%s: %v", m.Host, m.Name, err)
+		logger.Default.Error("bus metric save error", "host", m.Host, "metric", m.Name, "err", err)
 	}
 }
 
@@ -33,7 +33,7 @@ func (b *Bus) IngestSpan(s models.Span) {
 		b.topology.IngestSpan(s)
 	}
 	if err := b.store.SaveSpan(s, s.TraceID, s.SpanID); err != nil {
-		log.Printf("[bus] span %s/%s: %v", s.TraceID, s.SpanID, err)
+		logger.Default.Error("bus span save error", "trace_id", s.TraceID, "span_id", s.SpanID, "err", err)
 	}
 }
 
@@ -47,6 +47,6 @@ func (b *Bus) IngestLog(e models.LogEntry) {
 		service = "unknown"
 	}
 	if err := b.store.SaveLog(service, e, e.Timestamp); err != nil {
-		log.Printf("[bus] log %s: %v", service, err)
+		logger.Default.Error("bus log save error", "service", service, "err", err)
 	}
 }

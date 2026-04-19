@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -25,24 +24,90 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
+	"github.com/benfradjselim/ohe/pkg/logger"
 )
 
 const version = "4.0.0"
 
 // Handlers holds all API dependencies
+// UsageRecorder is a function that records a billable usage event.
+// Injected by the orchestrator via SetUsageRecorder to avoid an import cycle.
+type UsageRecorder func(orgID, eventType string, value float64)
+
 type Handlers struct {
-	store       *storage.Store
-	processor   *oheproc.Processor
-	analyzer    *analyzer.Analyzer
-	topology    *analyzer.TopologyAnalyzer
-	predictor   *predictor.Predictor
-	alerter     *alerter.Alerter
-	hub         *Hub
-	hostname    string
-	jwtSecret   string
-	startTime   time.Time
-	authEnabled bool
-	ready       int32 // 1 = ready; 0 = not ready; accessed via atomic ops (Go 1.18 compat)
+	store          *storage.Store
+	processor      *oheproc.Processor
+	analyzer       *analyzer.Analyzer
+	topology       *analyzer.TopologyAnalyzer
+	predictor      *predictor.Predictor
+	alerter        *alerter.Alerter
+	hub            *Hub
+	hostname       string
+	jwtSecret      string
+	startTime      time.Time
+	authEnabled    bool
+	ready          int32         // 1 = ready; 0 = not ready; accessed via atomic ops (Go 1.18 compat)
+	usageRecorder  UsageRecorder // optional; no-op when nil
+}
+
+// SetUsageRecorder wires the billing meter into the handler set.
+func (h *Handlers) SetUsageRecorder(fn UsageRecorder) {
+	h.usageRecorder = fn
+}
+
+// recordUsage emits a billing event; safe to call when recorder is nil.
+func (h *Handlers) recordUsage(r *http.Request, eventType string, value float64) {
+	if h.usageRecorder == nil {
+		return
+	}
+	h.usageRecorder(orgIDFromContext(r.Context()), eventType, value)
+}
+
+// orgStore returns a tenant-scoped store for the organisation identified in the
+// request's JWT claims. All metric, KPI, alert, dashboard, datasource, SLO,
+// log, and span operations must go through the returned OrgStore to ensure
+// hard data isolation between tenants at the storage layer.
+func (h *Handlers) orgStore(r *http.Request) *storage.OrgStore {
+	return h.store.ForOrg(orgIDFromContext(r.Context()))
+}
+
+// orgQuota returns the quota for the current request's org.
+// Falls back to DefaultQuota when the org record is missing.
+func (h *Handlers) orgQuota(r *http.Request) models.QuotaConfig {
+	var org models.Org
+	if err := h.store.GetOrg(orgIDFromContext(r.Context()), &org); err != nil {
+		return models.DefaultQuota()
+	}
+	// Zero-value quota means the org was created before quotas existed — apply defaults.
+	if org.Quota == (models.QuotaConfig{}) {
+		return models.DefaultQuota()
+	}
+	return org.Quota
+}
+
+// audit appends an immutable audit entry. Errors are logged but never fatal
+// so that an audit write failure never blocks the primary operation.
+func (h *Handlers) audit(r *http.Request, action, resource, resourceID, details string) {
+	claims, _ := claimsFromContext(r.Context())
+	username := ""
+	orgID := orgIDFromContext(r.Context())
+	if claims != nil {
+		username = claims.Username
+	}
+	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+	entry := storage.AuditEntry{
+		Timestamp:  time.Now().UTC(),
+		OrgID:      orgID,
+		Username:   username,
+		Action:     action,
+		Resource:   resource,
+		ResourceID: resourceID,
+		Details:    details,
+		IPAddress:  ip,
+	}
+	if err := h.store.AppendAuditEntry(entry); err != nil {
+		logger.Default.Error("audit write error", "err", err)
+	}
 }
 
 // SetReady marks the server as ready to serve traffic (called by the orchestrator).
@@ -91,6 +156,20 @@ func NewHandlers(
 // TopologyAnalyzer returns the topology analyzer (used by orchestrator to wire receivers)
 func (h *Handlers) TopologyAnalyzer() *analyzer.TopologyAnalyzer {
 	return h.topology
+}
+
+// OpenAPIHandler GET /api/v1/openapi.yaml — serves the bundled OpenAPI 3.0 spec.
+// The spec file is read from docs/openapi.yaml relative to the working directory.
+func (h *Handlers) OpenAPIHandler(w http.ResponseWriter, r *http.Request) {
+	data, err := os.ReadFile("docs/openapi.yaml")
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "SPEC_NOT_FOUND", "openapi.yaml not found")
+		return
+	}
+	w.Header().Set("Content-Type", "application/yaml")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 // HealthHandler GET /api/v1/health
@@ -172,7 +251,7 @@ func (h *Handlers) MetricGetHandler(w http.ResponseWriter, r *http.Request) {
 
 	from, to := parseTimeRange(r)
 
-	values, err := h.store.GetMetricRange(host, name, from, to)
+	values, err := h.orgStore(r).GetMetricRange(host, name, from, to)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "STORAGE_ERROR", err.Error())
 		return
@@ -228,7 +307,7 @@ func (h *Handlers) KPIGetHandler(w http.ResponseWriter, r *http.Request) {
 
 	from, to := parseTimeRange(r)
 
-	values, err := h.store.GetKPIRange(host, name, from, to)
+	values, err := h.orgStore(r).GetKPIRange(host, name, from, to)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "STORAGE_ERROR", err.Error())
 		return
@@ -320,7 +399,7 @@ func (h *Handlers) AlertDeleteHandler(w http.ResponseWriter, r *http.Request) {
 // DashboardListHandler GET /api/v1/dashboards
 func (h *Handlers) DashboardListHandler(w http.ResponseWriter, r *http.Request) {
 	var dashboards []*models.Dashboard
-	err := h.store.ListDashboards(func(val []byte) error {
+	err := h.orgStore(r).ListDashboards(func(val []byte) error {
 		var d models.Dashboard
 		if err := json.Unmarshal(val, &d); err != nil {
 			return nil
@@ -337,6 +416,10 @@ func (h *Handlers) DashboardListHandler(w http.ResponseWriter, r *http.Request) 
 
 // DashboardCreateHandler POST /api/v1/dashboards
 func (h *Handlers) DashboardCreateHandler(w http.ResponseWriter, r *http.Request) {
+	if err := h.orgStore(r).CheckDashboardQuota(h.orgQuota(r).MaxDashboards); err != nil {
+		respondError(w, http.StatusPaymentRequired, "QUOTA_EXCEEDED", err.Error())
+		return
+	}
 	var d models.Dashboard
 	if err := decodeBody(r, &d); err != nil {
 		respondError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
@@ -345,10 +428,11 @@ func (h *Handlers) DashboardCreateHandler(w http.ResponseWriter, r *http.Request
 	d.ID = utils.GenerateID(8)
 	d.CreatedAt = time.Now()
 	d.UpdatedAt = d.CreatedAt
-	if err := h.store.SaveDashboard(d.ID, d); err != nil {
+	if err := h.orgStore(r).SaveDashboard(d.ID, d); err != nil {
 		respondError(w, http.StatusInternalServerError, "STORAGE_ERROR", err.Error())
 		return
 	}
+	h.audit(r, "create", "dashboard", d.ID, d.Name)
 	respondJSON(w, http.StatusCreated, map[string]interface{}{
 		"success":   true,
 		"data":      d,
@@ -360,7 +444,7 @@ func (h *Handlers) DashboardCreateHandler(w http.ResponseWriter, r *http.Request
 func (h *Handlers) DashboardGetHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	var d models.Dashboard
-	if err := h.store.GetDashboard(id, &d); err != nil {
+	if err := h.orgStore(r).GetDashboard(id, &d); err != nil {
 		respondError(w, http.StatusNotFound, "NOT_FOUND", "dashboard not found")
 		return
 	}
@@ -371,7 +455,7 @@ func (h *Handlers) DashboardGetHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) DashboardUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	var d models.Dashboard
-	if err := h.store.GetDashboard(id, &d); err != nil {
+	if err := h.orgStore(r).GetDashboard(id, &d); err != nil {
 		respondError(w, http.StatusNotFound, "NOT_FOUND", "dashboard not found")
 		return
 	}
@@ -383,7 +467,7 @@ func (h *Handlers) DashboardUpdateHandler(w http.ResponseWriter, r *http.Request
 	update.ID = id
 	update.CreatedAt = d.CreatedAt
 	update.UpdatedAt = time.Now()
-	if err := h.store.SaveDashboard(id, update); err != nil {
+	if err := h.orgStore(r).SaveDashboard(id, update); err != nil {
 		respondError(w, http.StatusInternalServerError, "STORAGE_ERROR", err.Error())
 		return
 	}
@@ -393,10 +477,11 @@ func (h *Handlers) DashboardUpdateHandler(w http.ResponseWriter, r *http.Request
 // DashboardDeleteHandler DELETE /api/v1/dashboards/{id}
 func (h *Handlers) DashboardDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	if err := h.store.DeleteDashboard(id); err != nil {
+	if err := h.orgStore(r).DeleteDashboard(id); err != nil {
 		respondError(w, http.StatusNotFound, "NOT_FOUND", "dashboard not found")
 		return
 	}
+	h.audit(r, "delete", "dashboard", id, "")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -423,7 +508,9 @@ func (h *Handlers) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	claims := JWTClaims{
 		Username: user.Username,
 		Role:     user.Role,
+		OrgID:    user.OrgID,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        utils.GenerateID(16), // JTI — unique per token, used for revocation
 			ExpiresAt: jwt.NewNumericDate(exp),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
@@ -435,6 +522,7 @@ func (h *Handlers) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.audit(r, "login", "session", user.Username, "")
 	user.Password = "" // never expose hash in response
 	respondSuccess(w, models.LoginResponse{
 		Token:   signed,
@@ -462,8 +550,8 @@ func (h *Handlers) IngestHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Store metrics in Badger
 	for _, m := range batch.Metrics {
-		if err := h.store.SaveMetric(m.Host, m.Name, m.Value, m.Timestamp); err != nil {
-			log.Printf("[store] SaveMetric %s/%s: %v", m.Host, m.Name, err)
+		if err := h.orgStore(r).SaveMetric(m.Host, m.Name, m.Value, m.Timestamp); err != nil {
+			logger.Default.ErrorCtx(r.Context(), "SaveMetric failed", "host", m.Host, "metric", m.Name, "err", err)
 		}
 	}
 
@@ -480,8 +568,8 @@ func (h *Handlers) IngestHandler(w http.ResponseWriter, r *http.Request) {
 		"humidity":  snapshot.Humidity.Value,
 		"contagion": snapshot.Contagion.Value,
 	} {
-		if err := h.store.SaveKPI(batch.Host, kpiName, kpiVal, snapshot.Timestamp); err != nil {
-			log.Printf("[store] SaveKPI %s/%s: %v", batch.Host, kpiName, err)
+		if err := h.orgStore(r).SaveKPI(batch.Host, kpiName, kpiVal, snapshot.Timestamp); err != nil {
+			logger.Default.ErrorCtx(r.Context(), "SaveKPI failed", "host", batch.Host, "kpi", kpiName, "err", err)
 		}
 	}
 
@@ -500,8 +588,8 @@ func (h *Handlers) IngestHandler(w http.ResponseWriter, r *http.Request) {
 		"velocity":     snapshot.Velocity.Value,
 		"health_score": snapshot.HealthScore.Value,
 	} {
-		if err := h.store.SaveKPI(batch.Host, kpiName, kpiVal, snapshot.Timestamp); err != nil {
-			log.Printf("[store] SaveKPI %s/%s: %v", batch.Host, kpiName, err)
+		if err := h.orgStore(r).SaveKPI(batch.Host, kpiName, kpiVal, snapshot.Timestamp); err != nil {
+			logger.Default.ErrorCtx(r.Context(), "SaveKPI failed", "host", batch.Host, "kpi", kpiName, "err", err)
 		}
 	}
 	// Feed predictor with new KPIs
@@ -530,6 +618,9 @@ func (h *Handlers) IngestHandler(w http.ResponseWriter, r *http.Request) {
 		h.hub.Broadcast(msg)
 	}
 
+	// Record metered ingest event (bytes approximated as metric count × 100)
+	h.recordUsage(r, "ingest_bytes", float64(len(batch.Metrics)*100))
+
 	respondSuccess(w, map[string]interface{}{
 		"accepted": len(batch.Metrics),
 		"kpis":     snapshot,
@@ -554,7 +645,7 @@ func (h *Handlers) ReloadHandler(w http.ResponseWriter, r *http.Request) {
 // DataSourceListHandler GET /api/v1/datasources
 func (h *Handlers) DataSourceListHandler(w http.ResponseWriter, r *http.Request) {
 	var sources []*models.DataSource
-	err := h.store.ListDataSources(func(val []byte) error {
+	err := h.orgStore(r).ListDataSources(func(val []byte) error {
 		var ds models.DataSource
 		if err := json.Unmarshal(val, &ds); err != nil {
 			return nil
@@ -571,6 +662,10 @@ func (h *Handlers) DataSourceListHandler(w http.ResponseWriter, r *http.Request)
 
 // DataSourceCreateHandler POST /api/v1/datasources
 func (h *Handlers) DataSourceCreateHandler(w http.ResponseWriter, r *http.Request) {
+	if err := h.orgStore(r).CheckDataSourceQuota(h.orgQuota(r).MaxDataSources); err != nil {
+		respondError(w, http.StatusPaymentRequired, "QUOTA_EXCEEDED", err.Error())
+		return
+	}
 	var ds models.DataSource
 	if err := decodeBody(r, &ds); err != nil {
 		respondError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
@@ -585,10 +680,11 @@ func (h *Handlers) DataSourceCreateHandler(w http.ResponseWriter, r *http.Reques
 	}
 	ds.ID = utils.GenerateID(8)
 	ds.Enabled = true
-	if err := h.store.SaveDataSource(ds.ID, ds); err != nil {
+	if err := h.orgStore(r).SaveDataSource(ds.ID, ds); err != nil {
 		respondError(w, http.StatusInternalServerError, "STORAGE_ERROR", err.Error())
 		return
 	}
+	h.audit(r, "create", "datasource", ds.ID, ds.Name)
 	respondJSON(w, http.StatusCreated, map[string]interface{}{
 		"success": true, "data": ds, "timestamp": time.Now().UTC(),
 	})
@@ -598,7 +694,7 @@ func (h *Handlers) DataSourceCreateHandler(w http.ResponseWriter, r *http.Reques
 func (h *Handlers) DataSourceGetHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	var ds models.DataSource
-	if err := h.store.GetDataSource(id, &ds); err != nil {
+	if err := h.orgStore(r).GetDataSource(id, &ds); err != nil {
 		respondError(w, http.StatusNotFound, "NOT_FOUND", "datasource not found")
 		return
 	}
@@ -621,7 +717,7 @@ func (h *Handlers) DataSourceUpdateHandler(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	ds.ID = id
-	if err := h.store.SaveDataSource(id, ds); err != nil {
+	if err := h.orgStore(r).SaveDataSource(id, ds); err != nil {
 		respondError(w, http.StatusInternalServerError, "STORAGE_ERROR", err.Error())
 		return
 	}
@@ -631,10 +727,11 @@ func (h *Handlers) DataSourceUpdateHandler(w http.ResponseWriter, r *http.Reques
 // DataSourceDeleteHandler DELETE /api/v1/datasources/{id}
 func (h *Handlers) DataSourceDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	if err := h.store.DeleteDataSource(id); err != nil {
+	if err := h.orgStore(r).DeleteDataSource(id); err != nil {
 		respondError(w, http.StatusNotFound, "NOT_FOUND", "datasource not found")
 		return
 	}
+	h.audit(r, "delete", "datasource", id, "")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -642,7 +739,7 @@ func (h *Handlers) DataSourceDeleteHandler(w http.ResponseWriter, r *http.Reques
 func (h *Handlers) DataSourceTestHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	var ds models.DataSource
-	if err := h.store.GetDataSource(id, &ds); err != nil {
+	if err := h.orgStore(r).GetDataSource(id, &ds); err != nil {
 		respondError(w, http.StatusNotFound, "NOT_FOUND", "datasource not found")
 		return
 	}
@@ -755,8 +852,17 @@ func (h *Handlers) UserDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// LogoutHandler POST /api/v1/auth/logout — stateless JWT, just acknowledge
+// LogoutHandler POST /api/v1/auth/logout — adds the token's JTI to the revocation blocklist.
+// The Badger entry TTL is set to the token's remaining lifetime so no cleanup is needed.
 func (h *Handlers) LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	claims, ok := claimsFromContext(r.Context())
+	if ok && claims.ID != "" && claims.ExpiresAt != nil {
+		ttl := time.Until(claims.ExpiresAt.Time)
+		if ttl > 0 {
+			_ = h.store.RevokeToken(claims.ID, ttl)
+		}
+	}
+	h.audit(r, "logout", "session", "", "")
 	respondSuccess(w, map[string]string{"status": "logged out"})
 }
 
@@ -792,7 +898,7 @@ func (h *Handlers) RefreshHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) DashboardExportHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	var d models.Dashboard
-	if err := h.store.GetDashboard(id, &d); err != nil {
+	if err := h.orgStore(r).GetDashboard(id, &d); err != nil {
 		respondError(w, http.StatusNotFound, "NOT_FOUND", "dashboard not found")
 		return
 	}
@@ -811,7 +917,7 @@ func (h *Handlers) DashboardImportHandler(w http.ResponseWriter, r *http.Request
 	d.ID = utils.GenerateID(8)
 	d.CreatedAt = time.Now()
 	d.UpdatedAt = d.CreatedAt
-	if err := h.store.SaveDashboard(d.ID, d); err != nil {
+	if err := h.orgStore(r).SaveDashboard(d.ID, d); err != nil {
 		respondError(w, http.StatusInternalServerError, "STORAGE_ERROR", err.Error())
 		return
 	}
@@ -840,7 +946,7 @@ func (h *Handlers) QueryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// req.Query is a metric name for now
-	tvs, err := h.store.GetMetricRange(host, req.Query, req.From, req.To)
+	tvs, err := h.orgStore(r).GetMetricRange(host, req.Query, req.From, req.To)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "QUERY_ERROR", err.Error())
 		return
@@ -905,7 +1011,7 @@ func (h *Handlers) SetupHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user.Password = ""
-	log.Printf("[auth] first admin user '%s' created via setup endpoint", req.Username)
+	logger.Default.InfoCtx(r.Context(), "first admin user created via setup endpoint", "username", req.Username)
 	respondJSON(w, http.StatusCreated, map[string]interface{}{
 		"success": true, "data": user, "timestamp": time.Now().UTC(),
 	})
@@ -1631,7 +1737,7 @@ func (h *Handlers) TemplateApplyHandler(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	if err := h.store.SaveDashboard(d.ID, d); err != nil {
+	if err := h.orgStore(r).SaveDashboard(d.ID, d); err != nil {
 		respondError(w, http.StatusInternalServerError, "STORAGE_ERROR", err.Error())
 		return
 	}

@@ -3,7 +3,6 @@ package receiver
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/benfradjselim/ohe/internal/storage"
 	"github.com/benfradjselim/ohe/pkg/models"
+	"github.com/benfradjselim/ohe/pkg/logger"
 )
 
 // DogStatsDReceiver listens on UDP 8125 for DogStatsD / StatsD protocol metrics.
@@ -42,7 +42,7 @@ func (r *DogStatsDReceiver) Run(ctx context.Context) error {
 	closeConn := func() { closeOnce.Do(func() { conn.Close() }) }
 	defer closeConn()
 
-	log.Printf("[dogstatsd] listening on UDP %s (DogStatsD / StatsD compatible)", r.addr)
+	logger.Default.Info("dogstatsd listening", "addr", r.addr)
 
 	buf := make([]byte, 65536)
 
@@ -59,7 +59,7 @@ func (r *DogStatsDReceiver) Run(ctx context.Context) error {
 			case <-ctx.Done():
 				return nil
 			default:
-				log.Printf("[dogstatsd] read error: %v", err)
+				logger.Default.Error("dogstatsd read error", "err", err)
 				continue
 			}
 		}
@@ -72,7 +72,7 @@ func (r *DogStatsDReceiver) Run(ctx context.Context) error {
 			if sm, err := parseStatsDLine(line); err == nil {
 				r.emit(sm)
 			} else {
-				log.Printf("[dogstatsd] parse error %q: %v", line, err)
+				logger.Default.Warn("dogstatsd parse error", "line", line, "err", err)
 			}
 		}
 	}
@@ -98,7 +98,7 @@ func (r *DogStatsDReceiver) emit(sm models.StatsDMetric) {
 		r.metrics.IngestMetric(metric)
 	}
 	if err := r.store.SaveMetric(r.host, metric.Name, metric.Value, metric.Timestamp); err != nil {
-		log.Printf("[dogstatsd] save: %v", err)
+		logger.Default.Error("dogstatsd save error", "err", err)
 	}
 }
 

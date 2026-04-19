@@ -5,12 +5,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/benfradjselim/ohe/pkg/models"
+	"github.com/benfradjselim/ohe/pkg/logger"
 )
 
 // Channel defines a notification destination persisted in storage.
@@ -82,7 +82,7 @@ func (d *Dispatcher) Dispatch(a models.Alert) {
 		}
 		go func(ch Channel) {
 			if err := d.send(ch, a); err != nil {
-				log.Printf("[notifier] channel %q (%s) error: %v", ch.Name, ch.Type, err)
+				logger.Default.Error("notifier channel error", "name", ch.Name, "type", ch.Type, "err", err)
 			}
 		}(ch)
 	}

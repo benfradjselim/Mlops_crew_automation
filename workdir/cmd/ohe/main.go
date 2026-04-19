@@ -4,13 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/benfradjselim/ohe/internal/orchestrator"
+	"github.com/benfradjselim/ohe/pkg/logger"
 	"gopkg.in/yaml.v3"
 )
 
@@ -58,17 +58,22 @@ Commands:
   version  Print version
 
 Flags (agent & central):
-  --config   Path to config YAML (default: /etc/ohe/config.yaml)
-  --port     HTTP port (default: 8080)
-  --host     Hostname override
-  --storage  Storage directory (default: /var/lib/ohe/data)
+  --config    Path to config YAML (default: /etc/ohe/config.yaml)
+  --port      HTTP/HTTPS port (default: 8080)
+  --host      Hostname override
+  --storage   Storage directory (default: /var/lib/ohe/data)
+  --tls-cert  Path to TLS certificate PEM (enables HTTPS when paired with --tls-key)
+  --tls-key   Path to TLS private key PEM  (enables HTTPS when paired with --tls-cert)
+  --auth      Enable JWT authentication
+  --jwt-secret JWT signing secret
 
 Agent-specific:
   --central-url  Central server URL (default: http://localhost:8080)
 
 Examples:
   ohe central --port 8080 --storage /var/lib/ohe
-  ohe agent   --central-url http://central:8080`)
+  ohe central --port 443 --tls-cert /etc/ohe/tls.crt --tls-key /etc/ohe/tls.key
+  ohe agent   --central-url https://central:443`)
 }
 
 func runMode(mode string, args []string) {
@@ -82,6 +87,9 @@ func runMode(mode string, args []string) {
 	authEnabled := fs.Bool("auth", false, "enable JWT authentication")
 	jwtSecret := fs.String("jwt-secret", "", "JWT signing secret")
 	collectInterval := fs.Duration("interval", 15*time.Second, "metric collection interval")
+	tlsCert := fs.String("tls-cert", "", "path to TLS certificate PEM file (enables HTTPS when paired with --tls-key)")
+	tlsKey := fs.String("tls-key", "", "path to TLS private key PEM file (enables HTTPS when paired with --tls-cert)")
+	replicaURL := fs.String("replica-url", "", "Litestream replica URL for HA replication (e.g. s3://mybucket/ohe)")
 
 	_ = fs.Parse(args)
 
@@ -92,7 +100,8 @@ func runMode(mode string, args []string) {
 	// Load from file if provided
 	if *configFile != "" {
 		if err := loadConfigFile(*configFile, &cfg); err != nil {
-			log.Fatalf("load config: %v", err)
+			logger.Default.Error("load config failed", "err", err)
+			os.Exit(1)
 		}
 	}
 
@@ -121,6 +130,15 @@ func runMode(mode string, args []string) {
 	if cfg.BufferSize == 0 {
 		cfg.BufferSize = 10000
 	}
+	if *tlsCert != "" {
+		cfg.TLSCertFile = *tlsCert
+	}
+	if *tlsKey != "" {
+		cfg.TLSKeyFile = *tlsKey
+	}
+	if *replicaURL != "" {
+		cfg.ReplicaURL = *replicaURL
+	}
 
 	// Resolve hostname if not set
 	if cfg.Host == "" {
@@ -132,20 +150,22 @@ func runMode(mode string, args []string) {
 		}
 	}
 
-	log.Printf("[ohe] mode=%s host=%s port=%d storage=%s", cfg.Mode, cfg.Host, cfg.Port, cfg.StoragePath)
+	logger.Default.Info("ohe starting", "mode", cfg.Mode, "host", cfg.Host, "port", cfg.Port, "storage", cfg.StoragePath)
 
 	engine, err := orchestrator.New(cfg)
 	if err != nil {
-		log.Fatalf("init engine: %v", err)
+		logger.Default.Error("init engine failed", "err", err)
+		os.Exit(1)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	if err := engine.Run(ctx); err != nil {
-		log.Fatalf("engine: %v", err)
+		logger.Default.Error("engine error", "err", err)
+		os.Exit(1)
 	}
-	log.Println("[ohe] shutdown complete")
+	logger.Default.Info("shutdown complete")
 }
 
 func loadConfigFile(path string, cfg *orchestrator.Config) error {

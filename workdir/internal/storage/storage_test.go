@@ -262,6 +262,91 @@ func TestDataSourceCRUDStorage(t *testing.T) {
 	}
 }
 
+// TestOrgStoreIsolation verifies that data written by one org cannot be read
+// by another org, providing hard multi-tenant data isolation at the storage layer.
+func TestOrgStoreIsolation(t *testing.T) {
+	s := openTestStore(t)
+	defer s.Close()
+
+	now := time.Now()
+	orgA := s.ForOrg("acme")
+	orgB := s.ForOrg("beta")
+
+	// Write a metric only for org A
+	if err := orgA.SaveMetric("host1", "cpu_percent", 0.9, now); err != nil {
+		t.Fatalf("orgA.SaveMetric: %v", err)
+	}
+
+	// Org A can read it
+	valA, err := orgA.GetMetricRange("host1", "cpu_percent", now.Add(-time.Second), now.Add(time.Second))
+	if err != nil || len(valA) == 0 {
+		t.Fatalf("orgA.GetMetricRange: err=%v len=%d", err, len(valA))
+	}
+
+	// Org B gets nothing — key space is isolated
+	valB, err := orgB.GetMetricRange("host1", "cpu_percent", now.Add(-time.Second), now.Add(time.Second))
+	if err != nil {
+		t.Fatalf("orgB.GetMetricRange unexpected error: %v", err)
+	}
+	if len(valB) != 0 {
+		t.Errorf("org isolation breach: orgB got %d metrics that belong to orgA", len(valB))
+	}
+}
+
+// TestOrgStoreDashboardIsolation verifies dashboard isolation between orgs.
+func TestOrgStoreDashboardIsolation(t *testing.T) {
+	s := openTestStore(t)
+	defer s.Close()
+
+	orgA := s.ForOrg("acme")
+	orgB := s.ForOrg("beta")
+
+	if err := orgA.SaveDashboard("dash1", map[string]string{"title": "A dash"}); err != nil {
+		t.Fatalf("orgA.SaveDashboard: %v", err)
+	}
+
+	// Org B listing dashboards should return nothing
+	var count int
+	if err := orgB.ListDashboards(func([]byte) error { count++; return nil }); err != nil {
+		t.Fatalf("orgB.ListDashboards: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("org isolation breach: orgB sees %d dashboards from orgA", count)
+	}
+
+	// Org B cannot get org A's dashboard by ID
+	var dest map[string]string
+	if err := orgB.GetDashboard("dash1", &dest); err == nil {
+		t.Error("orgB.GetDashboard should fail for orgA's dashboard ID")
+	}
+}
+
+// TestOrgStoreDefaultFallback verifies that an empty orgID falls back to "default"
+// and data written via the base Store (unscoped) is not mixed with org-scoped data.
+func TestOrgStoreDefaultFallback(t *testing.T) {
+	s := openTestStore(t)
+	defer s.Close()
+
+	now := time.Now()
+	dflt := s.ForOrg("") // should become "default"
+
+	if err := dflt.SaveMetric("host1", "cpu_percent", 0.5, now); err != nil {
+		t.Fatalf("default.SaveMetric: %v", err)
+	}
+
+	vals, err := dflt.GetMetricRange("host1", "cpu_percent", now.Add(-time.Second), now.Add(time.Second))
+	if err != nil || len(vals) == 0 {
+		t.Fatalf("default.GetMetricRange: err=%v len=%d", err, len(vals))
+	}
+
+	// An org named "other" must not see it
+	other := s.ForOrg("other")
+	valOther, _ := other.GetMetricRange("host1", "cpu_percent", now.Add(-time.Second), now.Add(time.Second))
+	if len(valOther) != 0 {
+		t.Errorf("isolation breach: 'other' org sees %d metrics from 'default' org", len(valOther))
+	}
+}
+
 func openTestStore(t *testing.T) *Store {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "ohe-storage-test-*")

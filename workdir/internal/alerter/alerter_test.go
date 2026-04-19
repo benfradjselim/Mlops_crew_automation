@@ -177,3 +177,33 @@ func TestAlerterDedup(t *testing.T) {
 		t.Error("expected at least 1 alert on first evaluation")
 	}
 }
+
+func TestGetUpdateDeleteRule(t *testing.T) {
+	a := NewAlerter(100)
+	// Clear default rules for a controlled test
+	a.rules = nil
+	a.AddRule(Rule{Name: "r1", Metric: "cpu", Threshold: 90, Severity: "warning"})
+	a.AddRule(Rule{Name: "r2", Metric: "mem", Threshold: 80, Severity: "critical"})
+
+	rules := a.GetRules()
+	if len(rules) != 2 {
+		t.Fatalf("expected 2 rules, got %d", len(rules))
+	}
+
+	if !a.UpdateRule("r1", Rule{Name: "r1", Metric: "cpu", Threshold: 95, Severity: "critical"}) {
+		t.Error("UpdateRule should return true for existing rule")
+	}
+	if a.UpdateRule("nonexistent", Rule{}) {
+		t.Error("UpdateRule should return false for missing rule")
+	}
+
+	if !a.DeleteRule("r2") {
+		t.Error("DeleteRule should return true for existing rule")
+	}
+	if a.DeleteRule("r2") {
+		t.Error("DeleteRule should return false after deletion")
+	}
+	if len(a.GetRules()) != 1 {
+		t.Errorf("expected 1 rule after delete, got %d", len(a.GetRules()))
+	}
+}

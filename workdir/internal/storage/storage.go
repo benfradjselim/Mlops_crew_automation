@@ -378,6 +378,40 @@ func (s *Store) ListOrgs(dest func(val []byte) error) error {
 	})
 }
 
+// ListOrgIDs returns all org IDs stored in the database.
+func (s *Store) ListOrgIDs() ([]string, error) {
+	var ids []string
+	err := s.listByPrefix("org:", func(key, _ []byte) error {
+		// key format: "org:{id}"
+		k := string(key)
+		if len(k) > 4 {
+			ids = append(ids, k[4:]) // strip "org:" prefix
+		}
+		return nil
+	})
+	return ids, err
+}
+
+// --- JWT Token Revocation (blocklist) ---
+// Key schema: rev:{jti}   — value is empty, TTL = remaining token lifetime.
+// Auth middleware checks this list before accepting a JWT.
+
+// RevokeToken adds a token JTI to the blocklist with the given TTL.
+// TTL should equal the token's remaining lifetime so Badger GCs the entry automatically.
+func (s *Store) RevokeToken(jti string, ttl time.Duration) error {
+	if jti == "" || ttl <= 0 {
+		return nil
+	}
+	return s.set(fmt.Sprintf("rev:%s", jti), struct{}{}, ttl)
+}
+
+// IsTokenRevoked returns true if the JTI is in the blocklist.
+func (s *Store) IsTokenRevoked(jti string) bool {
+	var dummy struct{}
+	err := s.get(fmt.Sprintf("rev:%s", jti), &dummy)
+	return err == nil // key exists → revoked
+}
+
 // Healthy returns true if the database is responsive
 func (s *Store) Healthy() bool {
 	err := s.db.View(func(txn *badger.Txn) error {
@@ -408,17 +442,21 @@ func (s *Store) SaveLog(service string, entry interface{}, ts time.Time) error {
 func (s *Store) QueryLogs(service string, from, to time.Time, limit int) ([]json.RawMessage, error) {
 	var prefix, startKey, endKey string
 	if service == "" {
-		// Scan all services under the "l:" namespace
 		prefix = "l:"
-		startKey = tsKey("l::", from) // "l::" sorts before any "l:{service}:"
-		endKey = "l:~"               // "~" (0x7E) is the highest printable ASCII, terminates scan
+		startKey = tsKey("l::", from)
+		endKey = "l:~"
 	} else {
 		svc := sanitizeKeySegment(service)
 		prefix = fmt.Sprintf("l:%s:", svc)
 		startKey = tsKey(prefix, from)
 		endKey = tsKey(prefix, to)
 	}
+	return s.queryLogsRaw(prefix, startKey, endKey, service != "", from, to, limit)
+}
 
+// queryLogsRaw is the shared implementation used by both Store.QueryLogs and
+// OrgStore.QueryLogs. Callers supply fully-formed prefix/start/end keys.
+func (s *Store) queryLogsRaw(prefix, startKey, endKey string, filterTime bool, _, _ time.Time, limit int) ([]json.RawMessage, error) {
 	var results []json.RawMessage
 	err := s.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -432,7 +470,7 @@ func (s *Store) QueryLogs(service string, from, to time.Time, limit int) ([]json
 			if !strings.HasPrefix(key, prefix) {
 				break
 			}
-			if service != "" && (key < startKey || key >= endKey) {
+			if filterTime && (key < startKey || key >= endKey) {
 				if key >= endKey {
 					break
 				}

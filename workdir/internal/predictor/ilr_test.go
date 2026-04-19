@@ -241,6 +241,174 @@ func TestDynamicThresholdUpperBoundInsufficientData(t *testing.T) {
 	}
 }
 
+// --- Tests for prediction quality improvements ---
+
+// TestILRForgetsPastRegime verifies that the RLS forgetting factor allows the
+// model to adapt to a regime change rather than being stuck on old history.
+func TestILRForgetsPastRegime(t *testing.T) {
+	m := NewILR()
+
+	// Phase 1: stable flat series around y=50 for 100 points
+	for i := 0; i < 100; i++ {
+		m.Update(float64(i), 50.0)
+	}
+	// Intercept should be near 50, slope near 0
+	if math.Abs(m.Beta-50.0) > 5.0 {
+		t.Errorf("after flat phase Beta = %v; want ~50", m.Beta)
+	}
+
+	// Phase 2: step-change to rising series y = 100 + 3x for 60 points
+	for i := 0; i < 60; i++ {
+		x := float64(100 + i)
+		m.Update(x, 100.0+3.0*float64(i))
+	}
+	// With forgetting (λ=0.995), the model should have adapted towards the new slope
+	// Old Welford would still be dragged toward slope≈0; RLS should be > 1.0
+	if m.Alpha < 1.0 {
+		t.Errorf("after regime change Alpha = %v; RLS should have adapted (want > 1.0)", m.Alpha)
+	}
+}
+
+// TestHoltWintersDampingBound verifies that damped trend forecasts do not grow
+// without bound. Without damping, a series with a rising trend would produce
+// ever-larger predictions; with φ=0.98 they must converge.
+func TestHoltWintersDampingBound(t *testing.T) {
+	hw := newHoltWinters(10) // small period for fast warm-up
+
+	// Feed a rising series so the trend component becomes positive
+	for i := 0; i < 30; i++ {
+		hw.Update(float64(i) * 2.0)
+	}
+	if !hw.IsWarm() {
+		t.Skip("HW not warm — increase feed count")
+	}
+
+	short := hw.Forecast(5)
+	long := hw.Forecast(500)
+
+	// With damping the 500-step forecast must not exceed short + some bounded delta
+	// Specifically, the damped sum Σφ^i converges to φ/(1-φ) = 0.98/0.02 = 49
+	// so the extra trend contribution is at most 49 * trend, not 500 * trend.
+	if long > short*50 {
+		t.Errorf("undamped runaway: Forecast(500)=%v >> Forecast(5)=%v", long, short)
+	}
+}
+
+// TestHoltWintersSeasonalBootstrap verifies that after the first period the
+// seasonal components sum to ~0 (additive seasonality invariant), confirming
+// proper deviation-from-mean bootstrap instead of storing raw values.
+func TestHoltWintersSeasonalBootstrap(t *testing.T) {
+	period := 6
+	hw := newHoltWinters(period)
+
+	// Feed one full period of distinct values
+	vals := []float64{10, 20, 30, 20, 10, 15}
+	for _, v := range vals {
+		hw.Update(v)
+	}
+
+	// Seasonal components should sum to approximately 0
+	var sum float64
+	for _, s := range hw.seasonal {
+		sum += s
+	}
+	if math.Abs(sum) > 1.0 {
+		t.Errorf("seasonal components sum = %v; want ~0 (proper bootstrap)", sum)
+	}
+}
+
+// TestARIMAMultiStepResidualDecay confirms that multi-step forecasts use
+// zero future innovations (E[ε_{t+s}]=0 for s≥1) so the MA component
+// doesn't amplify phantom autocorrelation across steps.
+func TestARIMAMultiStepResidualDecay(t *testing.T) {
+	a := newARIMA()
+	// Feed a stationary series
+	for i := 0; i < 50; i++ {
+		a.Update(10.0 + math.Sin(float64(i)*0.3))
+	}
+	if !a.IsTrained() {
+		t.Skip("ARIMA not trained")
+	}
+	f1 := a.Forecast(1)
+	f5 := a.Forecast(5)
+	f20 := a.Forecast(20)
+
+	// For a near-zero-mean differenced series the forecasts should not diverge.
+	// With the fix (r0=0 for future steps), forecasts stay bounded; without it
+	// (r0=dy) the MA term amplifies the AR prediction and diverges.
+	const bound = 50.0
+	if math.Abs(f1) > bound || math.Abs(f5) > bound || math.Abs(f20) > bound {
+		t.Errorf("forecast diverges: f1=%v f5=%v f20=%v (bound %v)", f1, f5, f20, bound)
+	}
+}
+
+// TestEnsembleColdStartWeightsILR verifies that at cold start, before HW and
+// ARIMA MSE trackers are ready, the ensemble gives ILR full weight (1.0, 0, 0).
+func TestEnsembleColdStartWeightsILR(t *testing.T) {
+	e := newSeriesEnsemble()
+	// Feed only 2 points — ILR is warm (n≥3 not met yet so partial),
+	// but MSE trackers have 0 observations → ILR should dominate.
+	e.Update(0, 10)
+	e.Update(1, 12)
+
+	wILR, wHW, wAR := e.weights()
+	if wHW != 0 || wAR != 0 {
+		t.Errorf("cold start: wHW=%v wAR=%v should be 0", wHW, wAR)
+	}
+	if wILR <= 0 {
+		t.Errorf("cold start: wILR=%v should be > 0", wILR)
+	}
+}
+
+// TestMADStreamingMedian verifies that the dual-heap streaming median detector
+// returns the same anomaly decisions as the reference sort-based approach.
+func TestMADStreamingMedian(t *testing.T) {
+	det := newMADDetector(50, 3.0)
+
+	// Seed with normal values around 100
+	for i := 0; i < 50; i++ {
+		det.Update(100.0 + float64(i%5))
+	}
+
+	// Normal value — no anomaly
+	anom, _, _ := det.IsAnomaly(102.0)
+	if anom {
+		t.Error("102.0 should not be anomalous in series near 100")
+	}
+
+	// Extreme outlier — anomaly
+	anom, expected, score := det.IsAnomaly(500.0)
+	if !anom {
+		t.Errorf("500.0 should be anomalous (expected≈%v, score=%.2f)", expected, score)
+	}
+	if score < 3.0 {
+		t.Errorf("anomaly score %v should be ≥ 3.0 (threshold k)", score)
+	}
+}
+
+// TestRunningMedianAccuracy checks that the dual-heap streaming median matches
+// the exact sort-based median for a variety of inputs.
+func TestRunningMedianAccuracy(t *testing.T) {
+	cases := [][]float64{
+		{5, 3, 1, 4, 2},         // odd: median=3
+		{10, 20, 30, 40},        // even: median=25
+		{7, 7, 7, 7},            // all same: median=7
+		{1, 100, 2, 99, 3, 98}, // mixed: median=50.5
+	}
+	expected := []float64{3, 25, 7, 50.5}
+
+	for ci, vals := range cases {
+		var rm runningMedian
+		for _, v := range vals {
+			rm.push(v)
+		}
+		got := rm.median()
+		if math.Abs(got-expected[ci]) > 0.01 {
+			t.Errorf("case %d: median=%v want %v", ci, got, expected[ci])
+		}
+	}
+}
+
 func TestAnomalyDetector(t *testing.T) {
 	ad := NewAnomalyDetector(3.0)
 
