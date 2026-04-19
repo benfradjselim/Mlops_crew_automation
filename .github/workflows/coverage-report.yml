@@ -1,0 +1,87 @@
+name: Coverage Report
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "workdir/**/*.go"
+
+env:
+  GO_VERSION: "1.22"
+
+jobs:
+  coverage:
+    name: Coverage Table
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workdir
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: workdir/go.sum
+
+      - name: Run tests and collect coverage
+        run: |
+          go test -cover -timeout=180s ./... 2>&1 | tee /tmp/cover-raw.txt || true
+
+      - name: Build coverage table
+        id: table
+        run: |
+          python3 - <<'EOF'
+          import re, os
+
+          lines = open("/tmp/cover-raw.txt").readlines()
+          rows = []
+          for line in lines:
+              m = re.match(r'^ok\s+(\S+)\s+[\d.]+s\s+coverage:\s+([\d.]+)%', line)
+              if m:
+                  pkg = m.group(1).replace("github.com/benfradjselim/ohe/", "")
+                  pct = float(m.group(2))
+                  icon = "✅" if pct >= 60 else "❌"
+                  rows.append((pkg, pct, icon))
+
+          if not rows:
+              print("No coverage data found")
+              open(os.environ["GITHUB_STEP_SUMMARY"], "a").write("No coverage data.\n")
+              exit(0)
+
+          rows.sort(key=lambda r: r[1])
+          total_ok = all(r[1] >= 60 for r in rows)
+          gate_icon = "✅" if total_ok else "❌"
+
+          md = f"## {gate_icon} Coverage Report\n\n"
+          md += "| Package | Coverage | Gate |\n"
+          md += "|---------|----------|------|\n"
+          for pkg, pct, icon in rows:
+              md += f"| `{pkg}` | {pct:.1f}% | {icon} |\n"
+
+          avg = sum(r[1] for r in rows) / len(rows)
+          md += f"\n**Average:** {avg:.1f}% | **Gate:** ≥60% per package\n"
+
+          open(os.environ["GITHUB_STEP_SUMMARY"], "a").write(md)
+          print(md)
+          EOF
+
+      - name: Fail if any package below 60%
+        run: |
+          python3 - <<'EOF'
+          import re, sys
+          lines = open("/tmp/cover-raw.txt").readlines()
+          failed = []
+          for line in lines:
+              m = re.match(r'^ok\s+(\S+)\s+[\d.]+s\s+coverage:\s+([\d.]+)%', line)
+              if m and float(m.group(2)) < 60:
+                  failed.append(f"{m.group(1)}: {m.group(2)}%")
+          if failed:
+              print("FAIL — packages below 60%:")
+              for f in failed:
+                  print(f"  {f}")
+              sys.exit(1)
+          print("All packages ≥60% ✅")
+          EOF

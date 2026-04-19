@@ -1,0 +1,129 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: ["**"]
+    paths:
+      - "workdir/**/*.go"
+
+env:
+  GO_VERSION: "1.22"
+
+jobs:
+  pr-check:
+    name: Build · Vet · Test · Coverage diff
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: workdir
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: workdir/go.sum
+
+      - name: Build
+        id: build
+        run: |
+          go build ./... 2>&1 | tee /tmp/build.txt
+          echo "exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Vet
+        id: vet
+        run: |
+          go vet ./... 2>&1 | tee /tmp/vet.txt || echo "VET_FAILED=1" >> $GITHUB_ENV
+
+      - name: Test + coverage (PR branch)
+        id: test
+        run: |
+          go test -cover -timeout=180s ./... 2>&1 | tee /tmp/cover-pr.txt
+          echo "exit=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Detect changed packages
+        run: |
+          BASE=${{ github.event.pull_request.base.sha }}
+          git diff --name-only "$BASE" HEAD -- '*.go' | \
+            sed 's|workdir/||;s|/[^/]*\.go$||' | sort -u | \
+            grep -v "^$" > /tmp/changed-pkgs.txt || true
+          echo "Changed packages:"
+          cat /tmp/changed-pkgs.txt
+
+      - name: Build PR comment
+        run: |
+          python3 - <<'EOF'
+          import re, os, subprocess
+
+          build_out = open("/tmp/build.txt").read().strip()
+          vet_out = open("/tmp/vet.txt").read().strip()
+          cover_out = open("/tmp/cover-pr.txt").read()
+
+          build_ok = build_out == ""
+          vet_ok = vet_out == ""
+
+          # Parse coverage
+          rows = []
+          for line in cover_out.splitlines():
+              m = re.match(r'^ok\s+(\S+)\s+[\d.]+s\s+coverage:\s+([\d.]+)%', line)
+              if m:
+                  pkg = m.group(1).replace("github.com/benfradjselim/ohe/", "")
+                  pct = float(m.group(2))
+                  icon = "✅" if pct >= 60 else "❌"
+                  rows.append((pkg, pct, icon))
+
+          failed_tests = [l for l in cover_out.splitlines() if l.startswith("FAIL")]
+
+          md = "## PR Check Report\n\n"
+
+          # Build status
+          md += f"### {'✅' if build_ok else '❌'} Build\n"
+          if not build_ok:
+              md += f"```\n{build_out}\n```\n"
+
+          # Vet status
+          md += f"\n### {'✅' if vet_ok else '⚠️'} Vet\n"
+          if not vet_ok:
+              md += f"```\n{vet_out}\n```\n"
+
+          # Failed tests
+          if failed_tests:
+              md += "\n### ❌ Failed Packages\n"
+              for f in failed_tests:
+                  md += f"- `{f}`\n"
+
+          # Coverage table
+          md += "\n### Coverage\n\n"
+          if rows:
+              rows.sort(key=lambda r: r[1])
+              md += "| Package | Coverage | Gate |\n"
+              md += "|---------|----------|------|\n"
+              for pkg, pct, icon in rows:
+                  md += f"| `{pkg}` | {pct:.1f}% | {icon} |\n"
+              avg = sum(r[1] for r in rows) / len(rows)
+              md += f"\n**Average:** {avg:.1f}%\n"
+          else:
+              md += "_No coverage data._\n"
+
+          open("/tmp/pr-comment.md", "w").write(md)
+          print(md)
+          EOF
+
+      - name: Post PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: /tmp/pr-comment.md
+          header: pr-check
+
+      - name: Fail if build or tests failed
+        run: |
+          if grep -q "^FAIL" /tmp/cover-pr.txt; then
+            echo "Tests failed — see comment above"
+            exit 1
+          fi

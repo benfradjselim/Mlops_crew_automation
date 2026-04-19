@@ -1,0 +1,66 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "workdir/internal/predictor/**"
+      - "workdir/internal/analyzer/**"
+
+env:
+  GO_VERSION: "1.22"
+
+jobs:
+  bench:
+    name: Benchmark regression
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workdir
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need full history to compare base
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: workdir/go.sum
+
+      - name: Run benchmarks (HEAD)
+        run: |
+          go test -bench=. -benchmem -benchtime=3s -count=3 \
+            ./internal/predictor/... ./internal/analyzer/... \
+            2>&1 | tee /tmp/bench-head.txt
+          echo "### Benchmark Results (HEAD)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/bench-head.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Run benchmarks (base branch)
+        run: |
+          BASE=$(git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD~1)
+          git stash --include-untracked 2>/dev/null || true
+          git checkout "$BASE" -- internal/predictor internal/analyzer 2>/dev/null || true
+          go test -bench=. -benchmem -benchtime=3s -count=3 \
+            ./internal/predictor/... ./internal/analyzer/... \
+            2>&1 | tee /tmp/bench-base.txt || true
+          git checkout HEAD -- internal/predictor internal/analyzer 2>/dev/null || true
+          git stash pop 2>/dev/null || true
+
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@latest
+
+      - name: Compare
+        run: |
+          if [ -s /tmp/bench-base.txt ]; then
+            benchstat /tmp/bench-base.txt /tmp/bench-head.txt 2>&1 | tee /tmp/comparison.txt
+            echo "### Benchstat Comparison (base → HEAD)" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat /tmp/comparison.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No base benchmarks to compare against." >> $GITHUB_STEP_SUMMARY
+          fi
