@@ -7,7 +7,7 @@ COPY ui/ ./
 RUN npm run build          # outputs to ../web (vite.config.js: outDir: '../web')
 
 # ── Stage 2: build the Go binary ─────────────────────────────────────────────
-FROM golang:1.21-alpine AS go-builder
+FROM golang:1.25-alpine AS go-builder
 WORKDIR /app
 
 # Cache dependencies first

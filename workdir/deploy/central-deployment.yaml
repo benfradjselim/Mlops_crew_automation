@@ -8,7 +8,7 @@ metadata:
   labels:
     app.kubernetes.io/name: ohe
     app.kubernetes.io/component: central
-    app.kubernetes.io/version: "4.0.0"
+    app.kubernetes.io/version: "5.1.0"
 spec:
   replicas: 1          # Badger is single-writer; for HA use replicas: 1 + PVC RWO
   selector:
@@ -62,7 +62,7 @@ spec:
 
       containers:
         - name: ohe
-          image: ghcr.io/benfradjselim/ohe:4.0.0
+          image: ghcr.io/benfradjselim/ohe:5.1.0
           imagePullPolicy: IfNotPresent
           args:
             - central
