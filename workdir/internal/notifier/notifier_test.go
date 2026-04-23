@@ -96,12 +96,30 @@ func TestDispatchMultipleChannels(t *testing.T) {
 	}
 }
 
-func TestDispatchErrorDoesNotPanic(t *testing.T) {
+func TestDispatchHTTPError(t *testing.T) {
+	// Setup a server that returns 500
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
 	d := notifier.New()
 	d.SetChannels([]notifier.Channel{
-		{ID: "1", Name: "bad", Type: "webhook", URL: "http://127.0.0.1:1", Enabled: true},
+		{ID: "1", Name: "bad", Type: "webhook", URL: srv.URL, Enabled: true},
 	})
-	// Must not panic even with unreachable URL
+	
+	// Dispatch
+	d.Dispatch(makeAlert("test", "info"))
+	time.Sleep(200 * time.Millisecond)
+}
+
+func TestDispatchNetworkError(t *testing.T) {
+	d := notifier.New()
+	// Use an invalid URL to force Post to return an error
+	d.SetChannels([]notifier.Channel{
+		{ID: "1", Name: "invalid", Type: "webhook", URL: "http://invalid-url-that-does-not-exist", Enabled: true},
+	})
+	
 	d.Dispatch(makeAlert("test", "info"))
 	time.Sleep(200 * time.Millisecond)
 }

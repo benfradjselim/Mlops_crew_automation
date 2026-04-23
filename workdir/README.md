@@ -411,7 +411,7 @@ GET  /kpis/multi            KPI snapshot for multiple hosts
 - [ ] Change default admin password
 - [ ] Set `OHE_TRUSTED_DATASOURCE_HOSTS` to your Prometheus ClusterIP
 - [ ] Mount a PVC at `/var/lib/ohe/data` for persistent storage
-- [ ] Restrict `ohe-system` namespace with NetworkPolicy
+- [ ] Apply `deploy/network-policy.yaml` to restrict `ohe-system` namespace access
 - [ ] TLS termination at the Ingress — never expose port 8080 directly to the internet
 
 ---
