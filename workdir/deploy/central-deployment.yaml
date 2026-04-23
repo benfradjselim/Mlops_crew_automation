@@ -38,24 +38,17 @@ spec:
         - name: litestream-restore
           image: litestream/litestream:0.3.13
           args:
-            - sh
-            - -c
-            - |
-              if [ -z "$LITESTREAM_REPLICA_URL" ]; then
-                echo "No replica URL set — skipping restore"; exit 0
-              fi
-              if [ -d /var/lib/ohe/data ] && [ "$(ls -A /var/lib/ohe/data)" ]; then
-                echo "Data directory not empty — skipping restore"; exit 0
-              fi
-              echo "Restoring from $LITESTREAM_REPLICA_URL ..."
-              litestream restore -replica "$LITESTREAM_REPLICA_URL" /var/lib/ohe/data
+            - restore
+            - -replica
+            - $(LITESTREAM_REPLICA_URL)
+            - /var/lib/ohe/data
           env:
             - name: LITESTREAM_REPLICA_URL
               valueFrom:
                 secretKeyRef:
                   name: ohe-secrets
                   key: litestream-replica-url
-                  optional: true   # secret key absent = no replication
+                  optional: true
           volumeMounts:
             - name: data
               mountPath: /var/lib/ohe/data
@@ -117,13 +110,9 @@ spec:
         - name: litestream
           image: litestream/litestream:0.3.13
           args:
-            - sh
-            - -c
-            - |
-              if [ -z "$LITESTREAM_REPLICA_URL" ]; then
-                echo "No replica URL — sidecar exiting"; exit 0
-              fi
-              litestream replicate /var/lib/ohe/data "$LITESTREAM_REPLICA_URL"
+            - replicate
+            - /var/lib/ohe/data
+            - $(LITESTREAM_REPLICA_URL)
           env:
             - name: LITESTREAM_REPLICA_URL
               valueFrom:
