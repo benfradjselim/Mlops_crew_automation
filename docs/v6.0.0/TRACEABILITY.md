@@ -128,17 +128,17 @@ Matrix: WP Section <-> Package <-> Test File <-> Agent <-> Phase <-> Status
 
 | WP Section | Spec Item | Package | Test File | Agent | Phase | Status |
 |-----------|-----------|---------|-----------|-------|-------|--------|
-| §16.1 | GET /api/v2/rupture/{host} | `internal/api/handlers_rupture.go` | `api_test.go` | ECHO | 4 | PENDING |
-| §16.1 | GET /api/v2/ruptures | `internal/api/handlers_rupture.go` | `api_test.go` | ECHO | 4 | PENDING |
-| §16.1 | POST /api/v2/forecast | `internal/api/handlers_forecast.go` | `api_test.go` | ECHO | 4 | PENDING |
-| §16.1 | GET /api/v2/kpi/{name}/{host} | `internal/api/handlers_kpi.go` | `api_test.go` | ECHO | 4 | PENDING |
-| §16.1 | GET /api/v2/actions | `internal/api/handlers_actions.go` | `api_test.go` | ECHO | 4 | PENDING |
-| §16.1 | POST /api/v2/actions/emergency-stop | `internal/api/handlers_actions.go` | `api_test.go` | ECHO | 4 | PENDING |
-| §16.1 | POST /api/v2/suppressions | `internal/api/handlers_context.go` | `api_test.go` | ECHO | 4 | PENDING |
-| §16.1 | POST /api/v2/context | `internal/api/handlers_context.go` | `api_test.go` | ECHO | 4 | PENDING |
-| §16.1 | GET /api/v2/health | `internal/api/handlers_health.go` | `api_test.go` | ECHO | 4 | PENDING |
-| §16.1 | POST /api/v2/write | `internal/api/handlers_ingest.go` | `api_test.go` | ECHO | 4 | PENDING |
-| §16.1 | GET /timeline | `internal/api/handlers_health.go` | `api_test.go` | ECHO | 4 | PENDING |
+| §16.1 | GET /api/v2/rupture/{host} | `internal/api/handlers_extra.go` | `api_test.go` | ECHO | 4 | CI_GREEN |
+| §16.1 | GET /api/v2/ruptures | `internal/api/handlers_extra.go` | `api_test.go` | ECHO | 4 | CI_GREEN |
+| §16.1 | POST /api/v2/forecast | `internal/api/handlers_extra.go` | `api_test.go` | ECHO | 4 | CI_GREEN |
+| §16.1 | GET /api/v2/kpi/{name}/{host} | `internal/api/handlers_extra.go` | `api_test.go` | ECHO | 4 | CI_GREEN |
+| §16.1 | GET /api/v2/actions | `internal/api/handlers_extra.go` | `api_test.go` | ECHO | 4 | CI_GREEN |
+| §16.1 | POST /api/v2/actions/emergency-stop | `internal/api/handlers_extra.go` | `api_test.go` | ECHO | 4 | CI_GREEN |
+| §16.1 | POST /api/v2/suppressions | `internal/api/handlers_extra.go` | `api_test.go` | ECHO | 4 | CI_GREEN |
+| §16.1 | POST /api/v2/context | `internal/api/handlers_extra.go` | `api_test.go` | ECHO | 4 | CI_GREEN |
+| §16.1 | GET /api/v2/health | `internal/api/handlers_health.go` | `api_test.go` | ECHO | 4 | CI_GREEN |
+| §16.1 | POST /api/v2/write | `internal/api/handlers_ingest.go` | `api_test.go` | ECHO | 4 | CI_GREEN |
+| §16.1 | GET /timeline | `internal/api/handlers_health.go` | `api_test.go` | ECHO | 4 | CI_GREEN |
 
 ---
 
@@ -146,11 +146,11 @@ Matrix: WP Section <-> Package <-> Test File <-> Agent <-> Phase <-> Status
 
 | WP Section | Spec Item | Package | Test File | Agent | Phase | Status |
 |-----------|-----------|---------|-----------|-------|-------|--------|
-| §10.1 | Time-of-day: 24 buckets | `internal/context/timeofday.go` | `context_test.go` | ECHO | 4 | PENDING |
-| §10.1 | Day-of-week: weekday/weekend | `internal/context/dayofweek.go` | `context_test.go` | ECHO | 4 | PENDING |
-| §10.2 | Deployment: 60s pre + 300s post | `internal/context/deployment.go` | `context_test.go` | ECHO | 4 | PENDING |
-| §10.4 | Manual context CRUD + TTL | `internal/context/manual.go` | `context_test.go` | ECHO | 4 | PENDING |
-| §10.3 | Baseline lambda per context type | `internal/context/baseline.go` | `context_test.go` | ECHO | 4 | PENDING |
+| §10.1 | Time-of-day: 24 buckets | `internal/context/timeofday.go` | `context_test.go` | ECHO | 4 | CI_GREEN |
+| §10.1 | Day-of-week: weekday/weekend | `internal/context/dayofweek.go` | `context_test.go` | ECHO | 4 | CI_GREEN |
+| §10.2 | Deployment: 60s pre + 300s post | `internal/context/deployment.go` | `context_test.go` | ECHO | 4 | CI_GREEN |
+| §10.4 | Manual context CRUD + TTL | `internal/context/manual.go` | `context_test.go` | ECHO | 4 | CI_GREEN |
+| §10.3 | Baseline lambda per context type | `internal/context/baseline.go` | `context_test.go` | ECHO | 4 | CI_GREEN |
 
 ---
 
@@ -158,12 +158,12 @@ Matrix: WP Section <-> Package <-> Test File <-> Agent <-> Phase <-> Status
 
 | WP Section | Spec Item | Package | Test File | Agent | Phase | Status |
 |-----------|-----------|---------|-----------|-------|-------|--------|
-| §22 | kairo_rupture_index gauge | `internal/telemetry/metrics.go` | `telemetry_test.go` | ECHO | 4 | PENDING |
-| §22 | kairo_time_to_failure_seconds | `internal/telemetry/metrics.go` | `telemetry_test.go` | ECHO | 4 | PENDING |
-| §22 | kairo_actions_total counter | `internal/telemetry/metrics.go` | `telemetry_test.go` | ECHO | 4 | PENDING |
-| §22 | kairo_ingest_samples_total | `internal/telemetry/metrics.go` | `telemetry_test.go` | ECHO | 4 | PENDING |
-| §22 | kairo_version_info | `internal/telemetry/metrics.go` | `telemetry_test.go` | ECHO | 4 | PENDING |
-| §7.5 | Health schema: status/trackers/message | `internal/telemetry/health.go` | `telemetry_test.go` | ECHO | 4 | PENDING |
+| §22 | kairo_rupture_index gauge | `internal/telemetry/metrics.go` | `telemetry_test.go` | ECHO | 4 | CI_GREEN |
+| §22 | kairo_time_to_failure_seconds | `internal/telemetry/metrics.go` | `telemetry_test.go` | ECHO | 4 | CI_GREEN |
+| §22 | kairo_actions_total counter | `internal/telemetry/metrics.go` | `telemetry_test.go` | ECHO | 4 | CI_GREEN |
+| §22 | kairo_ingest_samples_total | `internal/telemetry/metrics.go` | `telemetry_test.go` | ECHO | 4 | CI_GREEN |
+| §22 | kairo_version_info | `internal/telemetry/metrics.go` | `telemetry_test.go` | ECHO | 4 | CI_GREEN |
+| §7.5 | Health schema: status/trackers/message | `internal/telemetry/health.go` | `telemetry_test.go` | ECHO | 4 | CI_GREEN |
 
 ---
 
@@ -179,4 +179,4 @@ Matrix: WP Section <-> Package <-> Test File <-> Agent <-> Phase <-> Status
 ---
 
 Produced: 2026-04-24
-Last updated: 2026-04-25 (Phase 3 — DELTA complete)
+Last updated: 2026-04-25 (Phase 4 — ECHO complete)
