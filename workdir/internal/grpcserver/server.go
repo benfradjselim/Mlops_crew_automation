@@ -1,8 +1,4 @@
 // Package grpcserver implements the OHE agent gRPC ingest service.
-//
-// Agents connect to the gRPC server and stream metric/log observations using
-// the ohe.v1.AgentService/Ingest unary RPC. The JSON codec is used so no
-// protoc-generated code is required.
 package grpcserver
 
 import (
@@ -13,7 +9,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 
 	pb "github.com/benfradjselim/kairo-core/internal/grpcserver/proto"
 	"github.com/benfradjselim/kairo-core/internal/storage"
@@ -22,7 +17,7 @@ import (
 
 // StorageBackend is the subset of *storage.Store used by the gRPC server.
 type StorageBackend interface {
-	ForOrg(orgID string) *storage.OrgStore
+	GetStore() *storage.Store
 }
 
 // Server is the OHE gRPC agent ingest server.
@@ -34,19 +29,15 @@ type Server struct {
 
 // Config holds options for the gRPC server.
 type Config struct {
-	// ListenAddr is the TCP address to bind, e.g. ":9090".
 	ListenAddr string
-	// TLSCert and TLSKey enable TLS. Both must be set or neither.
-	TLSCert string
-	TLSKey  string
-	// DefaultOrg is used when no org-id metadata is present.
+	TLSCert    string
+	TLSKey     string
 	DefaultOrg string
 }
 
 // New creates a gRPC server that stores ingested data via store.
 func New(store StorageBackend, cfg Config) (*Server, error) {
 	var opts []grpc.ServerOption
-
 	if cfg.TLSCert != "" && cfg.TLSKey != "" {
 		creds, err := credentials.NewServerTLSFromFile(cfg.TLSCert, cfg.TLSKey)
 		if err != nil {
@@ -62,7 +53,6 @@ func New(store StorageBackend, cfg Config) (*Server, error) {
 		log:   logger.New("grpc"),
 	}
 
-	// Register the AgentService manually (no generated RegisterXxx function)
 	gs.RegisterService(&grpc.ServiceDesc{
 		ServiceName: "ohe.v1.AgentService",
 		HandlerType: (*agentServiceServer)(nil),
@@ -79,12 +69,10 @@ func New(store StorageBackend, cfg Config) (*Server, error) {
 	return s, nil
 }
 
-// agentServiceServer is the interface gRPC uses to dispatch to our handler.
 type agentServiceServer interface {
 	Ingest(context.Context, *pb.IngestRequest) (*pb.IngestResponse, error)
 }
 
-// ingestHandler is the grpc.MethodDesc handler called by the gRPC framework.
 func ingestHandler(srv interface{}, ctx context.Context, dec func(interface{}) error, _ grpc.UnaryServerInterceptor) (interface{}, error) {
 	req := new(pb.IngestRequest)
 	if err := dec(req); err != nil {
@@ -95,9 +83,7 @@ func ingestHandler(srv interface{}, ctx context.Context, dec func(interface{}) e
 
 // Ingest implements agentServiceServer — the actual RPC handler.
 func (s *Server) Ingest(ctx context.Context, req *pb.IngestRequest) (*pb.IngestResponse, error) {
-	orgID := orgFromMeta(ctx, "default")
-	os := s.store.ForOrg(orgID)
-
+	os := s.store.GetStore()
 	resp := &pb.IngestResponse{}
 
 	for _, m := range req.Metrics {
@@ -163,20 +149,6 @@ func (s *Server) ServeListener(ctx context.Context, ln net.Listener) error {
 	}
 }
 
-// GracefulStop performs a graceful shutdown of the gRPC server.
 func (s *Server) GracefulStop() {
 	s.grpc.GracefulStop()
-}
-
-// orgFromMeta extracts org-id from gRPC metadata, falling back to def.
-func orgFromMeta(ctx context.Context, def string) string {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return def
-	}
-	vals := md.Get("org-id")
-	if len(vals) == 0 {
-		return def
-	}
-	return vals[0]
 }

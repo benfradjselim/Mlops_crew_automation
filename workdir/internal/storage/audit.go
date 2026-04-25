@@ -14,7 +14,6 @@ import (
 type AuditEntry struct {
 	ID        string    `json:"id"`
 	Timestamp time.Time `json:"timestamp"`
-	OrgID     string    `json:"org_id"`
 	Username  string    `json:"username"`
 	Action    string    `json:"action"`    // e.g. "create", "update", "delete", "login", "logout"
 	Resource  string    `json:"resource"`  // e.g. "dashboard", "datasource", "api_key", "user"
@@ -46,8 +45,8 @@ func (s *Store) AppendAuditEntry(entry AuditEntry) error {
 }
 
 // QueryAuditLog returns audit entries in [from, to], newest first, up to limit.
-// Filter by orgID or username (empty = all).
-func (s *Store) QueryAuditLog(orgID, username string, from, to time.Time, limit int) ([]AuditEntry, error) {
+// Filter by username (empty = all).
+func (s *Store) QueryAuditLog(username string, from, to time.Time, limit int) ([]AuditEntry, error) {
 	prefix := "audit:"
 	seekKey := fmt.Sprintf("audit:%020d", from.UnixNano())
 	endKey := fmt.Sprintf("audit:%020d", to.UnixNano())
@@ -68,9 +67,6 @@ func (s *Store) QueryAuditLog(orgID, username string, from, to time.Time, limit 
 			err := item.Value(func(val []byte) error {
 				var e AuditEntry
 				if err := json.Unmarshal(val, &e); err != nil {
-					return nil
-				}
-				if orgID != "" && e.OrgID != orgID {
 					return nil
 				}
 				if username != "" && e.Username != username {

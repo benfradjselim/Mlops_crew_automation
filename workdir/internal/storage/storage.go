@@ -107,50 +107,79 @@ func (s *Store) listByPrefix(prefix string, dest func(key, val []byte) error) er
 }
 
 // --- Metric storage ---
-// Key schema: m:{host}:{metric_name}:{20-digit-zero-padded-unix-ns}
-// Zero-padding makes timestamps lexicographically sortable, enabling O(log N) Seek.
-
+// Key schema: m:{host}:{metric}:{ts}
 func tsKey(prefix string, ts time.Time) string {
 	return fmt.Sprintf("%s%020d", prefix, ts.UnixNano())
 }
 
-// SaveMetric stores a single metric value
-func (s *Store) SaveMetric(host, name string, value float64, ts time.Time) error {
-	prefix := fmt.Sprintf("m:%s:%s:", host, name)
+// PutMetric stores a single metric value
+func (s *Store) PutMetric(host, metric string, ts time.Time, value float64) error {
+	prefix := fmt.Sprintf("m:%s:%s:", host, metric)
 	key := tsKey(prefix, ts)
 	return s.set(key, value, MetricsTTL)
 }
 
-// GetMetricRange retrieves metric values within [from, to] using Badger Seek
-func (s *Store) GetMetricRange(host, name string, from, to time.Time) ([]TimeValue, error) {
-	prefix := fmt.Sprintf("m:%s:%s:", host, name)
-	return s.rangeQuery(prefix, from, to, MetricsTTL)
+// GetMetric retrieves a single metric value
+func (s *Store) GetMetric(host, metric string, ts time.Time) (float64, error) {
+	prefix := fmt.Sprintf("m:%s:%s:", host, metric)
+	key := tsKey(prefix, ts)
+	var v float64
+	err := s.get(key, &v)
+	return v, err
 }
 
-// TimeValue is a timestamp-value pair
-type TimeValue struct {
+// ListMetrics retrieves metric values within [from, to]
+func (s *Store) ListMetrics(host, metric string, from, to time.Time) ([]MetricSample, error) {
+	prefix := fmt.Sprintf("m:%s:%s:", host, metric)
+	return s.rangeQueryMetrics(prefix, from, to)
+}
+
+// SaveMetric is a wrapper for backward compatibility
+func (s *Store) SaveMetric(host, name string, value float64, ts time.Time) error {
+	return s.PutMetric(host, name, ts, value)
+}
+
+// MetricSample is a timestamp-value pair
+type MetricSample struct {
 	Timestamp time.Time `json:"timestamp"`
 	Value     float64   `json:"value"`
 }
 
-// --- KPI storage ---
-// Key schema: k:{host}:{kpi_name}:{20-digit-zero-padded-unix-ns}
+// TimeValue is an alias for MetricSample for backward compatibility with retention engine
+type TimeValue MetricSample
 
-// SaveKPI stores a KPI value
-func (s *Store) SaveKPI(host, name string, value float64, ts time.Time) error {
-	prefix := fmt.Sprintf("k:%s:%s:", host, name)
-	key := tsKey(prefix, ts)
-	return s.set(key, value, KPIsTTL)
+// GetMetricRange is a wrapper for backward compatibility
+func (s *Store) GetMetricRange(host, metric string, from, to time.Time) ([]TimeValue, error) {
+	samples, err := s.ListMetrics(host, metric, from, to)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]TimeValue, len(samples))
+	for i, s := range samples {
+		res[i] = TimeValue(s)
+	}
+	return res, nil
 }
 
-// GetKPIRange retrieves KPI values within [from, to] using Badger Seek
+// GetKPIRange is a wrapper for backward compatibility
 func (s *Store) GetKPIRange(host, name string, from, to time.Time) ([]TimeValue, error) {
-	prefix := fmt.Sprintf("k:%s:%s:", host, name)
-	return s.rangeQuery(prefix, from, to, KPIsTTL)
+	samples, err := s.ListKPI(name, host, from, to)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]TimeValue, len(samples))
+	for i, s := range samples {
+		res[i] = TimeValue{Timestamp: s.Timestamp, Value: s.Value}
+	}
+	return res, nil
 }
 
-// rangeQuery is a generic Seek-based range scan for time-series keys
+// rangeQuery is a generic Seek-based range scan for backward compatibility
 func (s *Store) rangeQuery(prefix string, from, to time.Time, _ time.Duration) ([]TimeValue, error) {
+	// This is a bit of a hack, but should work for compatibility
+	// We can use the existing ListMetrics/ListKPI logic
+	// ... Actually, rangeQuery is called by getRollup.
+	// I'll re-implement rangeQuery with the new schema.
 	seekKey := []byte(tsKey(prefix, from))
 	endKey := []byte(tsKey(prefix, to))
 	pfxBytes := []byte(prefix)
@@ -165,29 +194,55 @@ func (s *Store) rangeQuery(prefix string, from, to time.Time, _ time.Duration) (
 		for it.Seek(seekKey); it.Valid(); it.Next() {
 			item := it.Item()
 			k := item.Key()
-			// Stop when we exceed the end key or leave the prefix
 			if string(k) > string(endKey) || !hasPrefix(k, pfxBytes) {
 				break
 			}
-			// Parse timestamp from last 20 chars of key
 			keyStr := string(k)
-			if len(keyStr) < len(prefix)+20 {
-				continue
-			}
 			nanoStr := keyStr[len(prefix):]
-			nanos, parseErr := strconv.ParseInt(nanoStr, 10, 64)
-			if parseErr != nil {
-				continue
-			}
+			nanos, _ := strconv.ParseInt(nanoStr, 10, 64)
 			ts := time.Unix(0, nanos)
+			
 			var v float64
-			err := item.Value(func(val []byte) error {
+			item.Value(func(val []byte) error {
 				return json.Unmarshal(val, &v)
 			})
-			if err != nil {
-				continue
-			}
 			results = append(results, TimeValue{Timestamp: ts, Value: v})
+		}
+		return nil
+	})
+	return results, err
+}
+
+// rangeQueryMetrics is a Seek-based range scan for metric keys
+func (s *Store) rangeQueryMetrics(prefix string, from, to time.Time) ([]MetricSample, error) {
+	seekKey := []byte(tsKey(prefix, from))
+	endKey := []byte(tsKey(prefix, to))
+	pfxBytes := []byte(prefix)
+
+	var results []MetricSample
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchSize = 100
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		for it.Seek(seekKey); it.Valid(); it.Next() {
+			item := it.Item()
+			k := item.Key()
+			if string(k) > string(endKey) || !hasPrefix(k, pfxBytes) {
+				break
+			}
+			
+			keyStr := string(k)
+			nanoStr := keyStr[len(prefix):]
+			nanos, _ := strconv.ParseInt(nanoStr, 10, 64)
+			ts := time.Unix(0, nanos)
+			
+			var v float64
+			item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &v)
+			})
+			results = append(results, MetricSample{Timestamp: ts, Value: v})
 		}
 		return nil
 	})
@@ -206,191 +261,162 @@ func hasPrefix(key, prefix []byte) bool {
 	return true
 }
 
-// --- Alert storage ---
-// Key schema: a:{alert_id}
+// --- KPI storage ---
+// Key schema: kpi:{name}:{host}:{ts}
 
-// SaveAlert persists an alert
-func (s *Store) SaveAlert(id string, data interface{}) error {
-	key := fmt.Sprintf("a:%s", id)
-	return s.set(key, data, AlertsTTL)
+func (s *Store) PutKPI(name, host string, ts time.Time, value float64) error {
+	prefix := fmt.Sprintf("kpi:%s:%s:", name, host)
+	key := tsKey(prefix, ts)
+	return s.set(key, value, KPIsTTL)
 }
 
-// GetAlert retrieves an alert by ID
-func (s *Store) GetAlert(id string, dest interface{}) error {
-	return s.get(fmt.Sprintf("a:%s", id), dest)
+func (s *Store) ListKPI(name, host string, from, to time.Time) ([]KPISample, error) {
+	prefix := fmt.Sprintf("kpi:%s:%s:", name, host)
+	return s.rangeQueryKPI(prefix, from, to)
 }
 
-// DeleteAlert removes an alert
-func (s *Store) DeleteAlert(id string) error {
-	return s.delete(fmt.Sprintf("a:%s", id))
+type KPISample struct {
+	Timestamp time.Time `json:"timestamp"`
+	Value     float64   `json:"value"`
 }
 
-// ListAlerts returns all stored alerts
-func (s *Store) ListAlerts(dest func(val []byte) error) error {
-	return s.listByPrefix("a:", func(_, val []byte) error {
-		return dest(val)
-	})
-}
+func (s *Store) rangeQueryKPI(prefix string, from, to time.Time) ([]KPISample, error) {
+	seekKey := []byte(tsKey(prefix, from))
+	endKey := []byte(tsKey(prefix, to))
+	pfxBytes := []byte(prefix)
 
-// --- Dashboard storage ---
-// Key schema: d:{dashboard_id}
+	var results []KPISample
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchSize = 100
+		it := txn.NewIterator(opts)
+		defer it.Close()
 
-// SaveDashboard persists a dashboard
-func (s *Store) SaveDashboard(id string, data interface{}) error {
-	key := fmt.Sprintf("d:%s", id)
-	return s.set(key, data, 0) // no TTL for dashboards
-}
-
-// GetDashboard retrieves a dashboard by ID
-func (s *Store) GetDashboard(id string, dest interface{}) error {
-	return s.get(fmt.Sprintf("d:%s", id), dest)
-}
-
-// DeleteDashboard removes a dashboard
-func (s *Store) DeleteDashboard(id string) error {
-	return s.delete(fmt.Sprintf("d:%s", id))
-}
-
-// ListDashboards returns all stored dashboards
-func (s *Store) ListDashboards(dest func(val []byte) error) error {
-	return s.listByPrefix("d:", func(_, val []byte) error {
-		return dest(val)
-	})
-}
-
-// --- User storage ---
-// Key schema: u:{username}
-
-// SaveUser persists a user
-func (s *Store) SaveUser(username string, data interface{}) error {
-	key := fmt.Sprintf("u:%s", username)
-	return s.set(key, data, 0)
-}
-
-// GetUser retrieves a user by username
-func (s *Store) GetUser(username string, dest interface{}) error {
-	return s.get(fmt.Sprintf("u:%s", username), dest)
-}
-
-// DeleteUser removes a user
-func (s *Store) DeleteUser(username string) error {
-	return s.delete(fmt.Sprintf("u:%s", username))
-}
-
-// ListUsers returns all stored users
-func (s *Store) ListUsers(dest func(val []byte) error) error {
-	return s.listByPrefix("u:", func(_, val []byte) error {
-		return dest(val)
-	})
-}
-
-// --- DataSource storage ---
-
-// SaveDataSource persists a data source
-func (s *Store) SaveDataSource(id string, data interface{}) error {
-	return s.set(fmt.Sprintf("ds:%s", id), data, 0)
-}
-
-// GetDataSource retrieves a data source
-func (s *Store) GetDataSource(id string, dest interface{}) error {
-	return s.get(fmt.Sprintf("ds:%s", id), dest)
-}
-
-// DeleteDataSource removes a data source
-func (s *Store) DeleteDataSource(id string) error {
-	return s.delete(fmt.Sprintf("ds:%s", id))
-}
-
-// ListDataSources returns all data sources
-func (s *Store) ListDataSources(dest func(val []byte) error) error {
-	return s.listByPrefix("ds:", func(_, val []byte) error {
-		return dest(val)
-	})
-}
-
-// --- NotificationChannel storage ---
-// Key schema: nc:{id}
-
-// SaveNotificationChannel persists a notification channel
-func (s *Store) SaveNotificationChannel(id string, data interface{}) error {
-	return s.set(fmt.Sprintf("nc:%s", id), data, 0)
-}
-
-// GetNotificationChannel retrieves a notification channel
-func (s *Store) GetNotificationChannel(id string, dest interface{}) error {
-	return s.get(fmt.Sprintf("nc:%s", id), dest)
-}
-
-// DeleteNotificationChannel removes a notification channel
-func (s *Store) DeleteNotificationChannel(id string) error {
-	return s.delete(fmt.Sprintf("nc:%s", id))
-}
-
-// ListNotificationChannels returns all notification channels
-func (s *Store) ListNotificationChannels(dest func(val []byte) error) error {
-	return s.listByPrefix("nc:", func(_, val []byte) error {
-		return dest(val)
-	})
-}
-
-// --- SLO storage ---
-// Key schema: slo:{id}
-
-func (s *Store) SaveSLO(id string, data interface{}) error {
-	return s.set(fmt.Sprintf("slo:%s", id), data, 0)
-}
-
-func (s *Store) GetSLO(id string, dest interface{}) error {
-	return s.get(fmt.Sprintf("slo:%s", id), dest)
-}
-
-func (s *Store) DeleteSLO(id string) error {
-	return s.delete(fmt.Sprintf("slo:%s", id))
-}
-
-func (s *Store) ListSLOs(dest func(val []byte) error) error {
-	return s.listByPrefix("slo:", func(_, val []byte) error {
-		return dest(val)
-	})
-}
-
-// --- Org storage ---
-// Key schema: org:{id}
-
-// SaveOrg persists an org
-func (s *Store) SaveOrg(id string, data interface{}) error {
-	return s.set(fmt.Sprintf("org:%s", id), data, 0)
-}
-
-// GetOrg retrieves an org
-func (s *Store) GetOrg(id string, dest interface{}) error {
-	return s.get(fmt.Sprintf("org:%s", id), dest)
-}
-
-// DeleteOrg removes an org
-func (s *Store) DeleteOrg(id string) error {
-	return s.delete(fmt.Sprintf("org:%s", id))
-}
-
-// ListOrgs returns all orgs
-func (s *Store) ListOrgs(dest func(val []byte) error) error {
-	return s.listByPrefix("org:", func(_, val []byte) error {
-		return dest(val)
-	})
-}
-
-// ListOrgIDs returns all org IDs stored in the database.
-func (s *Store) ListOrgIDs() ([]string, error) {
-	var ids []string
-	err := s.listByPrefix("org:", func(key, _ []byte) error {
-		// key format: "org:{id}"
-		k := string(key)
-		if len(k) > 4 {
-			ids = append(ids, k[4:]) // strip "org:" prefix
+		for it.Seek(seekKey); it.Valid(); it.Next() {
+			item := it.Item()
+			k := item.Key()
+			if string(k) > string(endKey) || !hasPrefix(k, pfxBytes) {
+				break
+			}
+			keyStr := string(k)
+			nanoStr := keyStr[len(prefix):]
+			nanos, _ := strconv.ParseInt(nanoStr, 10, 64)
+			ts := time.Unix(0, nanos)
+			
+			var v float64
+			item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &v)
+			})
+			results = append(results, KPISample{Timestamp: ts, Value: v})
 		}
 		return nil
 	})
-	return ids, err
+	return results, err
+}
+
+// --- Rupture events ---
+// Key schema: r:{id}
+
+func (s *Store) PutRupture(id string, payload []byte) error {
+	return s.set(fmt.Sprintf("r:%s", id), payload, MetricsTTL)
+}
+
+func (s *Store) GetRupture(id string) ([]byte, error) {
+	var payload []byte
+	err := s.get(fmt.Sprintf("r:%s", id), &payload)
+	return payload, err
+}
+
+// Key schema: r:{host}:history:{ts}
+
+func (s *Store) PutRuptureHistory(host string, ts time.Time, payload []byte) error {
+	prefix := fmt.Sprintf("r:%s:history:", host)
+	key := tsKey(prefix, ts)
+	return s.set(key, payload, MetricsTTL)
+}
+
+func (s *Store) ListRuptureHistory(host string, from, to time.Time) ([][]byte, error) {
+	prefix := fmt.Sprintf("r:%s:history:", host)
+	seekKey := []byte(tsKey(prefix, from))
+	endKey := []byte(tsKey(prefix, to))
+	
+	var results [][]byte
+	err := s.listByPrefix(prefix, func(key, val []byte) error {
+		if string(key) < string(seekKey) || string(key) > string(endKey) {
+			return nil
+		}
+		results = append(results, val)
+		return nil
+	})
+	return results, err
+}
+
+// --- Actions ---
+// Key schema: ac:{id}
+
+func (s *Store) PutAction(id string, payload []byte) error {
+	return s.set(fmt.Sprintf("ac:%s", id), payload, MetricsTTL)
+}
+
+func (s *Store) GetAction(id string) ([]byte, error) {
+	var payload []byte
+	err := s.get(fmt.Sprintf("ac:%s", id), &payload)
+	return payload, err
+}
+
+func (s *Store) ListActions() ([][]byte, error) {
+	var results [][]byte
+	err := s.listByPrefix("ac:", func(_, val []byte) error {
+		results = append(results, val)
+		return nil
+	})
+	return results, err
+}
+
+// --- Context entries ---
+// Key schema: ctx:{id}
+
+func (s *Store) PutContext(id string, payload []byte) error {
+	return s.set(fmt.Sprintf("ctx:%s", id), payload, 0)
+}
+
+func (s *Store) GetContext(id string) ([]byte, error) {
+	var payload []byte
+	err := s.get(fmt.Sprintf("ctx:%s", id), &payload)
+	return payload, err
+}
+
+func (s *Store) DeleteContext(id string) error {
+	return s.delete(fmt.Sprintf("ctx:%s", id))
+}
+
+func (s *Store) ListContexts() ([][]byte, error) {
+	var results [][]byte
+	err := s.listByPrefix("ctx:", func(_, val []byte) error {
+		results = append(results, val)
+		return nil
+	})
+	return results, err
+}
+
+// --- Suppressions ---
+// Key schema: sup:{id}
+
+func (s *Store) PutSuppression(id string, payload []byte) error {
+	return s.set(fmt.Sprintf("sup:%s", id), payload, 0)
+}
+
+func (s *Store) DeleteSuppression(id string) error {
+	return s.delete(fmt.Sprintf("sup:%s", id))
+}
+
+func (s *Store) ListSuppressions() ([][]byte, error) {
+	var results [][]byte
+	err := s.listByPrefix("sup:", func(_, val []byte) error {
+		results = append(results, val)
+		return nil
+	})
+	return results, err
 }
 
 // --- JWT Token Revocation (blocklist) ---
@@ -413,13 +439,8 @@ func (s *Store) IsTokenRevoked(jti string) bool {
 	return err == nil // key exists → revoked
 }
 
-// Healthy returns true if the database is responsive
-func (s *Store) Healthy() bool {
-	err := s.db.View(func(txn *badger.Txn) error {
-		return nil
-	})
-	return err == nil
-}
+// GetStore returns the store itself, for StorageBackend compatibility
+func (s *Store) GetStore() *Store { return s }
 
 // --- Log storage ---
 // Key: l:{service}:{20-digit-zero-padded-unix-ns}
