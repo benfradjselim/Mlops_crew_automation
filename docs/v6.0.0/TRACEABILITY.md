@@ -13,18 +13,18 @@ Matrix: WP Section <-> Package <-> Test File <-> Agent <-> Phase <-> Status
 
 | WP Section | Spec Item | Package | Test File | Agent | Phase | Status |
 |-----------|-----------|---------|-----------|-------|-------|--------|
-| §6.2 | ELS Stable Tracker (lambda=0.95) | `internal/pipeline/metrics/cailr.go` | `cailr_test.go` | ALPHA | 2a | PENDING |
-| §6.2 | ELS Burst Tracker (lambda=0.80) | `internal/pipeline/metrics/cailr.go` | `cailr_test.go` | ALPHA | 2a | PENDING |
-| §6.3 | Rupture Index formula | `pkg/rupture/rupture.go` | `rupture_test.go` | ALPHA | 2a | PENDING |
-| §6.4 | Rupture classification (5 tiers) | `pkg/rupture/rupture.go` | `rupture_test.go` | ALPHA | 2a | PENDING |
-| §5.3 | TTF formula + clamp to 3600s | `pkg/rupture/rupture.go` | `rupture_test.go` | ALPHA | 2a | PENDING |
-| §7.2 | ARIMA(1,1,1) | `internal/pipeline/metrics/arima.go` | `arima_test.go` | ALPHA | 2a | PENDING |
-| §7.2 | Holt-Winters damped phi=0.98 | `internal/pipeline/metrics/holtwinters.go` | `holtwinters_test.go` | ALPHA | 2a | PENDING |
-| §7.2 | MAD Anomaly Guard | `internal/pipeline/metrics/anomaly_mad.go` | `anomaly_mad_test.go` | ALPHA | 2a | PENDING |
-| §7.2 | Ensemble weights (CA-ILR=0.40) | `internal/pipeline/metrics/ensemble.go` | `ensemble_test.go` | ALPHA | 2a | PENDING |
-| §7.3 | Confidence C(t) = 1 - sigma2/mu | `internal/pipeline/metrics/ensemble.go` | `ensemble_test.go` | ALPHA | 2a | PENDING |
-| §7.4 | Forecast horizons: 5m/15m/60m | `internal/pipeline/metrics/ensemble.go` | `ensemble_test.go` | ALPHA | 2a | PENDING |
-| §5.5 | Surge profile classification | `internal/pipeline/metrics/surgeprofile.go` | `surgeprofile_test.go` | ALPHA | 2a | PENDING |
+| §6.2 | ELS Stable Tracker (lambda=0.95) | `internal/pipeline/metrics/cailr.go` | `cailr_test.go` | ALPHA | 2a | MERGED |
+| §6.2 | ELS Burst Tracker (lambda=0.80) | `internal/pipeline/metrics/cailr.go` | `cailr_test.go` | ALPHA | 2a | MERGED |
+| §6.3 | Rupture Index formula | `pkg/rupture/rupture.go` | `rupture_test.go` | ALPHA | 2a | MERGED |
+| §6.4 | Rupture classification (5 tiers) | `pkg/rupture/rupture.go` | `rupture_test.go` | ALPHA | 2a | MERGED |
+| §5.3 | TTF formula + clamp to 3600s | `pkg/rupture/rupture.go` | `rupture_test.go` | ALPHA | 2a | MERGED |
+| §7.2 | ARIMA(1,1,1) | `internal/pipeline/metrics/arima.go` | `arima_test.go` | ALPHA | 2a | MERGED |
+| §7.2 | Holt-Winters damped phi=0.98 | `internal/pipeline/metrics/holtwinters.go` | `holtwinters_test.go` | ALPHA | 2a | MERGED |
+| §7.2 | MAD Anomaly Guard | `internal/pipeline/metrics/anomaly_mad.go` | `anomaly_mad_test.go` | ALPHA | 2a | MERGED |
+| §7.2 | Ensemble weights (CA-ILR=0.40) | `internal/pipeline/metrics/ensemble.go` | `engine_test.go` | ALPHA | 2a | MERGED |
+| §7.3 | Confidence C(t) = 1 - sigma2/mu | `internal/pipeline/metrics/ensemble.go` | `engine_test.go` | ALPHA | 2a | MERGED |
+| §7.4 | Forecast horizons: 5m/15m/60m | `internal/pipeline/metrics/ensemble.go` | `engine_test.go` | ALPHA | 2a | MERGED |
+| §5.5 | Surge profile classification | `internal/pipeline/metrics/surgeprofile.go` | `engine_test.go` | ALPHA | 2a | MERGED |
 
 ---
 
@@ -119,8 +119,8 @@ Matrix: WP Section <-> Package <-> Test File <-> Agent <-> Phase <-> Status
 | §13.2 | Level 1: metric contribution | `internal/explain/trace.go` | `explain_test.go` | DELTA | 3 | CI_GREEN |
 | §13.2 | Level 2: temporal ordering (partial) | `internal/explain/trace.go` | `explain_test.go` | DELTA | 3 | CI_GREEN |
 | §13.4 | Formula audit: intermediate values | `internal/explain/formula.go` | `explain_test.go` | DELTA | 3 | CI_GREEN |
-| §16.1 | GET /api/v2/explain/{id} | `internal/api/handlers_explain.go` | `api_test.go` | ECHO | 4 | PENDING |
-| §16.1 | GET /api/v2/explain/{id}/formula | `internal/api/handlers_explain.go` | `api_test.go` | ECHO | 4 | PENDING |
+| §16.1 | GET /api/v2/explain/{id} | `internal/api/handlers_extra.go` | `api_test.go` | ECHO | 4 | CI_GREEN |
+| §16.1 | GET /api/v2/explain/{id}/formula | `internal/api/handlers_extra.go` | `api_test.go` | ECHO | 4 | CI_GREEN |
 
 ---
 
@@ -167,7 +167,16 @@ Matrix: WP Section <-> Package <-> Test File <-> Agent <-> Phase <-> Status
 
 ---
 
-## 12. Status Legend
+## 12. SDK
+
+| WP Section | Spec Item | Package | Test File | Agent | Phase | Status |
+|-----------|-----------|---------|-----------|-------|-------|--------|
+| §17 | Go SDK — typed v2 REST client | `workdir/pkg/client/client.go` | `client_test.go` | FOXTROT | 5 | MERGED |
+| §17 | Python SDK — KairoClient v2 | `sdk/python/kairo/client.py` | `tests/test_client.py` | FOXTROT | 5 | MERGED |
+
+---
+
+## 13. Status Legend
 
 | Status | Meaning |
 |--------|---------|
@@ -179,4 +188,4 @@ Matrix: WP Section <-> Package <-> Test File <-> Agent <-> Phase <-> Status
 ---
 
 Produced: 2026-04-24
-Last updated: 2026-04-25 (Phase 5 — FOXTROT complete; v6.0.0 tagged)
+Last updated: 2026-04-25 (ALPHA backfill MERGED; explain stubs CI_GREEN; Python SDK MERGED)
