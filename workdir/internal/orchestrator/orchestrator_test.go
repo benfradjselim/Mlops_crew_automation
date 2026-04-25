@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -58,7 +57,7 @@ func TestNewEngine_ValidConfig(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.StoragePath = t.TempDir()
 	cfg.Port = 0
-	cfg.DogStatsDAddr = "" // disable UDP listener
+	cfg.DogStatsDAddr = ""
 
 	eng, err := New(cfg)
 	if err != nil {
@@ -83,48 +82,27 @@ func TestNewEngine_AuthEnabledWithCustomSecret(t *testing.T) {
 	_ = eng.store.Close()
 }
 
-func TestSeedAdminIfEmpty_SeedsThenSkips(t *testing.T) {
-	dir := t.TempDir()
-
-	// Import storage inline via New to get a store
+func TestSeedAdminIfEmpty_IsNoOp(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.StoragePath = dir
-	cfg.DogStatsDAddr = ""
+	cfg.StoragePath = t.TempDir()
 	eng, err := New(cfg)
 	if err != nil {
 		t.Fatalf("setup: %v", err)
 	}
 	defer eng.store.Close()
 
-	// Seeding happened inside New(); verify admin user exists
-	count := 0
-	_ = eng.store.ListUsers(func([]byte) error {
-		count++
-		return nil
-	})
-	if count == 0 {
-		t.Fatal("expected admin user to be seeded on first boot")
+	// In v6 seedAdminIfEmpty is a no-op — call it twice and verify no error.
+	if err := seedAdminIfEmpty(eng.store); err != nil {
+		t.Fatalf("first call: %v", err)
 	}
-
-	// A second call to seedAdminIfEmpty should be a no-op (count > 0, no env var)
-	before := count
-	_ = seedAdminIfEmpty(eng.store)
-	after := 0
-	_ = eng.store.ListUsers(func([]byte) error {
-		after++
-		return nil
-	})
-	if after != before {
-		t.Errorf("seedAdminIfEmpty should be idempotent; before=%d after=%d", before, after)
+	if err := seedAdminIfEmpty(eng.store); err != nil {
+		t.Fatalf("second call: %v", err)
 	}
 }
 
-func TestSeedAdminIfEmpty_UsesEnvPassword(t *testing.T) {
-	t.Setenv("OHE_ADMIN_PASSWORD", "test-password-123")
-
-	dir := t.TempDir()
+func TestBuildMetricsMap_ReturnsMap(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.StoragePath = dir
+	cfg.StoragePath = t.TempDir()
 	cfg.DogStatsDAddr = ""
 	eng, err := New(cfg)
 	if err != nil {
@@ -132,10 +110,9 @@ func TestSeedAdminIfEmpty_UsesEnvPassword(t *testing.T) {
 	}
 	defer eng.store.Close()
 
-	count := 0
-	_ = eng.store.ListUsers(func([]byte) error { count++; return nil })
-	if count == 0 {
-		t.Fatal("expected seeded user even with env password")
+	m := eng.buildMetricsMap(cfg.Host)
+	if m == nil {
+		t.Fatal("buildMetricsMap returned nil")
 	}
 }
 
@@ -192,32 +169,14 @@ func TestPushBatch_ContextCancelled(t *testing.T) {
 
 	client := &http.Client{}
 	err := pushBatch(ctx, client, srv.URL, models.MetricBatch{})
-	close(done) // unblock handler so srv.Close() returns quickly
+	close(done)
 	srv.Close()
 	if err == nil {
 		t.Fatal("expected error from cancelled context")
 	}
 }
 
-func TestBuildMetricsMap_ReturnsMap(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.StoragePath = t.TempDir()
-	cfg.DogStatsDAddr = ""
-	eng, err := New(cfg)
-	if err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-	defer eng.store.Close()
-
-	m := eng.buildMetricsMap(cfg.Host)
-	if m == nil {
-		t.Fatal("buildMetricsMap returned nil")
-	}
-	// No data fed yet — map should be empty or populated but never nil
-}
-
 func TestEngineRun_AgentMode(t *testing.T) {
-	// Mock central server so collectAndPush has somewhere to POST
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -248,7 +207,7 @@ func TestEngineRun_TLSHalfConfig(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.StoragePath = t.TempDir()
 	cfg.DogStatsDAddr = ""
-	cfg.TLSCertFile = "/tmp/cert.pem" // only cert, no key
+	cfg.TLSCertFile = "/tmp/cert.pem"
 
 	eng, err := New(cfg)
 	if err != nil {
@@ -262,28 +221,5 @@ func TestEngineRun_TLSHalfConfig(t *testing.T) {
 	err = eng.Run(ctx)
 	if err == nil {
 		t.Fatal("expected error for half-TLS config (cert without key)")
-	}
-}
-
-func TestEngineRun_ShutdownClean(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("skipping engine run test in CI — requires port binding")
-	}
-	cfg := DefaultConfig()
-	cfg.StoragePath = t.TempDir()
-	cfg.Port = 18765
-	cfg.DogStatsDAddr = ""
-
-	eng, err := New(cfg)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-
-	// Run should return cleanly after ctx timeout
-	if err := eng.Run(ctx); err != nil {
-		t.Fatalf("Run returned error: %v", err)
 	}
 }

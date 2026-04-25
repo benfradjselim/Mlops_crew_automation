@@ -1,8 +1,5 @@
 package orchestrator
 
-// Coverage boost for collectLocally (was 15.8%), logAlerts, runGC, runCompaction.
-// All tests use Port=0 (OS-assigned) and short intervals so they are CI-safe.
-
 import (
 	"context"
 	"testing"
@@ -25,8 +22,7 @@ func engineForRun(t *testing.T, interval time.Duration) *Engine {
 }
 
 // TestCollectLocally_FiresTicks runs the central-mode engine long enough to
-// trigger several collection ticks. This exercises collectLocally, logAlerts,
-// runGC, runCompaction, and buildMetricsMap in one pass.
+// trigger several collection ticks and verifies it shuts down cleanly.
 func TestCollectLocally_FiresTicks(t *testing.T) {
 	eng := engineForRun(t, 30*time.Millisecond)
 
@@ -37,15 +33,11 @@ func TestCollectLocally_FiresTicks(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	// Verify that KPI data was stored by at least one tick
-	now := time.Now()
-	tvs, err := eng.store.ForOrg("default").GetKPIRange(
-		eng.cfg.Host, "stress", now.Add(-5*time.Second), now,
-	)
-	if err != nil {
-		t.Logf("GetKPIRange: %v (may be empty on fast CI)", err)
+	// buildMetricsMap is exercised internally; verify it returns a non-nil map.
+	m := eng.buildMetricsMap(eng.cfg.Host)
+	if m == nil {
+		t.Fatal("buildMetricsMap returned nil")
 	}
-	t.Logf("stress KPI points stored after run: %d", len(tvs))
 }
 
 // TestCollectLocally_GracefulShutdown verifies that Run() returns cleanly
