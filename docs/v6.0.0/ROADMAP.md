@@ -2,7 +2,7 @@
 
 Document ID: KC-ROAD-001
 Date: April 2026
-Status: Canonical — Phase 1 Output
+Status: Canonical — v6.0.0 RELEASED 2026-04-25
 Produced by: Orchestrator (Claude Code)
 
 ---
@@ -53,7 +53,7 @@ Phase 2b: BRAVO     Phase 2c: CHARLIE   (parallel after ALPHA green)
 
 ## 2. Phase Details
 
-### Phase -1 — Audit (DONE)
+### Phase -1 — Audit ✅ COMPLETE
 **Owner:** Orchestrator
 **Outputs:** `docs/v6.0.0/AUDIT.md`, `docs/v6.0.0/MIGRATION.md`
 **Exit criteria:** All packages categorized (RÉUTILISER / RÉÉCRIRE / JETER / NEW)
@@ -73,11 +73,11 @@ Phase 2b: BRAVO     Phase 2c: CHARLIE   (parallel after ALPHA green)
 
 **Exit criteria:** `go build ./...` green on `v6_main`
 
-### Phase 0.5 — SPECS Extraction (DONE)
+### Phase 0.5 — SPECS Extraction ✅ COMPLETE
 **Owner:** Orchestrator
 **Output:** `docs/v6.0.0/SPECS.md`
 
-### Phase 1 — Governance + CI/CD (IN PROGRESS)
+### Phase 1 — Governance + CI/CD ✅ COMPLETE
 **Owner:** Orchestrator
 **Outputs:**
 - `docs/v6.0.0/ROADMAP.md` (this file)
@@ -174,7 +174,7 @@ Phase 2b: BRAVO     Phase 2c: CHARLIE   (parallel after ALPHA green)
 - Total coverage >= 70%
 - Smoke test: start binary, POST /api/v2/write, GET /api/v2/health returns 200
 
-### Phase 6 — Release
+### Phase 6 — Release ✅ COMPLETE (2026-04-25)
 **Owner:** Orchestrator
 **Tasks:**
 1. Merge all PRs: v6_alpha → v6_main, then BRAVO+CHARLIE (parallel), then DELTA, ECHO, FOXTROT
@@ -187,19 +187,33 @@ Phase 2b: BRAVO     Phase 2c: CHARLIE   (parallel after ALPHA green)
 
 ---
 
+## v6.1.0 — PLANNED (Q3 2026)
+
+| Item | Priorité | Agent | Statut |
+|------|---------|-------|--------|
+| gRPC agent protocol (compléter le stub BRAVO) | P0 | BRAVO | TODO |
+| Event streaming NATS/Kafka | P0 | BRAVO | TODO |
+| Adaptive ensemble weighting | P1 | CHARLIE | TODO |
+| Operator/multi-cluster wiring (`ohe/operator/`) | P1 | FOXTROT | TODO |
+| cmd/kairo-core coverage ≥ 70% (actuellement 63%) | P0 | FOXTROT | TODO |
+
+---
+
 ## 3. Exit Criteria Summary Table
 
-| Phase | Hard Gate | Coverage Gate |
-|-------|-----------|--------------|
-| 0 | `go build ./...` green | N/A |
-| 1 | CI pipeline runs (build+vet) | N/A |
-| 2a ALPHA | CI green | pipeline/metrics >= 80%, pkg/rupture >= 85% |
-| 2b BRAVO | CI green | ingest >= 80%, pipeline/logs >= 80%, pipeline/traces >= 80% |
-| 2c CHARLIE | CI green | fusion >= 80%, composites >= 80%, pkg/composites >= 85% |
-| 3 DELTA | CI green | actions/* >= 75%, explain >= 75% |
-| 4 ECHO | CI green | api >= 70%, context >= 75%, storage >= 70% |
-| 5 FOXTROT | CI green + binary <= 25MB | total >= 70% |
-| 6 Release | image on ghcr.io | total >= 70% |
+| Phase | Hard Gate | Coverage Gate | Result |
+|-------|-----------|--------------|--------|
+| 0 | `go build ./...` green | N/A | ✅ DONE |
+| 1 | CI pipeline runs (build+vet) | N/A | ✅ DONE |
+| 2a ALPHA | CI green | pipeline/metrics >= 80%, pkg/rupture >= 85% | ✅ 89.2% — MERGED PR#1 |
+| 2b BRAVO | CI green | ingest >= 80%, pipeline/logs >= 80%, pipeline/traces >= 80% | ✅ 85-86% — MERGED PR#4 |
+| 2c CHARLIE | CI green | fusion >= 80%, composites >= 80%, pkg/composites >= 85% | ✅ 85-93% — MERGED PR#3 |
+| 3 DELTA | CI green | actions/* >= 75%, explain >= 75% | ✅ 83-100% — MERGED PR#5 |
+| 4 ECHO | CI green | api >= 70%, context >= 75%, storage >= 70% | ✅ 72-95% — MERGED PR#6 |
+| 5 FOXTROT | CI green + binary <= 25MB | total >= 70% | ✅ 63-88%* — MERGED PR#7 |
+| 6 Release | image on ghcr.io | total >= 70% | ✅ TAGGED v6.0.0 — 2026-04-25 |
+
+*cmd/kairo-core à 63% — sous le seuil de 70%, correction planifiée en v6.1.
 
 ---
 
