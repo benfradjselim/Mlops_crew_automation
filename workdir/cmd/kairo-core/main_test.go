@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -231,4 +232,64 @@ func TestRunWithContext_WithAPIKey(t *testing.T) {
 
 	cancel()
 	<-done
+}
+
+// TestRunWithContext_PortInUse covers the errCh path when ListenAndServe fails
+// immediately because the port is already bound.
+func TestRunWithContext_PortInUse(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	ctx := context.Background()
+	cfg := Config{
+		Port:        port,
+		StoragePath: t.TempDir(),
+	}
+	err = runWithContext(ctx, cfg)
+	if err == nil {
+		t.Fatal("expected error when port is already in use")
+	}
+}
+
+// TestRun_SIGTERM covers the run() wrapper by sending SIGTERM after the server starts.
+func TestRun_SIGTERM(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("find free port: %v", err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+
+	cfg := Config{
+		Port:        port,
+		StoragePath: t.TempDir(),
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- run(cfg) }()
+
+	// Wait for the server to bind then signal shutdown
+	addr := fmt.Sprintf("http://127.0.0.1:%d", port)
+	for i := 0; i < 30; i++ {
+		time.Sleep(20 * time.Millisecond)
+		resp, e := http.Get(addr + "/api/v2/health")
+		if e == nil {
+			resp.Body.Close()
+			break
+		}
+	}
+	syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("run() returned error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("run() did not return after SIGTERM")
+	}
 }
