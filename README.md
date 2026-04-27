@@ -1,119 +1,63 @@
-# MLOps Anomaly Detection
+# Kairo Core
 
-Real-time anomaly detection platform with microservices architecture on Kubernetes.
+**The Predictive Action Layer for Cloud-Native Infrastructure.**
 
-## Architecture
+Kairo Core detects infrastructure failures before they happen — using the Rupture Index™, an adaptive ensemble of 5 ML models, and an action engine that responds automatically with safety gates.
+
+→ **[Technical documentation & quickstart](workdir/README.md)**
+→ **[Whitepaper](docs/v6.0.0/whitepaper.md)**
+→ **[API Specification](docs/v6.0.0/SPECS.md)**
+
+---
+
+## Project Status
+
+| Version | Date | Status |
+|---------|------|--------|
+| v6.1.0 | 2026-04-27 | ✅ Released — gRPC, eventbus, adaptive ensemble, K8s operator |
+| v6.0.0 | 2026-04-25 | ✅ Released — full clean rewrite |
+| v5.1.0 (OHE) | 2026-04-19 | ✅ Released — SDKs, Vault, plugin system |
+
+**Active branch:** `v6.1` · **Module:** `github.com/benfradjselim/kairo-core`
+
+---
+
+## What's Inside
 
 ```
-Prometheus / K8s API
-        |
-   [COLLECTOR :8001]  -- scrapes metrics & logs every 15s
-        |
-   [PROCESSOR :8002]  -- normalizes + engineers features
-        |          \
-  [TRAINER :8003]  [DETECTOR :8004]  -- online learning / scoring
-                        |
-                   [EXPORTER :8005]  -- Prometheus metrics + REST API
-                        |
-                  [DASHBOARD :8501]  -- Streamlit real-time UI
+workdir/               Kairo Core Go source (v6.1.0)
+  cmd/kairo-core/      Main binary
+  internal/            Engine, pipelines, API, storage, actions
+  pkg/                 Public Go packages (rupture, composites, client)
+  ohe/operator/        Kubernetes operator (KairoInstance CRD)
+  sdk/                 (legacy — see sdk/ at root)
+
+sdk/
+  go/                  kairo-client-go (Go SDK)
+  python/              kairo-client (Python SDK)
+
+docs/
+  v6.0.0/             SPECS, AGENTS, ROADMAP, whitepaper, DEV-GUIDE
+  v6.1.0/             v6.1 delta specs (§23–§26)
+
+helm/                  Helm chart
+deploy/                Raw Kubernetes manifests
 ```
 
-All services share a SQLite database via a Kubernetes PersistentVolumeClaim.
+---
 
-## Services
+## Roadmap
 
-| Service    | Port | Description |
-|-----------|------|-------------|
-| Collector  | 8001 | Scrapes Prometheus + K8s pod logs |
-| Processor  | 8002 | Normalizes data, engineers features |
-| Trainer    | 8003 | River HalfSpaceTrees online learning |
-| Detector   | 8004 | Real-time anomaly scoring |
-| Exporter   | 8005 | Prometheus metrics + dashboard REST API |
-| Dashboard  | 8501 | Streamlit real-time visualization |
-
-## Quick Start
-
-### One-Click Installation
-
-```bash
-./scripts/install.sh
+```
+v6.1.0 ✅  gRPC ingest · NATS/Kafka eventbus · adaptive ensemble · K8s operator
+v6.2.0 ⏳  kairoctl CLI · web dashboard v2 · multi-tenant opt-in
+v6.3.0 ⏳  SaaS self-serve · billing · managed cloud deployment
 ```
 
-This will:
-1. Build Docker images for all 6 services
-2. Load images into your cluster (kind/minikube auto-detected)
-3. Install the Helm chart in namespace `mlops`
-4. Display service URLs
+Full roadmap: [docs/v6.0.0/ROADMAP.md](docs/v6.0.0/ROADMAP.md)
 
-### Prerequisites
+---
 
-- `kubectl` configured with cluster access
-- `helm` >= 3.0
-- `docker`
+## License
 
-### Custom configuration
-
-```bash
-IMAGE_REPO=my-registry/mlops IMAGE_TAG=v1.0 ./scripts/install.sh
-```
-
-Or edit `helm/values.yaml` before installing.
-
-## Development
-
-### Local setup
-
-```bash
-pip install -r requirements.txt
-```
-
-### Run tests
-
-```bash
-pytest tests/ -v --cov=src --cov-report=term-missing
-```
-
-### Run a service locally
-
-```bash
-DB_PATH=./data/mlops.db COLLECTOR_URL=http://localhost:8001 \
-  python services/collector/main.py
-```
-
-## Data Flow
-
-1. **Collector** scrapes Prometheus every `COLLECT_INTERVAL_SEC` (default 15s), writes to `raw_metrics` table, triggers Processor
-2. **Processor** normalizes metrics with online MinMax, fans out to Trainer + Detector in parallel
-3. **Trainer** calls `model.learn_one(x)` on River HalfSpaceTrees, serializes model to DB every 100 samples
-4. **Detector** loads latest model, calls `model.score_one(x)`, writes anomaly scores to `anomalies` table
-5. **Exporter** aggregates data from DB, exposes `/metrics` (Prometheus) and `/dashboard-data` (JSON)
-6. **Dashboard** polls Exporter every 5s, renders real-time charts
-
-## Key Design Decisions
-
-- **SQLite + WAL mode**: Zero-ops persistence, sufficient for ~100 writes/sec
-- **River HalfSpaceTrees**: Online learner, no labeled data required, sub-millisecond inference
-- **Push-based communication**: Upstream services POST to downstream on new data; reconciliation loop handles failures
-- **Table ownership**: Each table has one writer, avoiding SQLite write contention
-
-## Helm Configuration
-
-Key values in `helm/values.yaml`:
-
-```yaml
-config:
-  COLLECT_INTERVAL_SEC: "15"    # Scrape interval
-  ANOMALY_THRESHOLD: "0.7"      # Score threshold for anomaly flag
-  HST_N_TREES: "10"             # Number of HST trees
-  HST_WINDOW_SIZE: "250"        # Rolling window size
-
-pvc:
-  size: 5Gi                     # SQLite storage
-```
-
-## Uninstall
-
-```bash
-helm uninstall mlops-anomaly -n mlops
-kubectl delete namespace mlops
-```
+Apache 2.0

@@ -1,8 +1,8 @@
 # SPECS.md — Kairo Core v6.1.0 Technical Specifications
 
 Document ID: KC-SPECS-002
-Date: Q3 2026
-Status: DRAFT — Delta from v6.0.0 (additions only; base spec inherited)
+Date: 2026-04-27
+Status: RELEASED — All §23–§26 implemented and shipped in v6.1.0
 Produced by: Orchestrator (Claude Code)
 
 > Base spec: see docs/v6.0.0/SPECS.md — all v6.0.0 behaviour is preserved unless

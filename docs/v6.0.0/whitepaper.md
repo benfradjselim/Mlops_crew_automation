@@ -1,14 +1,20 @@
-Kairo Core v6.0.0
+Kairo Core
 
 The Predictive Action Layer for Cloud-Native Infrastructure
 
 Document ID: KC-WP-001
-Version: 6.0.0 (First Public Release)
+Version: 6.1.0
 Status: Canonical Specification — Single Source of Truth
-Date: April 2026
+Date: April 2026 (updated 2026-04-27 for v6.1.0)
 Author: Selim Benfradj, Founding Architect
 License: Apache 2.0
 Repository: github.com/benfradjselim/kairo-core
+
+Release history:
+  v6.0.0 — 2026-04-25 — Initial public release (ALPHA through FOXTROT phases)
+  v6.1.0 — 2026-04-27 — gRPC ingest (§23), NATS/Kafka eventbus (§24),
+                         adaptive ensemble weighting (§25), K8s operator (§26),
+                         Go SDK kairo-client-go
 
 Kairo — from the Greek kairos (καιρός): the critical, opportune moment. Not chronological time (chronos), but the instant when converging conditions demand decisive action. In dynamical systems theory, this corresponds to the inflection point where a system's trajectory departs irreversibly from its stable manifold.
 

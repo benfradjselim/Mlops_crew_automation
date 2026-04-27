@@ -187,5 +187,88 @@ Matrix: WP Section <-> Package <-> Test File <-> Agent <-> Phase <-> Status
 
 ---
 
+---
+
+## 14. v6.1 — GOLF §23 gRPC Ingest
+
+| Spec | Item | Package | Test File | Agent | Status |
+|------|------|---------|-----------|-------|--------|
+| §23 | Real gRPC server (google.golang.org/grpc) | `internal/ingest/grpc.go` | `grpc_test.go` | GOLF | MERGED PR#8 |
+| §23 | Max message size 4MB | `internal/ingest/grpc.go` | `grpc_test.go` | GOLF | MERGED PR#8 |
+| §23 | Back-pressure: RESOURCE_EXHAUSTED at 80% queue | `internal/ingest/grpc.go` | `grpc_test.go` | GOLF | MERGED PR#8 |
+| §23 | TLS: optional, shared with HTTP listener | `internal/ingest/grpc.go` | `grpc_test.go` | GOLF | MERGED PR#8 |
+| §23 | Proto: PushMetrics stream + PushResult | `api/proto/kairo/v1/ingest.proto` | — | GOLF | MERGED PR#8 |
+
+Coverage: `internal/ingest` 83.2%
+
+---
+
+## 15. v6.1 — HOTEL §24 Event Streaming
+
+| Spec | Item | Package | Test File | Agent | Status |
+|------|------|---------|-----------|-------|--------|
+| §24 | Driver interface (nats/kafka/none) | `internal/eventbus/eventbus.go` | `eventbus_test.go` | HOTEL | MERGED PR#9 |
+| §24 | NATS driver — JetStream at-least-once | `internal/eventbus/nats.go` | `nats_test.go` | HOTEL | MERGED PR#9 |
+| §24 | Kafka driver — franz-go exactly-once | `internal/eventbus/kafka.go` | `kafka_test.go` | HOTEL | MERGED PR#9 |
+| §24 | Publish on rupture state change: kairo.rupture.{host} | `internal/eventbus/eventbus.go` | `eventbus_test.go` | HOTEL | MERGED PR#9 |
+| §24 | Publish on Tier-1 action: kairo.actions.tier1 | `internal/eventbus/eventbus.go` | `eventbus_test.go` | HOTEL | MERGED PR#9 |
+| §24 | Config: eventbus.driver in kairo.yaml | `cmd/kairo-core/main.go` | — | HOTEL | MERGED PR#9 |
+
+Coverage: `internal/eventbus` 88.0%
+
+---
+
+## 16. v6.1 — INDIA §25 Adaptive Ensemble Weighting
+
+| Spec | Item | Package | Test File | Agent | Status |
+|------|------|---------|-----------|-------|--------|
+| §25 | Per-model MAE tracking (360×10s = 1h window) | `internal/pipeline/metrics/ensemble.go` | `ensemble_test.go` | INDIA | MERGED PR#10 |
+| §25 | Weight update every 60s: w_i = (1/MAE_i) / Σ(1/MAE_j) | `internal/pipeline/metrics/ensemble.go` | `ensemble_test.go` | INDIA | MERGED PR#10 |
+| §25 | Weight floor ≥ 0.05 (prevent collapse) | `internal/pipeline/metrics/ensemble.go` | `ensemble_test.go` | INDIA | MERGED PR#10 |
+| §25 | Config: ensemble.adaptive: true/false | `cmd/kairo-core/main.go` | — | INDIA | MERGED PR#10 |
+| §25 | EnsembleMode config flag wired through orchestrator | `cmd/kairo-core/main.go` | — | INDIA | MERGED PR#10 |
+
+Coverage: `internal/pipeline/metrics` 89.2%
+
+---
+
+## 17. v6.1 — JULIET §26 Kubernetes Operator
+
+| Spec | Item | Package | Test File | Agent | Status |
+|------|------|---------|-----------|-------|--------|
+| §26 | KairoInstance CRD (spec: image/port/storageSize/apiKey) | `ohe/operator/api/v1alpha1/` | `types_test.go` | JULIET | MERGED PR#11 |
+| §26 | Controller reconcile loop | `ohe/operator/controllers/kairoinstance_controller.go` | `controller_test.go` | JULIET | MERGED PR#11 |
+| §26 | Reconcile: create Deployment per KairoInstance | `ohe/operator/controllers/` | `controller_test.go` | JULIET | MERGED PR#11 |
+| §26 | Reconcile: create Service per KairoInstance | `ohe/operator/controllers/` | `controller_test.go` | JULIET | MERGED PR#11 |
+| §26 | Reconcile: create PVC per KairoInstance | `ohe/operator/controllers/` | `controller_test.go` | JULIET | MERGED PR#11 |
+| §26 | controller-runtime framework | `ohe/operator/` | — | JULIET | MERGED PR#11 |
+
+Coverage: `ohe/operator` 85.1%
+
+---
+
+## 18. Go SDK kairo-client-go
+
+| Item | Package | Test File | Status |
+|------|---------|-----------|--------|
+| Full v2 REST client (rupture, KPIs, actions, context, health) | `sdk/go/client.go` | `client_test.go` | MERGED |
+| Ingest (remote_write wrapper) | `sdk/go/ingest.go` | `client_test.go` | MERGED |
+| Auth (JWT + API key) | `sdk/go/auth.go` | `client_test.go` | MERGED |
+| KPI methods (stress, fatigue, healthscore, …) | `sdk/go/kpis.go` | `client_test.go` | MERGED |
+| Alerts, dashboards, org management | `sdk/go/alerts.go` | `client_test.go` | MERGED |
+
+---
+
+## 19. Status Legend (updated)
+
+| Status | Meaning |
+|--------|---------|
+| PENDING | Not yet implemented |
+| IN_PROGRESS | Agent branch open, work in progress |
+| CI_GREEN | Tests pass, coverage gate met on agent branch |
+| MERGED | PR merged, shipped in release |
+
+---
+
 Produced: 2026-04-24
-Last updated: 2026-04-25 (ALPHA backfill MERGED; explain stubs CI_GREEN; Python SDK MERGED)
+Last updated: 2026-04-27 — v6.1.0 released (GOLF PR#8, HOTEL PR#9, INDIA PR#10, JULIET PR#11, Go SDK)

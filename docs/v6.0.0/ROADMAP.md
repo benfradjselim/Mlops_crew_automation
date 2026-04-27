@@ -1,8 +1,8 @@
-# ROADMAP.md — Kairo Core v6.0.0 Development Phases
+# ROADMAP.md — Kairo Core Development Phases
 
 Document ID: KC-ROAD-001
 Date: April 2026
-Status: Canonical — v6.0.0 RELEASED 2026-04-25
+Status: Living document — v6.1.0 RELEASED 2026-04-27
 Produced by: Orchestrator (Claude Code)
 
 ---
@@ -187,15 +187,47 @@ Phase 2b: BRAVO     Phase 2c: CHARLIE   (parallel after ALPHA green)
 
 ---
 
-## v6.1.0 — PLANNED (Q3 2026)
+## v6.1.0 ✅ RELEASED 2026-04-27
 
-| Item | Priorité | Agent | Statut |
-|------|---------|-------|--------|
-| gRPC agent protocol (compléter le stub BRAVO) | P0 | BRAVO | TODO |
-| Event streaming NATS/Kafka | P0 | BRAVO | TODO |
-| Adaptive ensemble weighting | P1 | CHARLIE | TODO |
-| Operator/multi-cluster wiring (`ohe/operator/`) | P1 | FOXTROT | TODO |
-| cmd/kairo-core coverage ≥ 70% (actuellement 63%) | P0 | FOXTROT | ✅ DONE — 72.2% (v6_main cd2f52d) |
+| Item | Spec | Agent | Branch | PR | Coverage |
+|------|------|-------|--------|----|---------|
+| Real gRPC ingest server | §23 | GOLF | v6.1_golf | #8 | 83.2% |
+| NATS/Kafka eventbus (JetStream + franz-go) | §24 | HOTEL | v6.1_hotel | #9 | 88.0% |
+| Adaptive ensemble weighting (online MAE) | §25 | INDIA | v6.1_india | #10 | 89.2% |
+| Kubernetes operator (KairoInstance CRD) | §26 | JULIET | v6.1_juliet | #11 | 85.1% |
+| Go SDK kairo-client-go (full v2 coverage) | — | Orchestrator | v6.1 | direct | — |
+
+---
+
+## v6.2.0 — PLANNED (Q2 2026)
+
+Theme: **Operability + SaaS foundations**
+
+| Item | Spec | Agent | Priority |
+|------|------|-------|---------|
+| `kairoctl` CLI (Go binary, full v2 API) | §27 | PAPA | P0 |
+| Multi-tenant opt-in flag (`--multi-tenant`) | §28 | QUEBEC | P0 |
+| Web dashboard v2 (eventbus, adaptive weights, operator status) | §29 | ROMEO | P1 |
+| Helm chart v2 (operator CRD + eventbus config) | §30 | SIERRA | P1 |
+| Alerting templates (Alertmanager, PagerDuty pre-built rules) | §30 | SIERRA | P1 |
+| Python SDK v6.1 (eventbus, adaptive, operator methods) | — | LIMA | P0 |
+| Go SDK v6.1 (eventbus, adaptive, operator methods) | — | KILO | P0 |
+
+---
+
+## v6.3.0 — PLANNED (Q3 2026)
+
+Theme: **Commercial SaaS + CNCF**
+
+| Item | Priority |
+|------|---------|
+| Self-serve onboarding (sign-up → org → API key) | P0 |
+| Billing integration (Stripe, metering hooks already exist) | P0 |
+| Managed cloud deployment (Fly.io / Railway free tier) | P0 |
+| Marketing + documentation site | P1 |
+| GOVERNANCE.md, MAINTAINERS.md, CODE_OF_CONDUCT.md, SECURITY.md | P0 |
+| Multi-arch Docker builds (amd64 + arm64) | P1 |
+| CNCF Sandbox application | P1 |
 
 ---
 
@@ -235,3 +267,4 @@ ALPHA → (BRAVO || CHARLIE) → DELTA → ECHO → FOXTROT → tag v6.0.0
 ---
 
 Produced: 2026-04-24
+Last updated: 2026-04-27 — v6.1.0 released; v6.2 and v6.3 planned
