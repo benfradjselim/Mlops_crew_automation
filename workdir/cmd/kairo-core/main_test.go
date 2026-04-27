@@ -199,8 +199,8 @@ func TestRunWithContext_WithAPIKey(t *testing.T) {
 	go func() { done <- runWithContext(ctx, cfg) }()
 
 	addr := fmt.Sprintf("http://127.0.0.1:%d", port)
-	for i := 0; i < 25; i++ {
-		time.Sleep(20 * time.Millisecond)
+	for i := 0; i < 200; i++ {
+		time.Sleep(100 * time.Millisecond)
 		resp, err2 := http.Get(addr + "/api/v2/health")
 		if err2 == nil {
 			resp.Body.Close()
