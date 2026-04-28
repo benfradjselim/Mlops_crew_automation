@@ -1,3 +1,3 @@
-module github.com/benfradjselim/ohe-sdk-go
+module github.com/benfradjselim/kairo-core/sdk/go
 
 go 1.22

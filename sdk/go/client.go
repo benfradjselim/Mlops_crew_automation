@@ -1,14 +1,14 @@
-// Package ohe provides a typed Go client for the OHE Observability Holistic Engine API.
+// Package kairo provides a typed Go client for the Kairo Core API.
 //
 // Quick start:
 //
-//	c := ohe.New("https://ohe.example.com", ohe.WithAPIKey("ohe_abc123"))
+//	c := kairo.New("https://kairo.example.com", kairo.WithAPIKey("kairo_abc123"))
 //	health, err := c.Health(ctx)
 //
 // Authentication: use WithToken for JWT bearer auth, or WithAPIKey for
 // long-lived programmatic access keys. Calling Login updates the client token
 // automatically.
-package ohe
+package kairo
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-// Client is a thread-safe OHE API client.
+// Client is a thread-safe Kairo Core API client.
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
@@ -39,7 +39,7 @@ func WithToken(token string) Option {
 	return func(c *Client) { c.token = token }
 }
 
-// WithAPIKey sets a long-lived API key (ohe_* format) for all requests.
+// WithAPIKey sets a long-lived API key (kairo_* format) for all requests.
 func WithAPIKey(key string) Option {
 	return func(c *Client) { c.apiKey = key }
 }
@@ -59,7 +59,7 @@ func WithTimeout(d time.Duration) Option {
 	return func(c *Client) { c.httpClient.Timeout = d }
 }
 
-// New creates an OHE client for baseURL (e.g. "https://ohe.example.com").
+// New creates a Kairo client for baseURL (e.g. "https://kairo.example.com").
 func New(baseURL string, opts ...Option) *Client {
 	c := &Client{
 		baseURL:    strings.TrimRight(baseURL, "/"),
@@ -74,7 +74,7 @@ func New(baseURL string, opts ...Option) *Client {
 // SetToken updates the bearer token (e.g. after Login or Refresh).
 func (c *Client) SetToken(token string) { c.token = token }
 
-// Error is returned when the OHE API responds with a non-2xx status.
+// Error is returned when the Kairo API responds with a non-2xx status.
 type Error struct {
 	StatusCode int
 	Code       string
@@ -83,9 +83,9 @@ type Error struct {
 
 func (e *Error) Error() string {
 	if e.Code != "" {
-		return fmt.Sprintf("ohe %d %s: %s", e.StatusCode, e.Code, e.Message)
+		return fmt.Sprintf("kairo %d %s: %s", e.StatusCode, e.Code, e.Message)
 	}
-	return fmt.Sprintf("ohe HTTP %d", e.StatusCode)
+	return fmt.Sprintf("kairo HTTP %d", e.StatusCode)
 }
 
 // do executes method on path, optionally sending body as JSON, and decodes the
@@ -95,14 +95,14 @@ func (c *Client) do(ctx context.Context, method, path string, body, dest interfa
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
-			return fmt.Errorf("ohe: marshal: %w", err)
+			return fmt.Errorf("kairo: marshal: %w", err)
 		}
 		bodyReader = bytes.NewReader(b)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bodyReader)
 	if err != nil {
-		return fmt.Errorf("ohe: build request: %w", err)
+		return fmt.Errorf("kairo: build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
@@ -117,7 +117,7 @@ func (c *Client) do(ctx context.Context, method, path string, body, dest interfa
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("ohe: http: %w", err)
+		return fmt.Errorf("kairo: http: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -144,7 +144,7 @@ func (c *Client) do(ctx context.Context, method, path string, body, dest interfa
 		Data json.RawMessage `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
-		return fmt.Errorf("ohe: decode: %w", err)
+		return fmt.Errorf("kairo: decode: %w", err)
 	}
 	if len(wrapper.Data) == 0 {
 		return nil

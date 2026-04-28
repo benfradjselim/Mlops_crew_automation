@@ -10,31 +10,31 @@ go get github.com/benfradjselim/kairo-core/sdk/go@v6.1.1
 
 ## Import
 
-The package name is `ohe`:
+The package name is `kairo`:
 
 ```go
-import ohe "github.com/benfradjselim/kairo-core/sdk/go"
+import kairo "github.com/benfradjselim/kairo-core/sdk/go"
 ```
 
 ## Create a client
 
 ```go
 // API key auth (recommended for services)
-c := ohe.New("http://kairo-core:8080", ohe.WithAPIKey("ohe_abc123"))
+c := kairo.New("http://kairo-core:8080", kairo.WithAPIKey("kairo_abc123"))
 
 // JWT auth (for interactive / user sessions)
-c := ohe.New("http://kairo-core:8080", ohe.WithToken("eyJ..."))
+c := kairo.New("http://kairo-core:8080", kairo.WithToken("eyJ..."))
 
 // Custom timeout
-c := ohe.New("http://kairo-core:8080",
-    ohe.WithAPIKey("ohe_abc123"),
-    ohe.WithTimeout(10*time.Second),
+c := kairo.New("http://kairo-core:8080",
+    kairo.WithAPIKey("kairo_abc123"),
+    kairo.WithTimeout(10*time.Second),
 )
 
 // Multi-tenant
-c := ohe.New("http://kairo-core:8080",
-    ohe.WithAPIKey("ohe_abc123"),
-    ohe.WithOrgID("org_xyz"),
+c := kairo.New("http://kairo-core:8080",
+    kairo.WithAPIKey("kairo_abc123"),
+    kairo.WithOrgID("org_xyz"),
 )
 ```
 
@@ -84,7 +84,7 @@ for model, w := range weights.Weights {
 ## Ingest metrics
 
 ```go
-err := c.IngestMetrics(ctx, []ohe.Metric{
+err := c.IngestMetrics(ctx, []kairo.Metric{
     {Name: "cpu_usage", Value: 0.72, Host: "web-01", Timestamp: time.Now()},
     {Name: "mem_usage", Value: 0.45, Host: "web-01", Timestamp: time.Now()},
 })
@@ -105,12 +105,12 @@ err = c.EmergencyStop(ctx)
 
 ## Error handling
 
-The SDK returns `*ohe.Error` for non-2xx responses:
+The SDK returns `*kairo.Error` for non-2xx responses:
 
 ```go
 rupture, err := c.RuptureIndex(ctx, "unknown-host")
 if err != nil {
-    var apiErr *ohe.Error
+    var apiErr *kairo.Error
     if errors.As(err, &apiErr) {
         fmt.Printf("HTTP %d: %s\n", apiErr.StatusCode, apiErr.Message)
     }
@@ -121,7 +121,7 @@ if err != nil {
 
 | Option | Description |
 |--------|-------------|
-| `WithAPIKey(key string)` | Set API key (`ohe_*` format) |
+| `WithAPIKey(key string)` | Set API key (`kairo_*` format) |
 | `WithToken(token string)` | Set JWT bearer token |
 | `WithOrgID(id string)` | Set `X-Org-ID` header for multi-tenancy |
 | `WithTimeout(d time.Duration)` | HTTP request timeout (default 30s) |
