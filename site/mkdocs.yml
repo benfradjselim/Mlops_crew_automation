@@ -1,7 +1,7 @@
 site_name: Ruptura
 site_description: "Predictive failure detection engine for cloud-native infrastructure"
-site_url: https://benfradjselim.github.io/Mlops_crew_automation/
-repo_url: https://github.com/benfradjselim/Mlops_crew_automation
+site_url: https://benfradjselim.github.io/ruptura/
+repo_url: https://github.com/benfradjselim/ruptura
 copyright: "© 2026 Selim Benfradj — Apache 2.0"
 
 theme:

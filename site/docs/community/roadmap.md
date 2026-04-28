@@ -78,4 +78,4 @@ Go + Python SDK, Prometheus remote_write, gRPC agent, Vault integration, plugin 
 
 CA-ILR dual-scale predictor, dissipative fatigue (λ recovery), METRICS.md XAI standard, BadgerDB tiered storage.
 
-[Full OHE v5 changelog in docs/v5.0.0/](https://github.com/benfradjselim/Mlops_crew_automation/tree/v6.1/workdir/docs/v5.0.0)
+[Full OHE v5 changelog in docs/v5.0.0/](https://github.com/benfradjselim/ruptura/tree/v6.1/workdir/docs/v5.0.0)
