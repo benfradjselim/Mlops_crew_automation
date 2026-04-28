@@ -83,7 +83,7 @@ func newOTLPReceiver() (*OTLPReceiver, *mockMetricSink, *mockSpanSink, *mockLogS
 	ms := &mockMetricSink{}
 	ss := &mockSpanSink{}
 	ls := &mockLogSink{}
-	return NewOTLPReceiver(ms, ss, ls, "testhost"), ms, ss, ls
+	return NewOTLPReceiver(ms, ss, ls, "testhost", nil, nil), ms, ss, ls
 }
 
 func postJSON(t *testing.T, handler http.HandlerFunc, body interface{}) *httptest.ResponseRecorder {

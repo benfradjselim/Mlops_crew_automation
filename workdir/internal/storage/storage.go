@@ -6,8 +6,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/benfradjselim/ruptura/pkg/models"
 	"github.com/dgraph-io/badger/v3"
 )
 
@@ -22,7 +24,9 @@ const (
 
 // Store wraps Badger with typed key helpers
 type Store struct {
-	db *badger.DB
+	db            *badger.DB
+	snapshotsMu   sync.RWMutex
+	snapshots     map[string]models.KPISnapshot // host → latest snapshot (in-memory)
 }
 
 // Open opens (or creates) the Badger database at path
@@ -36,7 +40,33 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open badger: %w", err)
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, snapshots: make(map[string]models.KPISnapshot)}, nil
+}
+
+// StoreSnapshot saves the latest KPISnapshot for a host (in-memory, fast lookup).
+func (s *Store) StoreSnapshot(snap models.KPISnapshot) {
+	s.snapshotsMu.Lock()
+	s.snapshots[snap.Host] = snap
+	s.snapshotsMu.Unlock()
+}
+
+// LatestSnapshot returns the most recent KPISnapshot for a host, if any.
+func (s *Store) LatestSnapshot(host string) (models.KPISnapshot, bool) {
+	s.snapshotsMu.RLock()
+	snap, ok := s.snapshots[host]
+	s.snapshotsMu.RUnlock()
+	return snap, ok
+}
+
+// AllSnapshots returns copies of all stored KPISnapshots.
+func (s *Store) AllSnapshots() []models.KPISnapshot {
+	s.snapshotsMu.RLock()
+	result := make([]models.KPISnapshot, 0, len(s.snapshots))
+	for _, snap := range s.snapshots {
+		result = append(result, snap)
+	}
+	s.snapshotsMu.RUnlock()
+	return result
 }
 
 // Close shuts the database

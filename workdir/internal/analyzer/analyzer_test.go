@@ -51,7 +51,7 @@ func TestAnalyzerUpdate(t *testing.T) {
 		"uptime_seconds": 86400.0,
 	}
 
-	snap := a.Update("host1", metrics)
+	snap := a.UpdateHost("host1", metrics)
 
 	if snap.Host != "host1" {
 		t.Errorf("snapshot host = %q; want host1", snap.Host)
@@ -85,7 +85,7 @@ func TestStressFormula(t *testing.T) {
 		"error_rate":     0.0,
 		"timeout_rate":   0.0,
 	}
-	snap := a.Update("test", metrics)
+	snap := a.UpdateHost("test", metrics)
 	if snap.Stress.Value < 0.28 || snap.Stress.Value > 0.32 {
 		t.Errorf("expected stress ~0.30, got %v", snap.Stress.Value)
 	}
@@ -105,7 +105,7 @@ func TestFatigueAccumulation(t *testing.T) {
 
 	var prev float64
 	for i := 0; i < 10; i++ {
-		snap := a.Update("fatigue-host", highStress)
+		snap := a.UpdateHost("fatigue-host", highStress)
 		if i > 0 && snap.Fatigue.Value < prev {
 			t.Errorf("fatigue should increase under high stress, got %v < %v", snap.Fatigue.Value, prev)
 		}
@@ -192,7 +192,7 @@ func TestAnalyzerSnapshot(t *testing.T) {
 
 	// After an update the snapshot should be retrievable
 	metrics := map[string]float64{"cpu_percent": 0.5, "memory_percent": 0.3}
-	a.Update("snap-host", metrics)
+	a.UpdateHost("snap-host", metrics)
 
 	snap, ok := a.Snapshot("snap-host")
 	if !ok {
@@ -211,7 +211,7 @@ func TestAnalyzerRecordRestartAndResetFatigue(t *testing.T) {
 		"cpu_percent": 0.95, "memory_percent": 0.95, "load_avg_1": 0.95,
 	}
 	for i := 0; i < 5; i++ {
-		a.Update("rr-host", high)
+		a.UpdateHost("rr-host", high)
 	}
 
 	snap, _ := a.Snapshot("rr-host")
@@ -224,7 +224,7 @@ func TestAnalyzerRecordRestartAndResetFatigue(t *testing.T) {
 	a.ResetFatigue("rr-host")
 
 	// Next update should reflect near-zero fatigue
-	snap2 := a.Update("rr-host", map[string]float64{"cpu_percent": 0.0})
+	snap2 := a.UpdateHost("rr-host", map[string]float64{"cpu_percent": 0.0})
 	if snap2.Fatigue.Value >= fatigueBeforeReset {
 		t.Errorf("fatigue after reset (%v) should be < pre-reset (%v)", snap2.Fatigue.Value, fatigueBeforeReset)
 	}

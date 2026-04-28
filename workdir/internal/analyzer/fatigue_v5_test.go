@@ -26,21 +26,21 @@ func TestDissipativeFatigue_Recovery(t *testing.T) {
 	// Simulate 30-minute backup spike: high CPU, moderate errors
 	// At 15s intervals = 120 samples for 30 min
 	for i := 0; i < 120; i++ {
-		snap := a.Update("host1", metrics(0.75, 0.2))
+		snap := a.UpdateHost("host1", metrics(0.75, 0.2))
 		_ = snap
 	}
 
-	snapAfterSpike := a.Update("host1", metrics(0.75, 0.2))
+	snapAfterSpike := a.UpdateHost("host1", metrics(0.75, 0.2))
 	fatiguePeak := snapAfterSpike.Fatigue.Value
 	t.Logf("Fatigue after 30min spike: %.4f (state=%s)", fatiguePeak, snapAfterSpike.Fatigue.State)
 
 	// Now simulate 2 hours of idle recovery (low CPU, no errors)
 	// At 15s intervals = 480 samples for 2 hours
 	for i := 0; i < 480; i++ {
-		a.Update("host1", metrics(0.1, 0.0))
+		a.UpdateHost("host1", metrics(0.1, 0.0))
 	}
 
-	snapRecovered := a.Update("host1", metrics(0.1, 0.0))
+	snapRecovered := a.UpdateHost("host1", metrics(0.1, 0.0))
 	fatigueAfter := snapRecovered.Fatigue.Value
 	t.Logf("Fatigue after 2h recovery: %.4f (state=%s)", fatigueAfter, snapRecovered.Fatigue.State)
 
@@ -74,18 +74,18 @@ func TestDissipativeFatigue_LambdaReducesFalsePositives(t *testing.T) {
 
 	// Feed a 5-minute high-CPU spike (20 samples)
 	for i := 0; i < 20; i++ {
-		a.Update("host2", metrics(0.9))
+		a.UpdateHost("host2", metrics(0.9))
 	}
 
-	snapAfterSpike := a.Update("host2", metrics(0.9))
+	snapAfterSpike := a.UpdateHost("host2", metrics(0.9))
 	t.Logf("Fatigue immediately after spike: %.4f", snapAfterSpike.Fatigue.Value)
 
 	// Feed 1 hour of idle
 	for i := 0; i < 240; i++ {
-		a.Update("host2", metrics(0.05))
+		a.UpdateHost("host2", metrics(0.05))
 	}
 
-	snapRecovered := a.Update("host2", metrics(0.05))
+	snapRecovered := a.UpdateHost("host2", metrics(0.05))
 	t.Logf("Fatigue after 1h idle: %.4f", snapRecovered.Fatigue.Value)
 
 	// The v5.0 λ recovery should bring it back down
@@ -117,7 +117,7 @@ func TestDissipativeFatigue_HighSustainedLoad(t *testing.T) {
 	_ = snap
 	var lastFatigue float64
 	for i := 0; i < 960; i++ {
-		s := a.Update("host3", metrics())
+		s := a.UpdateHost("host3", metrics())
 		lastFatigue = s.Fatigue.Value
 	}
 
@@ -141,7 +141,7 @@ func TestSetFatigueConfig(t *testing.T) {
 		"uptime_seconds": 3600,
 	}
 	for i := 0; i < 10; i++ {
-		a.Update("hostX", m)
+		a.UpdateHost("hostX", m)
 	}
 
 	idle := map[string]float64{
@@ -150,10 +150,10 @@ func TestSetFatigueConfig(t *testing.T) {
 		"uptime_seconds": 3600,
 	}
 	for i := 0; i < 10; i++ {
-		a.Update("hostX", idle)
+		a.UpdateHost("hostX", idle)
 	}
 
-	snap := a.Update("hostX", idle)
+	snap := a.UpdateHost("hostX", idle)
 	// With λ=0.5, recovery should be fast
 	t.Logf("Fatigue with λ=0.5 after 10 idle cycles: %.4f", snap.Fatigue.Value)
 	// Should be zero or near-zero with aggressive λ

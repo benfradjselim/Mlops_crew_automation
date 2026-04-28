@@ -17,6 +17,7 @@ type Metric struct {
 	Timestamp time.Time         `json:"timestamp"`
 	Labels    map[string]string `json:"labels,omitempty"`
 	Host      string            `json:"host"`
+	Workload  WorkloadRef       `json:"workload,omitempty"` // K8s workload identity
 }
 
 // MetricBatch is a collection of metrics sent by an agent
@@ -29,28 +30,32 @@ type MetricBatch struct {
 
 // KPI represents a computed composite KPI
 type KPI struct {
-	Name      string    `json:"name"`
-	Value     float64   `json:"value"`
-	State     string    `json:"state"`
-	Timestamp time.Time `json:"timestamp"`
-	Host      string    `json:"host"`
+	Name      string      `json:"name"`
+	Value     float64     `json:"value"`
+	State     string      `json:"state"`
+	Timestamp time.Time   `json:"timestamp"`
+	Host      string      `json:"host"`
+	Workload  WorkloadRef `json:"workload,omitempty"` // K8s workload identity
 }
 
 // KPISnapshot holds all current KPIs for a host
 type KPISnapshot struct {
-	Host        string    `json:"host"`
-	Timestamp   time.Time `json:"timestamp"`
-	Stress      KPI       `json:"stress"`
-	Fatigue     KPI       `json:"fatigue"`
-	Mood        KPI       `json:"mood"`
-	Pressure    KPI       `json:"pressure"`
-	Humidity    KPI       `json:"humidity"`
-	Contagion   KPI       `json:"contagion"`
+	Host        string      `json:"host"`
+	Workload    WorkloadRef `json:"workload,omitempty"` // K8s workload identity
+	Timestamp   time.Time   `json:"timestamp"`
+	Stress      KPI         `json:"stress"`
+	Fatigue     KPI         `json:"fatigue"`
+	Mood        KPI         `json:"mood"`
+	Pressure    KPI         `json:"pressure"`
+	Humidity    KPI         `json:"humidity"`
+	Contagion   KPI         `json:"contagion"`
 	// ETF-style composed KPIs
-	Resilience  KPI       `json:"resilience"`   // ability to absorb disruption
-	Entropy     KPI       `json:"entropy"`      // system disorder level
-	Velocity    KPI       `json:"velocity"`     // rate of change (momentum)
-	HealthScore KPI       `json:"health_score"` // single composite executive KPI [0-100]
+	Resilience  KPI `json:"resilience"`   // ability to absorb disruption
+	Entropy     KPI `json:"entropy"`      // system disorder level
+	Velocity    KPI `json:"velocity"`     // rate of change (momentum)
+	HealthScore KPI `json:"health_score"` // single composite executive KPI [0-100]
+	// v6.1: throughput collapse signal
+	Throughput KPI `json:"throughput"`
 	// v5.0: dual-scale CA-ILR rupture events (omitted when none detected)
 	RuptureEvents []RuptureEvent `json:"rupture_events,omitempty"`
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/benfradjselim/ruptura/internal/actions/engine"
+	"github.com/benfradjselim/ruptura/internal/alerter"
 	"github.com/benfradjselim/ruptura/internal/api"
 	apicontext "github.com/benfradjselim/ruptura/internal/context"
 	"github.com/benfradjselim/ruptura/internal/eventbus"
@@ -87,13 +88,14 @@ func runWithContext(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("init action engine failed: %w", err)
 	}
 
+	al := alerter.NewAlerter(256)
 	explainer := explain.NewEngine()
 	ctxStore := apicontext.NewManualContextStore()
 	detector := apicontext.NewDeploymentDetector()
 	metrics := telemetry.NewRegistry(version)
 	healthCheck := telemetry.NewHealthChecker()
 
-	handlers := api.New(store, actionEngine, explainer, ctxStore, detector, metrics, healthCheck, cfg.APIKey)
+	handlers := api.New(store, actionEngine, explainer, al, ctxStore, detector, metrics, healthCheck, cfg.APIKey)
 	handlers.SetReady(true)
 
 	router := handlers.NewRouter()

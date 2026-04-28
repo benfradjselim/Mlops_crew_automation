@@ -6,14 +6,59 @@ package receiver
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/benfradjselim/ruptura/internal/correlator"
 	"github.com/benfradjselim/ruptura/pkg/models"
 	"github.com/benfradjselim/ruptura/pkg/logger"
 )
+
+// TraceFusionSink accepts trace-derived rupture signals.
+type TraceFusionSink interface {
+	SetTraceR(host string, r float64, ts time.Time)
+}
+
+// spanWindow accumulates spans for a service and flushes when enough have
+// arrived or the flush interval has elapsed.
+type spanWindow struct {
+	mu          sync.Mutex
+	total       int
+	errors      int
+	durationSum int64 // nanoseconds
+	lastFlush   time.Time
+}
+
+// update adds a span to the window. Returns (errorRate, avgLatencyMS, flush) when
+// enough spans have accumulated (≥10) or 15 seconds have passed.
+func (w *spanWindow) update(durationNS int64, isError bool, ts time.Time) (float64, float64, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.total++
+	w.durationSum += durationNS
+	if isError {
+		w.errors++
+	}
+	shouldFlush := w.total >= 10 || ts.Sub(w.lastFlush) >= 15*time.Second
+	if !shouldFlush {
+		return 0, 0, false
+	}
+	errorRate := float64(w.errors) / float64(w.total)
+	avgLatMS := float64(w.durationSum) / float64(w.total) / 1e6
+	w.total, w.errors, w.durationSum = 0, 0, 0
+	w.lastFlush = ts
+	return errorRate, avgLatMS, true
+}
+
+// spanCacheEntry stores span-to-service mapping with an eviction timestamp.
+type spanCacheEntry struct {
+	service string
+	addedAt time.Time
+}
 
 // MetricSink accepts parsed metrics from any receiver
 type MetricSink interface {
@@ -34,15 +79,56 @@ type LogSink interface {
 // It is a pure HTTP handler — mount it into the main router.
 // Persistence is delegated to the sink interfaces to avoid double-writes.
 type OTLPReceiver struct {
-	metrics  MetricSink
-	spans    SpanSink
-	logs     LogSink
-	hostname string
+	metrics     MetricSink
+	spans       SpanSink
+	logs        LogSink
+	hostname    string
+	fusion      TraceFusionSink               // optional; nil = disabled
+	topology    *correlator.TopologyBuilder   // optional; nil = disabled
+	spanWindows sync.Map                      // key: service name → *spanWindow
+	spanCache   sync.Map                      // key: spanID → spanCacheEntry
 }
 
-// NewOTLPReceiver creates a new OTLP HTTP receiver
-func NewOTLPReceiver(metrics MetricSink, spans SpanSink, logs LogSink, hostname string) *OTLPReceiver {
-	return &OTLPReceiver{metrics: metrics, spans: spans, logs: logs, hostname: hostname}
+// NewOTLPReceiver creates a new OTLP HTTP receiver.
+// fusion and topology are optional (may be nil).
+func NewOTLPReceiver(metrics MetricSink, spans SpanSink, logs LogSink, hostname string, fusion TraceFusionSink, topology *correlator.TopologyBuilder) *OTLPReceiver {
+	return &OTLPReceiver{
+		metrics:  metrics,
+		spans:    spans,
+		logs:     logs,
+		hostname: hostname,
+		fusion:   fusion,
+		topology: topology,
+	}
+}
+
+// getOrCreateWindow returns the spanWindow for the given service, creating it if needed.
+func (r *OTLPReceiver) getOrCreateWindow(service string) *spanWindow {
+	if v, ok := r.spanWindows.Load(service); ok {
+		return v.(*spanWindow)
+	}
+	w := &spanWindow{lastFlush: time.Now()}
+	actual, _ := r.spanWindows.LoadOrStore(service, w)
+	return actual.(*spanWindow)
+}
+
+const spanCacheTTL = 5 * time.Minute
+
+// cacheSpan stores spanID → service in the span cache.
+func (r *OTLPReceiver) cacheSpan(spanID, service string, ts time.Time) {
+	r.spanCache.Store(spanID, spanCacheEntry{service: service, addedAt: ts})
+}
+
+// lookupSpanService returns the service for a spanID (from cache), or "".
+func (r *OTLPReceiver) lookupSpanService(spanID string) string {
+	if v, ok := r.spanCache.Load(spanID); ok {
+		entry := v.(spanCacheEntry)
+		if time.Since(entry.addedAt) < spanCacheTTL {
+			return entry.service
+		}
+		r.spanCache.Delete(spanID)
+	}
+	return ""
 }
 
 // TraceHandler handles POST /otlp/v1/traces
@@ -72,6 +158,32 @@ func (r *OTLPReceiver) TraceHandler(w http.ResponseWriter, req *http.Request) {
 				if r.spans != nil {
 					r.spans.IngestSpan(span) // Bus handles persistence
 				}
+
+				start := span.StartTime
+				isError := s.Status.Code == 2
+
+				// Cache spanID → service for parent lookup
+				if span.SpanID != "" {
+					r.cacheSpan(span.SpanID, service, start)
+				}
+
+				// Topology: resolve parent service and record edge
+				if r.topology != nil {
+					parentService := r.lookupSpanService(span.ParentID)
+					r.topology.ObserveSpan(service, parentService, span.DurationNS, isError)
+				}
+
+				// Fusion: update per-service traceR
+				if r.fusion != nil {
+					window := r.getOrCreateWindow(service)
+					if errRate, avgLatMS, ok := window.update(span.DurationNS, isError, start); ok {
+						// Normalize: errRate [0,1] + latency normalized against 200ms baseline
+						latScore := math.Min(avgLatMS/200.0, 3.0) / 3.0 // 0=fast, 1=very slow
+						traceR := 0.6*errRate + 0.4*latScore
+						r.fusion.SetTraceR(service, traceR, start)
+					}
+				}
+
 				count++
 			}
 		}

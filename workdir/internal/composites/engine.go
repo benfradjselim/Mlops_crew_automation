@@ -1,3 +1,7 @@
+// Deprecated: Use internal/analyzer.Analyzer instead.
+// This engine is kept for test compatibility only and will be removed in v6.3.
+// The superior Contagion (graph-based) and Pressure (EWMA) formulas have been
+// ported into the Analyzer.
 package composites
 
 import (

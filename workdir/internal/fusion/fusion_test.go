@@ -1,10 +1,13 @@
 package fusion
 
 import (
+	"context"
 	"math"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/benfradjselim/ruptura/pkg/models"
 )
 
 func TestFusion_weightedAverage(t *testing.T) {
@@ -115,5 +118,68 @@ func TestFusion_unknownHost(t *testing.T) {
 	_, _, err := e.FusedR("unknown")
 	if err == nil {
 		t.Error("expected error for unknown host, got nil")
+	}
+}
+
+func TestFusion_StartLogWatcher_UpdatesLogR(t *testing.T) {
+	e := NewEngine()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan models.BurstEvent, 1)
+	e.StartLogWatcher(ctx, ch)
+
+	now := time.Now()
+	// Also set a metricR so we have 2 signals and can call FusedR
+	e.SetMetricR("svc-a", 1.0, now)
+
+	// Send a burst event: Count=30, BaselineRate=10 → logR = 30/10 - 1.0 = 2.0
+	ch <- models.BurstEvent{
+		Service:      "svc-a",
+		StartTS:      now,
+		EndTS:        now.Add(5 * time.Second),
+		Count:        30,
+		BaselineRate: 10.0,
+	}
+
+	// Wait for watcher goroutine to process
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		val, _, err := e.FusedR("svc-a")
+		if err == nil && val > 0 {
+			return // success
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Error("expected FusedR to return non-zero after StartLogWatcher received BurstEvent")
+}
+
+func TestFusion_FusedR_NonZero_WhenLogRSet(t *testing.T) {
+	e := NewEngine()
+	now := time.Now()
+	e.SetLogR("svc-b", 1.5, now)
+	e.SetTraceR("svc-b", 0.5, now)
+
+	val, _, err := e.FusedR("svc-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if val == 0 {
+		t.Error("expected FusedR to return non-zero, got 0")
+	}
+}
+
+func TestFusion_Snapshot(t *testing.T) {
+	e := NewEngine()
+	now := time.Now()
+	e.SetMetricR("host1", 1.0, now)
+	e.SetLogR("host1", 1.0, now)
+
+	snap := e.Snapshot()
+	if _, ok := snap["host1"]; !ok {
+		t.Error("expected host1 in snapshot")
+	}
+	if snap["host1"] == 0 {
+		t.Error("expected non-zero snapshot value for host1")
 	}
 }

@@ -15,16 +15,18 @@ const epsilon = 1e-10
 type Analyzer struct {
 	mu sync.RWMutex
 
-	// Per-host accumulated state
-	hosts     map[string]*hostState
-	snapshots map[string]models.KPISnapshot // last computed snapshot per host
+	// Per-workload accumulated state; key = WorkloadRef.Key()
+	workloads map[string]*workloadState
+	snapshots map[string]models.KPISnapshot // last computed snapshot per workload
 
-	// Default fatigue config applied to new hosts; overridable per-host via SetFatigueConfig.
+	// Default fatigue config applied to new workloads; overridable per-workload via SetFatigueConfig.
 	defaultFatigueRThreshold float64
 	defaultFatigueLambda     float64
 }
 
-type hostState struct {
+type workloadState struct {
+	// WorkloadRef for this state entry
+	ref models.WorkloadRef
 	// Last raw metric inputs (stored for /explain endpoint)
 	lastMetrics map[string]float64
 	// Stress history for fatigue integration
@@ -54,12 +56,25 @@ type hostState struct {
 	uptime float64
 	// firstUpdate tracks whether lastStress is valid for derivative
 	firstUpdate bool
+
+	// EWMA Pressure state (ported from composites engine)
+	muLat, sigma2Lat float64 // EWMA mean and variance for latency
+	muErr, sigma2Err float64 // EWMA mean and variance for error_rate
+
+	// Throughput collapse signal
+	prevRequestRate float64
+
+	// Adaptive baseline (Welford online algorithm)
+	observationCount int
+	baselineReady    bool
+	baselineMeans    map[string]float64 // per-signal rolling mean
+	baselineM2       map[string]float64 // Welford M2 for stddev
 }
 
 // NewAnalyzer creates a new holistic analyzer
 func NewAnalyzer() *Analyzer {
 	return &Analyzer{
-		hosts:                    make(map[string]*hostState),
+		workloads:                make(map[string]*workloadState),
 		snapshots:                make(map[string]models.KPISnapshot),
 		defaultFatigueRThreshold: 0.3,
 		defaultFatigueLambda:     0.05,
@@ -67,7 +82,7 @@ func NewAnalyzer() *Analyzer {
 }
 
 // SetDefaultFatigueConfig sets the dissipative fatigue parameters applied to
-// all new hosts. Existing hosts are not affected; use SetFatigueConfig for those.
+// all new workloads. Existing workloads are not affected; use SetFatigueConfig for those.
 func (a *Analyzer) SetDefaultFatigueConfig(rThreshold, lambda float64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -75,11 +90,13 @@ func (a *Analyzer) SetDefaultFatigueConfig(rThreshold, lambda float64) {
 	a.defaultFatigueLambda = lambda
 }
 
-func (a *Analyzer) getOrCreate(host string) *hostState {
-	if hs, ok := a.hosts[host]; ok {
-		return hs
+func (a *Analyzer) getOrCreate(ref models.WorkloadRef) *workloadState {
+	key := ref.Key()
+	if ws, ok := a.workloads[key]; ok {
+		return ws
 	}
-	hs := &hostState{
+	ws := &workloadState{
+		ref:               ref,
 		stressHistory:     utils.NewCircularBuffer(600),
 		errorHistory:      utils.NewCircularBuffer(600),
 		timeoutHistory:    utils.NewCircularBuffer(600),
@@ -90,24 +107,24 @@ func (a *Analyzer) getOrCreate(host string) *hostState {
 		fatigueRThreshold: a.defaultFatigueRThreshold,
 		fatigueLambda:     a.defaultFatigueLambda,
 	}
-	a.hosts[host] = hs
-	return hs
+	a.workloads[key] = ws
+	return ws
 }
 
-// Update ingests new normalized metrics and returns a KPI snapshot
-func (a *Analyzer) Update(host string, metrics map[string]float64) models.KPISnapshot {
+// Update ingests new normalized metrics for a workload and returns a KPI snapshot.
+func (a *Analyzer) Update(ref models.WorkloadRef, metrics map[string]float64) models.KPISnapshot {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	hs := a.getOrCreate(host)
+	ws := a.getOrCreate(ref)
 	// Store raw inputs for /explain endpoint
 	last := make(map[string]float64, len(metrics))
 	for k, v := range metrics {
 		last[k] = v
 	}
-	hs.lastMetrics = last
+	ws.lastMetrics = last
 	now := time.Now()
-	dt := now.Sub(hs.lastUpdate).Seconds()
+	dt := now.Sub(ws.lastUpdate).Seconds()
 	if dt < 0.001 {
 		dt = 1
 	}
@@ -123,7 +140,7 @@ func (a *Analyzer) Update(host string, metrics map[string]float64) models.KPISna
 	stress := 0.30*cpu + 0.20*ram + 0.20*latency + 0.20*errors + 0.10*timeouts
 	stress = utils.Clamp(stress, 0, 1)
 
-	hs.stressHistory.Push(stress)
+	ws.stressHistory.Push(stress)
 
 	// --- Fatigue (v5.0 — Dissipative) ---
 	// F_t = max(0, F_{t−1} + (S_t − R_threshold) − λ_eff)
@@ -136,77 +153,101 @@ func (a *Analyzer) Update(host string, metrics map[string]float64) models.KPISna
 	if dt > maxDt {
 		dt = maxDt
 	}
-	lambdaEff := hs.fatigueLambda * (dt / nominalInterval)
-	hs.fatigue = math.Max(0, hs.fatigue+(stress-hs.fatigueRThreshold)-lambdaEff)
-	hs.fatigue = utils.Clamp(hs.fatigue, 0, 1)
+	lambdaEff := ws.fatigueLambda * (dt / nominalInterval)
+	ws.fatigue = math.Max(0, ws.fatigue+(stress-ws.fatigueRThreshold)-lambdaEff)
+	ws.fatigue = utils.Clamp(ws.fatigue, 0, 1)
 
 	// --- Mood ---
 	// M = (Uptime × Throughput) / (Errors × Timeouts × Restarts + ε)
 	// ε guards the WHOLE denominator product (not individual factors) per spec.
 	// Log normalization: log(rawMood + 1) / log(max_expected + 1) maps to [0, 1].
 	uptime := getMetric(metrics, "uptime_seconds")
-	hs.uptime = uptime // always update (including 0) to avoid stale value
+	ws.uptime = uptime // always update (including 0) to avoid stale value
 
 	requests := getMetric(metrics, "request_rate")
-	hs.requestHistory.Push(requests)
-	hs.errorHistory.Push(errors)
-	hs.timeoutHistory.Push(timeouts)
+	ws.requestHistory.Push(requests)
+	ws.errorHistory.Push(errors)
+	ws.timeoutHistory.Push(timeouts)
 
-	restarts := hs.restartCount + 1 // always at least 1 to avoid division by zero
+	restarts := ws.restartCount + 1 // always at least 1 to avoid division by zero
 	// Denominator: errors × timeouts × restarts with ε protecting against zero
 	denominator := errors*timeouts*restarts + epsilon
-	rawMood := (hs.uptime * (requests + epsilon)) / denominator
+	rawMood := (ws.uptime * (requests + epsilon)) / denominator
 	// Log-normalize: log(1 + rawMood) / log(1 + expectedMax)
 	// expectedMax ≈ uptime(86400s) × throughput(1) / epsilon ≈ 8.64e14 → use log ceiling 35
 	const moodLogCeiling = 35.0
 	mood := utils.Clamp(math.Log1p(rawMood)/moodLogCeiling, 0, 1)
 
-	// --- Atmospheric Pressure ---
-	// P = dS/dt + ∫errors dt (raw integral per spec, not normalized by count)
-	// Skip derivative on first call to avoid artificially high spike from zero lastStress.
-	dSdt := 0.0
-	if !hs.firstUpdate {
-		dSdt = utils.Derivative(hs.lastStress, stress, dt)
+	// --- Atmospheric Pressure (EWMA z-score, ported from composites engine) ---
+	lat := getMetric(metrics, "latency")
+	if lat == 0 {
+		lat = getMetric(metrics, "load_avg_1")
 	}
-	errorIntegral := utils.TrapezoidIntegrate(hs.errorHistory.Values(), 1.0)
-	pressure := dSdt + errorIntegral
-	pressure = utils.Clamp(pressure, -1, 1)
-	// Normalize to [0,1]: -1 → 0, 0 → 0.5, +1 → 1
-	pressureNorm := utils.Clamp((pressure+1)/2.0, 0, 1)
+	errRate := getMetric(metrics, "error_rate")
+
+	ws.muLat = 0.9*ws.muLat + 0.1*lat
+	ws.sigma2Lat = 0.9*ws.sigma2Lat + 0.1*math.Pow(lat-ws.muLat, 2)
+	ws.muErr = 0.9*ws.muErr + 0.1*errRate
+	ws.sigma2Err = 0.9*ws.sigma2Err + 0.1*math.Pow(errRate-ws.muErr, 2)
+
+	sigmaLat := math.Sqrt(ws.sigma2Lat)
+	if sigmaLat < 1e-6 {
+		sigmaLat = 1.0
+	}
+	sigmaErr := math.Sqrt(ws.sigma2Err)
+	if sigmaErr < 1e-6 {
+		sigmaErr = 1.0
+	}
+
+	latencyZ := (lat - ws.muLat) / sigmaLat
+	errorZ := (errRate - ws.muErr) / sigmaErr
+	rawPressure := 0.5*latencyZ + 0.5*errorZ
+	pressureNorm := utils.Clamp((rawPressure+3)/6.0, 0, 1) // map [-3,+3] z-score to [0,1]
 
 	// --- Error Humidity ---
 	// H = (E × T) / Q
-	throughput := requests + epsilon
-	humidity := (errors * timeouts) / throughput
+	throughputQ := requests + epsilon
+	humidity := (errors * timeouts) / throughputQ
 	humidity = utils.Clamp(humidity, 0, 1)
 
 	// --- Contagion Index ---
 	// C = Σ(E_ij × D_ij) — simplified: use average error × load as proxy
 	contagion := utils.Clamp(errors*cpu, 0, 1)
 
+	// --- Throughput collapse signal (v6.1) ---
+	reqRate := getMetric(metrics, "request_rate")
+	throughputDrop := 0.0
+	if ws.prevRequestRate > 0.01 && reqRate < ws.prevRequestRate {
+		drop := (ws.prevRequestRate - reqRate) / ws.prevRequestRate
+		throughputDrop = utils.Clamp(drop, 0, 1)
+	}
+	ws.prevRequestRate = reqRate
+
 	// --- ETF-style Composed KPIs ---
 
 	// Resilience: ability to absorb disruption without failing
 	// High mood + low fatigue + low contagion = resilient
 	// R = mood × (1 - fatigue) × (1 - contagion)
-	resilience := utils.Clamp(mood*(1-hs.fatigue)*(1-contagion), 0, 1)
+	resilience := utils.Clamp(mood*(1-ws.fatigue)*(1-contagion), 0, 1)
 
 	// HealthScore: single executive composite [0, 1] (mapped to [0,100] in API)
 	// Weighted average: stress inverted (calm is healthy), mood positive, fatigue inverted,
-	// pressure inverted, humidity inverted, contagion inverted
+	// pressure inverted, humidity inverted, contagion inverted, throughput inverted
+	// Weights sum to 1.0: 0.23+0.18+0.18+0.13+0.09+0.09+0.10 = 1.00
 	healthScore := utils.Clamp(
-		0.25*(1-stress)+
-			0.20*mood+
-			0.20*(1-hs.fatigue)+
-			0.15*(1-pressureNorm)+
-			0.10*(1-humidity)+
-			0.10*(1-contagion),
+		0.23*(1-stress)+
+			0.18*mood+
+			0.18*(1-ws.fatigue)+
+			0.13*(1-pressureNorm)+
+			0.09*(1-humidity)+
+			0.09*(1-contagion)+
+			0.10*(1-throughputDrop),
 		0, 1)
 
 	// Entropy: system disorder — how much KPI values deviate from their rolling mean
 	// Computed as mean absolute deviation of health history (normalized)
-	hs.healthHistory.Push(healthScore)
-	healthVals := hs.healthHistory.Values()
+	ws.healthHistory.Push(healthScore)
+	healthVals := ws.healthHistory.Values()
 	entropy := 0.0
 	if len(healthVals) > 1 {
 		// mean
@@ -228,145 +269,236 @@ func (a *Analyzer) Update(host string, metrics map[string]float64) models.KPISna
 	// Velocity: rate of change of HealthScore (momentum)
 	// High velocity = system changing fast (could be recovering or crashing)
 	velocity := 0.0
-	if !hs.firstUpdate && dt > 0 {
-		delta := math.Abs(healthScore - hs.lastHealthScore)
+	if !ws.firstUpdate && dt > 0 {
+		delta := math.Abs(healthScore - ws.lastHealthScore)
 		// normalize by expected max change rate: 0.1 per second = extreme
 		velocity = utils.Clamp(delta/(0.1*dt), 0, 1)
 	}
 
-	// Update last state
-	hs.lastStress = stress
-	hs.lastHealthScore = healthScore
-	hs.lastUpdate = now
-	hs.firstUpdate = false
+	// --- Adaptive baseline update (Welford online algorithm) ---
+	signals := map[string]float64{
+		"stress":          stress,
+		"fatigue":         ws.fatigue,
+		"mood":            mood,
+		"pressure":        pressureNorm,
+		"humidity":        humidity,
+		"contagion":       contagion,
+		"throughput_drop": throughputDrop,
+		"health_score":    healthScore,
+	}
+	ws.updateBaseline(signals)
 
+	// Update last state
+	ws.lastStress = stress
+	ws.lastHealthScore = healthScore
+	ws.lastUpdate = now
+	ws.firstUpdate = false
+
+	key := ref.Key()
 	snap := models.KPISnapshot{
-		Host:      host,
+		Host:      ref.Node,
+		Workload:  ref,
 		Timestamp: now,
 		Stress: models.KPI{
 			Name:      "stress",
 			Value:     utils.RoundTo(stress, 4),
 			State:     stressState(stress),
 			Timestamp: now,
-			Host:      host,
+			Host:      ref.Node,
+			Workload:  ref,
 		},
 		Fatigue: models.KPI{
 			Name:      "fatigue",
-			Value:     utils.RoundTo(hs.fatigue, 4),
-			State:     fatigueState(hs.fatigue),
+			Value:     utils.RoundTo(ws.fatigue, 4),
+			State:     fatigueState(ws.fatigue),
 			Timestamp: now,
-			Host:      host,
+			Host:      ref.Node,
+			Workload:  ref,
 		},
 		Mood: models.KPI{
 			Name:      "mood",
 			Value:     utils.RoundTo(mood, 4),
 			State:     moodState(mood),
 			Timestamp: now,
-			Host:      host,
+			Host:      ref.Node,
+			Workload:  ref,
 		},
 		Pressure: models.KPI{
 			Name:      "pressure",
 			Value:     utils.RoundTo(pressureNorm, 4),
 			State:     pressureState(pressureNorm),
 			Timestamp: now,
-			Host:      host,
+			Host:      ref.Node,
+			Workload:  ref,
 		},
 		Humidity: models.KPI{
 			Name:      "humidity",
 			Value:     utils.RoundTo(humidity, 4),
 			State:     humidityState(humidity),
 			Timestamp: now,
-			Host:      host,
+			Host:      ref.Node,
+			Workload:  ref,
 		},
 		Contagion: models.KPI{
 			Name:      "contagion",
 			Value:     utils.RoundTo(contagion, 4),
 			State:     contagionState(contagion),
 			Timestamp: now,
-			Host:      host,
+			Host:      ref.Node,
+			Workload:  ref,
 		},
 		Resilience: models.KPI{
 			Name:      "resilience",
 			Value:     utils.RoundTo(resilience, 4),
 			State:     resilienceState(resilience),
 			Timestamp: now,
-			Host:      host,
+			Host:      ref.Node,
+			Workload:  ref,
 		},
 		Entropy: models.KPI{
 			Name:      "entropy",
 			Value:     utils.RoundTo(entropy, 4),
 			State:     entropyState(entropy),
 			Timestamp: now,
-			Host:      host,
+			Host:      ref.Node,
+			Workload:  ref,
 		},
 		Velocity: models.KPI{
 			Name:      "velocity",
 			Value:     utils.RoundTo(velocity, 4),
 			State:     velocityState(velocity),
 			Timestamp: now,
-			Host:      host,
+			Host:      ref.Node,
+			Workload:  ref,
+		},
+		Throughput: models.KPI{
+			Name:      "throughput",
+			Value:     utils.RoundTo(throughputDrop, 4),
+			State:     throughputState(throughputDrop),
+			Timestamp: now,
+			Host:      ref.Node,
+			Workload:  ref,
 		},
 		HealthScore: models.KPI{
 			Name:      "health_score",
 			Value:     utils.RoundTo(healthScore*100, 2), // expose as 0-100
 			State:     healthScoreState(healthScore),
 			Timestamp: now,
-			Host:      host,
+			Host:      ref.Node,
+			Workload:  ref,
 		},
 	}
-	a.snapshots[host] = snap
+	a.snapshots[key] = snap
 	return snap
+}
+
+// UpdateHost is a backward-compatible wrapper for callers using the old host-string API.
+func (a *Analyzer) UpdateHost(host string, metrics map[string]float64) models.KPISnapshot {
+	return a.Update(models.WorkloadRefFromHost(host), metrics)
+}
+
+// updateBaseline applies the Welford online algorithm to maintain per-signal
+// rolling mean and M2 (sum of squared deviations) for adaptive thresholding.
+// baselineReady is set to true after 96 observations (24h at 15s intervals).
+func (ws *workloadState) updateBaseline(signals map[string]float64) {
+	ws.observationCount++
+	if ws.baselineMeans == nil {
+		ws.baselineMeans = make(map[string]float64)
+		ws.baselineM2 = make(map[string]float64)
+	}
+	for k, v := range signals {
+		n := float64(ws.observationCount)
+		delta := v - ws.baselineMeans[k]
+		ws.baselineMeans[k] += delta / n
+		ws.baselineM2[k] += delta * (v - ws.baselineMeans[k])
+	}
+	if ws.observationCount >= 96 { // 24h at 15s intervals
+		ws.baselineReady = true
+	}
+}
+
+// BaselineReady returns true if the workload has accumulated enough observations
+// to use adaptive baseline thresholding (96 observations, ~24h at 15s intervals).
+func (a *Analyzer) BaselineReady(ref models.WorkloadRef) bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	ws, ok := a.workloads[ref.Key()]
+	if !ok {
+		return false
+	}
+	return ws.baselineReady
+}
+
+// BaselineSigma returns the standard deviation for a named signal from the
+// Welford adaptive baseline. Returns 0 if the workload is unknown or the signal
+// has not been observed.
+func (a *Analyzer) BaselineSigma(ref models.WorkloadRef, signal string) float64 {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	ws, ok := a.workloads[ref.Key()]
+	if !ok || ws.observationCount < 2 {
+		return 0
+	}
+	m2, ok := ws.baselineM2[signal]
+	if !ok {
+		return 0
+	}
+	variance := m2 / float64(ws.observationCount-1)
+	return math.Sqrt(variance)
 }
 
 // Snapshot returns the last computed KPI snapshot without mutating state (safe for GET handlers)
 func (a *Analyzer) Snapshot(host string) (models.KPISnapshot, bool) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	snap, ok := a.snapshots[host]
+	// Try direct lookup by host key (backward compat: host was used as map key before)
+	ref := models.WorkloadRefFromHost(host)
+	snap, ok := a.snapshots[ref.Key()]
 	return snap, ok
 }
 
-// RecordRestart increments the restart count for a host
+// RecordRestart increments the restart count for a workload
 func (a *Analyzer) RecordRestart(host string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	hs := a.getOrCreate(host)
-	hs.restartCount++
+	ws := a.getOrCreate(models.WorkloadRefFromHost(host))
+	ws.restartCount++
 }
 
 // ResetFatigue resets fatigue after maintenance/restart
 func (a *Analyzer) ResetFatigue(host string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	hs := a.getOrCreate(host)
-	hs.fatigue = 0
+	ws := a.getOrCreate(models.WorkloadRefFromHost(host))
+	ws.fatigue = 0
 }
 
-// LastMetrics returns the most recent raw metric inputs for a host.
+// LastMetrics returns the most recent raw metric inputs for a workload.
 // Used by the /explain/:kpi endpoint to compute input contributions.
 func (a *Analyzer) LastMetrics(host string) (map[string]float64, bool) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	hs, ok := a.hosts[host]
-	if !ok || hs.lastMetrics == nil {
+	ref := models.WorkloadRefFromHost(host)
+	ws, ok := a.workloads[ref.Key()]
+	if !ok || ws.lastMetrics == nil {
 		return nil, false
 	}
-	cp := make(map[string]float64, len(hs.lastMetrics))
-	for k, v := range hs.lastMetrics {
+	cp := make(map[string]float64, len(ws.lastMetrics))
+	for k, v := range ws.lastMetrics {
 		cp[k] = v
 	}
 	return cp, true
 }
 
-// SetFatigueConfig overrides the dissipative fatigue parameters for a host.
-// Call before the first Update() for a host to take effect from the start.
+// SetFatigueConfig overrides the dissipative fatigue parameters for a workload.
+// Call before the first Update() for a workload to take effect from the start.
 // If not called, canonical v5.0 defaults (RThreshold=0.3, Lambda=0.05) are used.
 func (a *Analyzer) SetFatigueConfig(host string, rThreshold, lambda float64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	hs := a.getOrCreate(host)
-	hs.fatigueRThreshold = rThreshold
-	hs.fatigueLambda = lambda
+	ws := a.getOrCreate(models.WorkloadRefFromHost(host))
+	ws.fatigueRThreshold = rThreshold
+	ws.fatigueLambda = lambda
 }
 
 func getMetric(metrics map[string]float64, name string) float64 {
@@ -499,6 +631,17 @@ func velocityState(v float64) string {
 	}
 }
 
+func throughputState(t float64) string {
+	switch {
+	case t > 0.5:
+		return "collapsing"
+	case t > 0.2:
+		return "declining"
+	default:
+		return "stable"
+	}
+}
+
 func healthScoreState(h float64) string {
 	// h is in [0,1] (raw, before *100 scaling)
 	switch {
@@ -515,7 +658,7 @@ func healthScoreState(h float64) string {
 	}
 }
 
-// AllHosts returns all known host names
+// AllHosts returns all known host names (backward-compat: returns workload keys)
 func (a *Analyzer) AllHosts() []string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/benfradjselim/ruptura/internal/eventbus"
+	"github.com/benfradjselim/ruptura/pkg/models"
+	"github.com/benfradjselim/ruptura/pkg/utils"
 	"gopkg.in/yaml.v3"
 )
 
@@ -118,4 +120,26 @@ func (e *Engine) EmergencyStop() {
 
 func (e *Engine) IsEmergencyStopped() bool {
 	return atomic.LoadInt32(&e.emergencyStopped) == 1
+}
+
+// RecommendFromAnomaly translates a critical anomaly event into a RuptureEvent
+// and returns the recommended actions. Only processes SeverityCritical anomalies.
+func (e *Engine) RecommendFromAnomaly(ev models.AnomalyEvent) ([]ActionRecommendation, error) {
+	if ev.Severity != models.SeverityCritical {
+		return nil, nil // only act on consensus anomalies
+	}
+	profile := "spike"
+	if ev.Score <= 5.0 {
+		profile = "plateau"
+	}
+	rupture := RuptureEvent{
+		ID:         utils.GenerateID(8),
+		Host:       ev.Host,
+		Metric:     ev.Metric,
+		R:          ev.Score,
+		Confidence: 0.75, // anomaly consensus = moderate confidence
+		Profile:    profile,
+		Timestamp:  ev.Timestamp,
+	}
+	return e.Recommend(rupture)
 }

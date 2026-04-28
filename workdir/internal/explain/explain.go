@@ -157,3 +157,78 @@ func (e *Engine) PipelineDebug(id string) (*PipelineDebugResponse, error) {
 		Timestamp: rec.Timestamp,
 	}, nil
 }
+
+// NarrativeExplain returns a human-readable explanation of a rupture event.
+// It is a structured template filled from the rupture record — no LLM required.
+func (e *Engine) NarrativeExplain(id string) (string, error) {
+	val, ok := e.records.Load(id)
+	if !ok {
+		return "", fmt.Errorf("explain: rupture %s not found", id)
+	}
+	rec := val.(RuptureRecord)
+
+	// Determine primary pipeline
+	primaryPipeline := "metric"
+	primaryR := rec.MetricR
+	if rec.LogR > primaryR {
+		primaryPipeline = "log"
+		primaryR = rec.LogR
+	}
+	if rec.TraceR > primaryR {
+		primaryPipeline = "trace"
+		primaryR = rec.TraceR
+	}
+
+	// Severity label
+	severity := "warning"
+	if rec.R >= 5.0 {
+		severity = "critical"
+	} else if rec.R >= 3.0 {
+		severity = "elevated"
+	}
+
+	// Find the top contributing metric
+	topMetric := "unknown"
+	topWeight := 0.0
+	for _, m := range rec.Metrics {
+		if m.Weight > topWeight {
+			topMetric = m.Metric
+			topWeight = m.Weight
+		}
+	}
+
+	// Build TTF description
+	ttfDesc := ""
+	if rec.TTFSeconds > 0 {
+		mins := int(rec.TTFSeconds / 60)
+		if mins < 1 {
+			ttfDesc = fmt.Sprintf(" TTF was %ds.", int(rec.TTFSeconds))
+		} else {
+			ttfDesc = fmt.Sprintf(" TTF was %d minutes.", mins)
+		}
+	}
+
+	// Contagion note
+	contagionNote := ""
+	if rec.LogR > 1.0 {
+		contagionNote = " Log burst signals indicate contagion may have spread from a dependency."
+	}
+	if rec.TraceR > 1.0 {
+		contagionNote = " Trace error propagation detected — check service dependency graph."
+	}
+
+	narrative := fmt.Sprintf(
+		"[%s] Rupture %s on %s — R=%.2f (%s). "+
+			"Primary signal: %s pipeline (R=%.2f). "+
+			"Top contributing factor: %s (weight=%.0f%%)."+
+			"%s%s",
+		rec.Timestamp.UTC().Format("2006-01-02 15:04:05 UTC"),
+		rec.ID,
+		rec.Host,
+		rec.R, severity,
+		primaryPipeline, primaryR,
+		topMetric, topWeight*100,
+		ttfDesc, contagionNote,
+	)
+	return narrative, nil
+}

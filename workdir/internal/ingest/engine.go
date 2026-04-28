@@ -117,6 +117,42 @@ func RegisterHandlers(mux *http.ServeMux, e *Engine) {
 	mux.HandleFunc("/otlp/v1/traces", e.handleOTLPTraces)
 }
 
+// extractWorkloadRef extracts a WorkloadRef from an OTLPResource by inspecting
+// standard Kubernetes and OpenTelemetry semantic convention attributes.
+func extractWorkloadRef(r models.OTLPResource) models.WorkloadRef {
+	ns := r.GetAttr("k8s.namespace.name")
+	node := models.FirstNonEmpty(r.GetAttr("k8s.node.name"), r.GetAttr("host.name"))
+	name := models.FirstNonEmpty(
+		r.GetAttr("k8s.deployment.name"),
+		r.GetAttr("k8s.statefulset.name"),
+		r.GetAttr("k8s.daemonset.name"),
+		r.GetAttr("k8s.job.name"),
+		r.GetAttr("service.name"),
+		node, // final fallback: use node as identity (non-K8s)
+	)
+	kind := inferWorkloadKind(r)
+	if ns == "" {
+		ns = "default"
+	}
+	return models.WorkloadRef{Namespace: ns, Kind: kind, Name: name, Node: node}
+}
+
+// inferWorkloadKind returns the Kubernetes workload kind string from OTLP resource attributes.
+func inferWorkloadKind(r models.OTLPResource) string {
+	switch {
+	case r.GetAttr("k8s.deployment.name") != "":
+		return "Deployment"
+	case r.GetAttr("k8s.statefulset.name") != "":
+		return "StatefulSet"
+	case r.GetAttr("k8s.daemonset.name") != "":
+		return "DaemonSet"
+	case r.GetAttr("k8s.job.name") != "":
+		return "Job"
+	default:
+		return "host"
+	}
+}
+
 func (e *Engine) handleRemoteWrite(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -137,16 +173,27 @@ func (e *Engine) handleRemoteWrite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, ts := range req.Timeseries {
-		var name, host string = "", "unknown"
+		var name string
+		host := "unknown"
+		workload := models.WorkloadRef{}
 		for _, lbl := range ts.Labels {
-			if lbl.Name == "__name__" {
+			switch lbl.Name {
+			case "__name__":
 				name = lbl.Value
-			} else if lbl.Name == "host" {
+			case "host", "instance":
 				host = lbl.Value
+			case "namespace":
+				workload.Namespace = lbl.Value
+			case "deployment":
+				workload.Name = lbl.Value
+				workload.Kind = "Deployment"
 			}
 		}
 		if name == "" {
 			continue
+		}
+		if workload.IsEmpty() {
+			workload = models.WorkloadRefFromHost(host)
 		}
 
 		if e.checkCardinality(host, name) {
@@ -166,7 +213,8 @@ func (e *Engine) handleOTLPMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, rm := range req.ResourceMetrics {
-		host := rm.Resource.GetAttr("host.name")
+		ref := extractWorkloadRef(rm.Resource)
+		host := ref.Node
 		if host == "" {
 			host = "unknown"
 		}
@@ -202,6 +250,7 @@ func (e *Engine) handleOTLPMetrics(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 				}
+				_ = ref // WorkloadRef available for future enrichment
 			}
 		}
 	}
@@ -216,7 +265,11 @@ func (e *Engine) handleOTLPLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	if e.logs != nil {
 		for _, rl := range req.ResourceLogs {
+			ref := extractWorkloadRef(rl.Resource)
 			service := rl.Resource.GetAttr("service.name")
+			if service == "" {
+				service = ref.Name
+			}
 			if service == "" {
 				service = "unknown"
 			}
@@ -239,6 +292,7 @@ func (e *Engine) handleOTLPTraces(w http.ResponseWriter, r *http.Request) {
 	}
 	if e.spans != nil {
 		for _, rs := range req.ResourceSpans {
+			ref := extractWorkloadRef(rs.Resource)
 			for _, ss := range rs.ScopeSpans {
 				for _, span := range ss.Spans {
 					s := models.Span{
@@ -253,6 +307,7 @@ func (e *Engine) handleOTLPTraces(w http.ResponseWriter, r *http.Request) {
 					} else {
 						s.Status = "unset"
 					}
+					_ = ref // WorkloadRef available for future enrichment
 					e.spans.IngestSpan(s)
 				}
 			}

@@ -7,6 +7,7 @@ import (
     "time"
 
     "github.com/benfradjselim/ruptura/internal/actions/engine"
+    "github.com/benfradjselim/ruptura/internal/alerter"
     apicontext "github.com/benfradjselim/ruptura/internal/context"
     "github.com/benfradjselim/ruptura/internal/explain"
     "github.com/benfradjselim/ruptura/internal/storage"
@@ -17,6 +18,7 @@ type Handlers struct {
     store      *storage.Store
     engine     *engine.Engine
     explainer  *explain.Engine
+    alerter    *alerter.Alerter
     ctxStore   *apicontext.ManualContextStore
     detector   *apicontext.DeploymentDetector
     metrics    *telemetry.Registry
@@ -30,6 +32,7 @@ func NewHandlers(
     store *storage.Store,
     eng *engine.Engine,
     exp *explain.Engine,
+    al  *alerter.Alerter,
     ctx *apicontext.ManualContextStore,
     det *apicontext.DeploymentDetector,
     met *telemetry.Registry,
@@ -37,8 +40,8 @@ func NewHandlers(
     apiKey string,
 ) *Handlers {
     return &Handlers{
-        store: store, engine: eng, explainer: exp, ctxStore: ctx,
-        detector: det, metrics: met, health: hc,
+        store: store, engine: eng, explainer: exp, alerter: al,
+        ctxStore: ctx, detector: det, metrics: met, health: hc,
         startTime: time.Now(), apiKey: apiKey,
     }
 }
@@ -48,13 +51,14 @@ func New(
 	store *storage.Store,
 	eng *engine.Engine,
 	exp *explain.Engine,
+	al  *alerter.Alerter,
 	ctx *apicontext.ManualContextStore,
 	det *apicontext.DeploymentDetector,
 	met *telemetry.Registry,
 	hc *telemetry.HealthChecker,
 	apiKey string,
 ) *Handlers {
-	return NewHandlers(store, eng, exp, ctx, det, met, hc, apiKey)
+	return NewHandlers(store, eng, exp, al, ctx, det, met, hc, apiKey)
 }
 
 func (h *Handlers) SetReady(v bool) {

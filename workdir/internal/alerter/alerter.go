@@ -45,6 +45,16 @@ var defaultRules = []Rule{
 	{Name: "health_score_critical", Metric: "health_score", Threshold: 0.15, Severity: models.SeverityCritical, Message: "Health score critical — immediate attention required"},
 }
 
+// MaintenanceWindow suppresses rupture alarms for a specific workload during
+// planned maintenance (deploys, restarts, migrations).
+type MaintenanceWindow struct {
+	ID          string    `json:"id"`
+	WorkloadKey string    `json:"workload_key"` // WorkloadRef.Key() or "*" for cluster-wide
+	From        time.Time `json:"from"`
+	Until       time.Time `json:"until"`
+	Reason      string    `json:"reason,omitempty"`
+}
+
 // Alerter evaluates KPI snapshots against rules and fires alerts
 type Alerter struct {
 	mu          sync.RWMutex
@@ -54,6 +64,8 @@ type Alerter struct {
 	fired       map[string]time.Time     // dedup: last fire time per rule+host
 	ch          chan models.Alert
 	dropped     int64 // count of alerts dropped due to full channel
+	windows     []MaintenanceWindow
+	windowsMu   sync.RWMutex
 }
 
 // NewAlerter creates an alerter with default OHE rules
@@ -72,6 +84,62 @@ func (a *Alerter) Alerts() <-chan models.Alert {
 	return a.ch
 }
 
+// AddMaintenanceWindow registers a suppression window.
+func (a *Alerter) AddMaintenanceWindow(w MaintenanceWindow) string {
+	if w.ID == "" {
+		w.ID = utils.GenerateID(8)
+	}
+	a.windowsMu.Lock()
+	a.windows = append(a.windows, w)
+	a.windowsMu.Unlock()
+	return w.ID
+}
+
+// RemoveMaintenanceWindow removes a suppression window by ID.
+func (a *Alerter) RemoveMaintenanceWindow(id string) {
+	a.windowsMu.Lock()
+	defer a.windowsMu.Unlock()
+	filtered := a.windows[:0]
+	for _, w := range a.windows {
+		if w.ID != id {
+			filtered = append(filtered, w)
+		}
+	}
+	a.windows = filtered
+}
+
+// ListMaintenanceWindows returns all currently active windows.
+func (a *Alerter) ListMaintenanceWindows() []MaintenanceWindow {
+	a.windowsMu.RLock()
+	defer a.windowsMu.RUnlock()
+	now := time.Now()
+	var active []MaintenanceWindow
+	for _, w := range a.windows {
+		if w.Until.After(now) {
+			active = append(active, w)
+		}
+	}
+	return active
+}
+
+// isSuppressed returns true if the given workload key is currently in a maintenance window.
+func (a *Alerter) isSuppressed(workloadKey string, now time.Time) bool {
+	a.windowsMu.RLock()
+	defer a.windowsMu.RUnlock()
+	for _, w := range a.windows {
+		if w.Until.Before(now) {
+			continue
+		}
+		if w.From.After(now) {
+			continue
+		}
+		if w.WorkloadKey == "*" || w.WorkloadKey == workloadKey {
+			return true
+		}
+	}
+	return false
+}
+
 // Evaluate checks KPI values against all rules and fires new alerts.
 // Uses an O(1) secondary index for resolution to avoid O(n) scans.
 func (a *Alerter) Evaluate(host string, kpis map[string]float64) {
@@ -79,6 +147,11 @@ func (a *Alerter) Evaluate(host string, kpis map[string]float64) {
 	defer a.mu.Unlock()
 
 	now := time.Now()
+
+	workloadKey := "default/host/" + host
+	if a.isSuppressed(workloadKey, now) {
+		return
+	}
 
 	// Evict stale fired entries (> 5 min old) to bound map growth
 	for key, ts := range a.fired {
@@ -145,11 +218,16 @@ func (a *Alerter) Evaluate(host string, kpis map[string]float64) {
 // FireRupture emits an ExponentialFailure alert for a CA-ILR rupture event (v5.0).
 // Deduplicates: fires at most once per minute per host:metric pair.
 func (a *Alerter) FireRupture(ev models.RuptureEvent) {
+	now := time.Now()
+	workloadKey := "default/host/" + ev.Host
+	if a.isSuppressed(workloadKey, now) {
+		return
+	}
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	fireKey := "exponential_failure:" + ev.Host + ":" + ev.Metric
-	now := time.Now()
 	if last, fired := a.fired[fireKey]; fired && now.Sub(last) < time.Minute {
 		return
 	}
