@@ -1,119 +1,213 @@
-# MLOps Anomaly Detection
+# Kairo Core
 
-Real-time anomaly detection platform with microservices architecture on Kubernetes.
+<p align="center">
+  <img src="https://img.shields.io/badge/version-6.1.1-0069ff?style=for-the-badge" alt="v6.1.1">
+  <img src="https://img.shields.io/badge/go-1.18+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.18+">
+  <img src="https://img.shields.io/badge/license-Apache%202.0-green?style=for-the-badge" alt="Apache 2.0">
+  <img src="https://img.shields.io/badge/kubernetes-native-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes Native">
+  <img src="https://img.shields.io/badge/coverage-70%25+-brightgreen?style=for-the-badge" alt="Coverage">
+</p>
+
+<p align="center">
+  <b>The Predictive Action Layer for Cloud-Native Infrastructure.</b><br>
+  Kairo detects infrastructure ruptures before they cause outages — and acts on them automatically.
+</p>
+
+**[Documentation →](https://benfradjselim.github.io/Mlops_crew_automation/)**
+
+---
+
+## What Kairo Does
+
+Traditional observability tells you what broke. Kairo tells you **what is about to break** — and triggers the right action before users feel it.
+
+| Traditional Observability | Kairo Core |
+|--------------------------|-----------|
+| Threshold alerts fire after the fact | Rupture Index™ detects divergence **hours early** |
+| You define rules per metric | Adaptive ensemble learns your baseline automatically |
+| Manual incident response | Tier-1 actions (scale, restart, rollback) fire automatically with safety gates |
+| 5+ tools: Prom + Grafana + AM + Loki + PD | **One binary**, one `kubectl apply` |
+| No reasoning about why | Full XAI trace for every prediction |
+
+---
+
+## Core Concepts
+
+### Rupture Index™
+
+```
+R(t) = |α_burst(t)| / max(|α_stable(t)|, ε)
+
+  α_burst  = slope from 5-min CA-ILR tracker  (detects sudden change)
+  α_stable = slope from 60-min CA-ILR tracker (tracks baseline)
+  ε        = 1e-6 (numerical stability)
+```
+
+| R Range | State | Action |
+|---------|-------|--------|
+| < 1.5 | Stable / Elevated | None |
+| 1.5–3.0 | Warning | Tier-3 (human) |
+| 3.0–5.0 | Critical | Tier-2 (suggested) |
+| ≥ 5.0 | Emergency | Tier-1 (automated) |
+
+### Adaptive Ensemble (v6.1)
+
+Five models (CA-ILR, ARIMA, Holt-Winters, MAD, EWMA) with online MAE-based weight adaptation — weights update every 60s over a 1-hour sliding window.
+
+### 8 Composite Signals
+
+`stress` · `fatigue` · `pressure` · `contagion` · `resilience` · `entropy` · `sentiment` · `healthscore`
+
+Each maps raw telemetry to an interpretable 0–1 index with a published formula. No black boxes.
+
+---
 
 ## Architecture
 
 ```
-Prometheus / K8s API
-        |
-   [COLLECTOR :8001]  -- scrapes metrics & logs every 15s
-        |
-   [PROCESSOR :8002]  -- normalizes + engineers features
-        |          \
-  [TRAINER :8003]  [DETECTOR :8004]  -- online learning / scoring
-                        |
-                   [EXPORTER :8005]  -- Prometheus metrics + REST API
-                        |
-                  [DASHBOARD :8501]  -- Streamlit real-time UI
+┌──────────────────────────────────────────────────────────┐
+│                      kairo-core                          │
+│                                                          │
+│  Ingest ──► Metric/Log/Trace pipelines ──► Fusion        │
+│     │              │                         │           │
+│  gRPC           Composites              RuptureDetector  │
+│  OTLP           (8 signals)                  │           │
+│  Prom rw        Adaptive                  Actions        │
+│  DogStatsD      Ensemble              (K8s/Webhook/PD)   │
+│     │                                        │           │
+│  NATS/Kafka eventbus ◄──────────────── XAI Explain       │
+│                                              │           │
+│              REST API v2 (44 endpoints) ─────┘           │
+│              K8s Operator (KairoInstance CRD)            │
+└──────────────────────────────────────────────────────────┘
 ```
 
-All services share a SQLite database via a Kubernetes PersistentVolumeClaim.
+Single binary — BadgerDB embedded, no external database required.
 
-## Services
-
-| Service    | Port | Description |
-|-----------|------|-------------|
-| Collector  | 8001 | Scrapes Prometheus + K8s pod logs |
-| Processor  | 8002 | Normalizes data, engineers features |
-| Trainer    | 8003 | River HalfSpaceTrees online learning |
-| Detector   | 8004 | Real-time anomaly scoring |
-| Exporter   | 8005 | Prometheus metrics + dashboard REST API |
-| Dashboard  | 8501 | Streamlit real-time visualization |
+---
 
 ## Quick Start
 
-### One-Click Installation
+### Kubernetes (recommended)
 
 ```bash
-./scripts/install.sh
+git clone https://github.com/benfradjselim/Mlops_crew_automation.git
+cd Mlops_crew_automation/workdir
+docker build -t kairo-core:6.1.1 .
+kubectl apply -f deploy/
+kubectl port-forward svc/kairo-core 8080:8080 -n kairo-system
+curl http://localhost:8080/api/v2/health
 ```
 
-This will:
-1. Build Docker images for all 6 services
-2. Load images into your cluster (kind/minikube auto-detected)
-3. Install the Helm chart in namespace `mlops`
-4. Display service URLs
-
-### Prerequisites
-
-- `kubectl` configured with cluster access
-- `helm` >= 3.0
-- `docker`
-
-### Custom configuration
+### Docker
 
 ```bash
-IMAGE_REPO=my-registry/mlops IMAGE_TAG=v1.0 ./scripts/install.sh
+docker run -d \
+  -p 8080:8080 \
+  -v kairo-data:/var/lib/kairo \
+  -e KAIRO_JWT_SECRET=$(openssl rand -hex 32) \
+  kairo-core:6.1.1
+curl http://localhost:8080/api/v2/health
 ```
 
-Or edit `helm/values.yaml` before installing.
+### Helm
+
+```bash
+helm install kairo-core ./workdir/helm \
+  --namespace kairo-system \
+  --create-namespace \
+  --set auth.jwtSecret=$(openssl rand -hex 32)
+```
+
+---
+
+## Configuration (`kairo.yaml`)
+
+```yaml
+mode: connected          # connected | stateless | shadow
+
+ingest:
+  http_port: 8080
+  grpc_port: 9090
+
+eventbus:
+  driver: none           # none | nats | kafka
+
+ensemble:
+  adaptive: false        # true = online MAE-based weight adaptation (v6.1)
+
+predictor:
+  rupture_threshold: 3.0
+
+actions:
+  execution_mode: shadow  # shadow | suggest | auto
+  safety:
+    rate_limit_per_hour: 6
+
+auth:
+  jwt_secret: ""         # set via KAIRO_JWT_SECRET env var
+
+storage:
+  path: /var/lib/kairo
+```
+
+---
+
+## SDKs
+
+**Go**
+```go
+import ohe "github.com/benfradjselim/kairo-core/sdk/go"
+
+c := ohe.New("http://kairo-core:8080", ohe.WithAPIKey("ohe_your_api_key"))
+rupture, _ := c.RuptureIndex(ctx, "web-01")
+weights, _ := c.EnsembleWeights(ctx, "web-01")  // v6.1
+```
+
+**Python**
+```python
+from kairo import KairoClient
+
+c = KairoClient("http://kairo-core:8080", api_key="ohe_your_api_key")
+rupture = c.rupture_index("web-01")
+```
+
+---
+
+## Changelog
+
+### v6.1.1 — 2026-04-28
+- Documentation site launched at [benfradjselim.github.io/Mlops_crew_automation](https://benfradjselim.github.io/Mlops_crew_automation/)
+- All 8 composite signal formulas published
+- Bug fixes
+
+### v6.1.0 — 2026-04-27
+- **§23** gRPC ingest server (google.golang.org/grpc, 4MB max, back-pressure)
+- **§24** NATS/Kafka eventbus — JetStream at-least-once + franz-go exactly-once
+- **§25** Adaptive ensemble weighting — online MAE-based, 1-hour sliding window, 60s update
+- **§26** Kubernetes operator — KairoInstance CRD, controller-runtime reconcile loop
+- Go SDK `kairo-client-go` — full v2 API coverage
+
+### v6.0.0 — 2026-04-25
+- Complete clean-room rewrite from OHE v5.1 as `github.com/benfradjselim/kairo-core`
+- CA-ILR dual-scale engine, 5-model ensemble, 8 composite signals
+- 44-endpoint REST API v2, XAI explainability, single-tenant BadgerDB storage
+- Action engine with safety gates, OTLP + Prom remote_write + DogStatsD ingest
+- ≥70% test coverage
+
+---
 
 ## Development
 
-### Local setup
-
 ```bash
-pip install -r requirements.txt
+cd workdir
+go build ./...
+go test -race -timeout=120s ./...
+go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out | grep total
 ```
 
-### Run tests
+---
 
-```bash
-pytest tests/ -v --cov=src --cov-report=term-missing
-```
+## License
 
-### Run a service locally
-
-```bash
-DB_PATH=./data/mlops.db COLLECTOR_URL=http://localhost:8001 \
-  python services/collector/main.py
-```
-
-## Data Flow
-
-1. **Collector** scrapes Prometheus every `COLLECT_INTERVAL_SEC` (default 15s), writes to `raw_metrics` table, triggers Processor
-2. **Processor** normalizes metrics with online MinMax, fans out to Trainer + Detector in parallel
-3. **Trainer** calls `model.learn_one(x)` on River HalfSpaceTrees, serializes model to DB every 100 samples
-4. **Detector** loads latest model, calls `model.score_one(x)`, writes anomaly scores to `anomalies` table
-5. **Exporter** aggregates data from DB, exposes `/metrics` (Prometheus) and `/dashboard-data` (JSON)
-6. **Dashboard** polls Exporter every 5s, renders real-time charts
-
-## Key Design Decisions
-
-- **SQLite + WAL mode**: Zero-ops persistence, sufficient for ~100 writes/sec
-- **River HalfSpaceTrees**: Online learner, no labeled data required, sub-millisecond inference
-- **Push-based communication**: Upstream services POST to downstream on new data; reconciliation loop handles failures
-- **Table ownership**: Each table has one writer, avoiding SQLite write contention
-
-## Helm Configuration
-
-Key values in `helm/values.yaml`:
-
-```yaml
-config:
-  COLLECT_INTERVAL_SEC: "15"    # Scrape interval
-  ANOMALY_THRESHOLD: "0.7"      # Score threshold for anomaly flag
-  HST_N_TREES: "10"             # Number of HST trees
-  HST_WINDOW_SIZE: "250"        # Rolling window size
-
-pvc:
-  size: 5Gi                     # SQLite storage
-```
-
-## Uninstall
-
-```bash
-helm uninstall mlops-anomaly -n mlops
-kubectl delete namespace mlops
-```
+Apache 2.0 — see [LICENSE](LICENSE)
