@@ -1,10 +1,10 @@
 # Community
 
-Kairo Core is an open-source project by Selim Benfradj, licensed under Apache 2.0.
+Ruptura is an open-source project by Selim Benfradj, licensed under Apache 2.0.
 
 | Resource | Link |
 |----------|------|
-| GitHub | [benfradjselim/Mlops_crew_automation](https://github.com/benfradjselim/Mlops_crew_automation) |
+| GitHub | [benfradjselim/ruptura](https://github.com/benfradjselim/ruptura) |
 | Issues | GitHub Issues |
 | Discussions | GitHub Discussions |
 | License | Apache 2.0 |

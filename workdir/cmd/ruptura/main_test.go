@@ -18,7 +18,7 @@ func TestParseFlags_Defaults(t *testing.T) {
 	if cfg.Port != 8080 {
 		t.Errorf("want 8080 got %d", cfg.Port)
 	}
-	if cfg.StoragePath != "/var/lib/kairo/data" {
+	if cfg.StoragePath != "/var/lib/ruptura/data" {
 		t.Errorf("wrong default storage")
 	}
 	if cfg.APIKey != "" {
@@ -70,7 +70,7 @@ func TestVersion_Constant(t *testing.T) {
 
 func TestRunWithContext_InvalidStorage(t *testing.T) {
 	ctx := context.Background()
-	err := runWithContext(ctx, Config{StoragePath: "/proc/nonexistent/kairo", Port: 0})
+	err := runWithContext(ctx, Config{StoragePath: "/proc/nonexistent/ruptura", Port: 0})
 	if err == nil {
 		t.Error("expected error for invalid storage path")
 	}

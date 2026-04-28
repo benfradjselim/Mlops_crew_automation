@@ -1,6 +1,6 @@
 # License
 
-Kairo Core is released under the **Apache License, Version 2.0**.
+Ruptura is released under the **Apache License, Version 2.0**.
 
 ```
 Copyright 2026 Selim Benfradj
@@ -22,7 +22,7 @@ limitations under the License.
 
 | You can | You cannot |
 |---------|-----------|
-| Use commercially | Trademark Kairo Core |
+| Use commercially | Trademark Ruptura |
 | Modify the source | Hold author liable |
 | Distribute | Remove the license notice |
 | Sublicense | — |
@@ -31,4 +31,4 @@ limitations under the License.
 
 The Apache 2.0 license is compatible with most open-source and commercial use cases. SDKs (`sdk/go`, `sdk/python`) are also Apache 2.0.
 
-Full license text: [LICENSE](https://github.com/benfradjselim/Mlops_crew_automation/blob/v6.1/LICENSE)
+Full license text: [LICENSE](https://github.com/benfradjselim/ruptura/blob/v6.1/LICENSE)
