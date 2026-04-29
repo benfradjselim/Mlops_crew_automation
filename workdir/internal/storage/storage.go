@@ -77,6 +77,31 @@ func (s *Store) AllSnapshots() []models.KPISnapshot {
 	return result
 }
 
+// FlushSnapshots persists all in-memory snapshots to BadgerDB for durability on shutdown.
+// This is the NFR-05 implementation: no data loss on graceful shutdown.
+func (s *Store) FlushSnapshots() error {
+	s.snapshotsMu.RLock()
+	snaps := make([]models.KPISnapshot, 0, len(s.snapshots))
+	for _, snap := range s.snapshots {
+		snaps = append(snaps, snap)
+	}
+	s.snapshotsMu.RUnlock()
+
+	for _, snap := range snaps {
+		key := "snapshot:" + snap.Host
+		if err := s.set(key, snap, KPIsTTL); err != nil {
+			return fmt.Errorf("flush snapshot %s: %w", snap.Host, err)
+		}
+		if !snap.Workload.IsEmpty() {
+			wKey := "snapshot:" + snap.Workload.Key()
+			if err := s.set(wKey, snap, KPIsTTL); err != nil {
+				return fmt.Errorf("flush snapshot workload %s: %w", snap.Workload.Key(), err)
+			}
+		}
+	}
+	return nil
+}
+
 // Close shuts the database
 func (s *Store) Close() error {
 	return s.db.Close()

@@ -32,6 +32,7 @@ func (h *Handlers) NewRouter() http.Handler {
 
 	r.HandleFunc("/api/v2/forecast", h.handleForecast).Methods("POST")
 	r.HandleFunc("/api/v2/forecast/{metric}/{host}", h.handleForecast).Methods("GET")
+	r.HandleFunc("/api/v2/forecast/{metric}/{namespace}/{workload}", h.handleForecast).Methods("GET")
 
 	r.HandleFunc("/api/v2/kpi/{name}/{host}", h.handleKPI).Methods("GET")
 	r.HandleFunc("/api/v2/kpi/{name}/{host}/history", h.handleKPI).Methods("GET")

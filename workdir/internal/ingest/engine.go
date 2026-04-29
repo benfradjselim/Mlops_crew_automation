@@ -2,16 +2,18 @@ package ingest
 
 import (
 	"context"
-	"google.golang.org/grpc"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"google.golang.org/grpc"
 
 	"github.com/benfradjselim/ruptura/internal/pipeline/metrics"
 	"github.com/benfradjselim/ruptura/pkg/logger"
@@ -69,10 +71,63 @@ func New(pipeline metrics.MetricPipeline, logs LogSink, spans SpanSink, sentimen
 	}
 }
 
+// rateLimiter is a simple token-bucket middleware for the ingest HTTP server.
+// Capacity and refill rate are configurable via RUPTURA_INGEST_RPS env variable.
+type rateLimiter struct {
+	tokens   float64
+	capacity float64
+	refillPS float64 // tokens added per second
+	last     time.Time
+	mu       sync.Mutex
+}
+
+func newRateLimiter() *rateLimiter {
+	rps := 1000.0 // default: 1000 req/s
+	if v := os.Getenv("RUPTURA_INGEST_RPS"); v != "" {
+		if n, err := strconv.ParseFloat(v, 64); err == nil && n > 0 {
+			rps = n
+		}
+	}
+	return &rateLimiter{tokens: rps, capacity: rps, refillPS: rps, last: time.Now()}
+}
+
+func (rl *rateLimiter) allow() bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := time.Now()
+	elapsed := now.Sub(rl.last).Seconds()
+	rl.last = now
+	rl.tokens = min(rl.capacity, rl.tokens+rl.refillPS*elapsed)
+	if rl.tokens < 1 {
+		return false
+	}
+	rl.tokens--
+	return true
+}
+
+func min(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func rateLimitMiddleware(rl *rateLimiter, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !rl.allow() {
+			w.Header().Set("Retry-After", "1")
+			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (e *Engine) StartHTTP(addr string) error {
 	mux := http.NewServeMux()
 	RegisterHandlers(mux, e)
-	e.httpServer = &http.Server{Addr: addr, Handler: mux}
+	rl := newRateLimiter()
+	e.httpServer = &http.Server{Addr: addr, Handler: rateLimitMiddleware(rl, mux)}
 	go func() {
 		if err := e.httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			logger.Default.Error("HTTP ingest failed", "error", err)

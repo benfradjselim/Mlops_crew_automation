@@ -22,6 +22,7 @@ import (
 	"github.com/benfradjselim/ruptura/internal/fusion"
 	"github.com/benfradjselim/ruptura/internal/ingest"
 	pipelinemetrics "github.com/benfradjselim/ruptura/internal/pipeline/metrics"
+	"github.com/benfradjselim/ruptura/internal/predictor"
 	"github.com/benfradjselim/ruptura/internal/storage"
 	"github.com/benfradjselim/ruptura/internal/telemetry"
 	"github.com/benfradjselim/ruptura/pkg/logger"
@@ -114,6 +115,7 @@ func run(cfg Config) error {
 	topoBuilder := correlator.NewTopologyBuilder()
 	logSink := &burstLogSink{detector: burstDet}
 	fusionEngine := fusion.NewEngine()
+	predictorEngine := predictor.NewPredictor()
 	ingestEngine := ingest.New(pipelineEngine, logSink, nil, nil, fusionEngine)
 	analyzerEngine := analyzer.NewAnalyzer()
 	analyzerEngine.SetTopology(topoBuilder)
@@ -131,7 +133,7 @@ func run(cfg Config) error {
 	al := alerter.NewAlerter(256)
 	metricsReg := telemetry.NewRegistry(version)
 
-	// 15-second analyzer ticker: pipeline → analyzer → store → fusion
+	// 15-second analyzer ticker: pipeline → analyzer → store → fusion → predictor
 	go func() {
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
@@ -149,6 +151,15 @@ func run(cfg Config) error {
 					snap := analyzerEngine.Update(ref, rawMetrics)
 					store.StoreSnapshot(snap)
 					metricsReg.RecordKPISnapshot(snap)
+
+					// Feed each raw metric into the predictor ensemble.
+					for metric, val := range rawMetrics {
+						predictorEngine.Feed(host, metric, val, now)
+					}
+					// Also feed the composite KPI signals.
+					predictorEngine.Feed(host, "health_score", snap.HealthScore.Value, now)
+					predictorEngine.Feed(host, "stress", snap.Stress.Value, now)
+					predictorEngine.Feed(host, "fatigue", snap.Fatigue.Value, now)
 
 					// Feed metricR into fusion using the rupture index of the primary metric.
 					metricName := pickPrimaryMetric(rawMetrics)
@@ -203,7 +214,7 @@ func run(cfg Config) error {
 	detector := apicontext.NewDeploymentDetector()
 	healthCheck := telemetry.NewHealthChecker()
 
-	handlers := api.New(store, actionEngine, explainer, al, ctxStore, detector, metricsReg, healthCheck, cfg.APIKey)
+	handlers := api.New(store, actionEngine, explainer, al, predictorEngine, ctxStore, detector, metricsReg, healthCheck, cfg.APIKey)
 	handlers.SetReady(true)
 
 	router := handlers.NewRouter()
@@ -225,7 +236,11 @@ func run(cfg Config) error {
 		shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutCtx); err != nil {
-			return fmt.Errorf("shutdown error: %w", err)
+			logger.Default.Error("shutdown error", "err", err)
+		}
+		// NFR-05: flush all in-memory snapshots to BadgerDB before exit.
+		if err := store.FlushSnapshots(); err != nil {
+			logger.Default.Error("snapshot flush failed", "err", err)
 		}
 		logger.Default.Info("shutdown complete")
 		return nil

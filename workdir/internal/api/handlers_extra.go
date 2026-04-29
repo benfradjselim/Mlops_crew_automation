@@ -177,23 +177,64 @@ func (h *Handlers) handleKPIByWorkload(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, kpi)
 }
 
-// handleForecast returns a forecast stub (predictor not injected into Handlers).
+// handleForecast returns a real ensemble forecast (ILR + Holt-Winters + ARIMA).
 func (h *Handlers) handleForecast(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	metric := vars["metric"]
 	host := vars["host"]
+
 	horizon := 60 // default 60 minutes
 	if hStr := r.URL.Query().Get("horizon"); hStr != "" {
 		if v, err := strconv.Atoi(hStr); err == nil && v > 0 {
 			horizon = v
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"host":    host,
-		"metric":  metric,
-		"horizon": horizon,
-		"note":    "predictor not yet injected into Handlers — wire in cmd/ruptura/main.go",
-	})
+
+	if r.Method == http.MethodPost {
+		// POST /api/v2/forecast — batch forecast request body
+		var req struct {
+			Host    string `json:"host"`
+			Metric  string `json:"metric"`
+			Horizon int    `json:"horizon"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			if req.Host != "" {
+				host = req.Host
+			}
+			if req.Metric != "" {
+				metric = req.Metric
+			}
+			if req.Horizon > 0 {
+				horizon = req.Horizon
+			}
+		}
+	}
+
+	if h.predictor == nil || host == "" || metric == "" {
+		writeError(w, http.StatusUnprocessableEntity, "predictor not available or missing host/metric params")
+		return
+	}
+
+	result, ok := h.predictor.Forecast(host, metric, horizon)
+	if !ok {
+		// Predictor is warming up — return current stub with warming_up flag
+		snap, _ := h.store.LatestSnapshot(host)
+		var current float64
+		if m, exists := snap.Stress, snap.Stress.Name == metric; exists || m.Value > 0 {
+			current = snap.HealthScore.Value
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"host":       host,
+			"metric":     metric,
+			"horizon":    horizon,
+			"warming_up": true,
+			"current":    current,
+			"note":       "accumulating observations — forecast available after ~15 minutes of data",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }
 
 // handleActions returns action recommendations or handles action operations.

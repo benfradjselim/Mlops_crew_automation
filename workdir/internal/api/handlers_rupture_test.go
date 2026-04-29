@@ -40,7 +40,7 @@ func TestHandleRupture_404_unknownHost(t *testing.T) {
 	hc := telemetry.NewHealthChecker()
 	al := alerter.NewAlerter(10)
 	exp := explain.NewEngine()
-	h := New(store, nil, exp, al, nil, nil, met, hc, "")
+	h := New(store, nil, exp, al, nil, nil, nil, met, hc, "")
 	h.SetReady(true)
 	router := h.NewRouter()
 
@@ -61,7 +61,7 @@ func TestHandleRupture_200_knownHost(t *testing.T) {
 	hc := telemetry.NewHealthChecker()
 	al := alerter.NewAlerter(10)
 	exp := explain.NewEngine()
-	h := New(store, nil, exp, al, nil, nil, met, hc, "")
+	h := New(store, nil, exp, al, nil, nil, nil, met, hc, "")
 	h.SetReady(true)
 	router := h.NewRouter()
 
@@ -101,7 +101,7 @@ func TestHandleRuptures_200_allHosts(t *testing.T) {
 	hc := telemetry.NewHealthChecker()
 	al := alerter.NewAlerter(10)
 	exp := explain.NewEngine()
-	h := New(store, nil, exp, al, nil, nil, met, hc, "")
+	h := New(store, nil, exp, al, nil, nil, nil, met, hc, "")
 	h.SetReady(true)
 	router := h.NewRouter()
 
