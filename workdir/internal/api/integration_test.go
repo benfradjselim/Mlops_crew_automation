@@ -6,10 +6,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/benfradjselim/ruptura/internal/alerter"
 	"github.com/benfradjselim/ruptura/internal/analyzer"
 	"github.com/benfradjselim/ruptura/internal/explain"
+	"github.com/benfradjselim/ruptura/internal/fusion"
 	"github.com/benfradjselim/ruptura/internal/storage"
 	"github.com/benfradjselim/ruptura/internal/telemetry"
 	"github.com/benfradjselim/ruptura/pkg/models"
@@ -36,7 +38,17 @@ func TestIntegration_RuptureWorkload(t *testing.T) {
 		"error_rate":     0.02,
 	}
 
+	// Simulate the production ticker: set MetricR + LogR in fusion BEFORE storing snapshot.
+	// FusedR requires >=2 signals; logR=0.5 simulates a modest burst event.
+	now := time.Now()
+	fusionEng := fusion.NewEngine()
+	fusionEng.SetMetricR(ref.Key(), 2.5, now)
+	fusionEng.SetLogR(ref.Key(), 0.5, now)
+
 	snap := ana.Update(ref, rawMetrics)
+	if r, _, err := fusionEng.FusedR(ref.Key()); err == nil {
+		snap.FusedRuptureIndex = r
+	}
 	store.StoreSnapshot(snap)
 
 	met := telemetry.NewRegistry("test")
@@ -64,6 +76,9 @@ func TestIntegration_RuptureWorkload(t *testing.T) {
 		}
 		if got.HealthScore.Value <= 0 {
 			t.Errorf("expected positive HealthScore, got %f", got.HealthScore.Value)
+		}
+		if got.FusedRuptureIndex <= 0 {
+			t.Errorf("expected positive FusedRuptureIndex, got %f", got.FusedRuptureIndex)
 		}
 	})
 

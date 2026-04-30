@@ -7,9 +7,11 @@
       "id": 1,
       "type": "gauge",
       "title": "Health Score",
+      "description": "Composite workload health [0-100]. Below 40 = poor, above 80 = excellent.",
       "targets": [
         {
-          "expr": "ruptura_health_score",
+          "expr": "ruptura_kpi_signals{signal=\"health_score\"}",
+          "legendFormat": "{{namespace}}/{{kind}}/{{name}}",
           "refId": "A"
         }
       ],
@@ -20,19 +22,25 @@
           {"color": "yellow", "value": 40},
           {"color": "green", "value": 80}
         ]
+      },
+      "fieldConfig": {
+        "defaults": {"min": 0, "max": 100}
       }
     },
     {
       "id": 2,
       "type": "timeseries",
       "title": "Stress and Fatigue",
+      "description": "Stress = real-time load signal. Fatigue = accumulated burden over time.",
       "targets": [
         {
-          "expr": "ruptura_stress",
+          "expr": "ruptura_kpi_signals{signal=\"stress\"}",
+          "legendFormat": "stress {{namespace}}/{{name}}",
           "refId": "A"
         },
         {
-          "expr": "ruptura_fatigue",
+          "expr": "ruptura_kpi_signals{signal=\"fatigue\"}",
+          "legendFormat": "fatigue {{namespace}}/{{name}}",
           "refId": "B"
         }
       ]
@@ -40,10 +48,12 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Rupture Index",
+      "title": "Fused Rupture Index",
+      "description": "FusedR = combined metric + log + trace rupture signal. Green <1, Yellow 1-3, Red >3.",
       "targets": [
         {
-          "expr": "ruptura_rupture_index",
+          "expr": "ruptura_kpi_signals{signal=\"fused_rupture_index\"}",
+          "legendFormat": "{{namespace}}/{{name}}",
           "refId": "A"
         }
       ],
@@ -58,24 +68,53 @@
     },
     {
       "id": 4,
-      "type": "table",
-      "title": "Anomaly Total",
+      "type": "timeseries",
+      "title": "Pressure and Contagion",
+      "description": "Pressure = rate of deterioration (EWMA z-score). Contagion = error propagation from upstream services.",
       "targets": [
         {
-          "expr": "ruptura_anomaly_total",
+          "expr": "ruptura_kpi_signals{signal=\"pressure\"}",
+          "legendFormat": "pressure {{namespace}}/{{name}}",
           "refId": "A"
+        },
+        {
+          "expr": "ruptura_kpi_signals{signal=\"contagion\"}",
+          "legendFormat": "contagion {{namespace}}/{{name}}",
+          "refId": "B"
         }
       ]
     },
     {
       "id": 5,
-      "type": "text",
-      "title": "Action Queue API",
-      "options": {
-        "mode": "markdown",
-        "content": "### Action Queue API
-
-This section provides an overview of the Action Queue API metrics. It helps monitor the health and performance of the API responsible for processing actions within the Ruptura system."
+      "type": "table",
+      "title": "Anomaly Events",
+      "description": "Total anomaly detections per workload and severity.",
+      "targets": [
+        {
+          "expr": "ruptura_anomaly_total",
+          "legendFormat": "{{host}} [{{severity}}]",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Throughput Collapse",
+      "description": "Detects workloads going silent (circuit-breaker, crash-loop). 0=normal, 1=collapsed.",
+      "targets": [
+        {
+          "expr": "ruptura_kpi_signals{signal=\"throughput\"}",
+          "legendFormat": "{{namespace}}/{{name}}",
+          "refId": "A"
+        }
+      ],
+      "thresholds": {
+        "mode": "absolute",
+        "steps": [
+          {"color": "green", "value": null},
+          {"color": "red", "value": 0.5}
+        ]
       }
     }
   ],
@@ -92,13 +131,24 @@ This section provides an overview of the Action Queue API metrics. It helps moni
       },
       {
         "name": "namespace",
-        "query": "label_values(kube_pod_info, namespace)",
+        "query": "label_values(ruptura_kpi_signals, namespace)",
         "type": "query",
         "datasource": "$datasource",
         "hide": 0,
         "refresh": 1,
         "label": "Namespace"
+      },
+      {
+        "name": "workload",
+        "query": "label_values(ruptura_kpi_signals{namespace=\"$namespace\"}, name)",
+        "type": "query",
+        "datasource": "$datasource",
+        "hide": 0,
+        "refresh": 1,
+        "label": "Workload"
       }
     ]
-  }
+  },
+  "time": {"from": "now-1h", "to": "now"},
+  "refresh": "15s"
 }
