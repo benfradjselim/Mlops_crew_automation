@@ -55,7 +55,7 @@ func TestIntegration_RuptureWorkload(t *testing.T) {
 	hc := telemetry.NewHealthChecker()
 	al := alerter.NewAlerter(10)
 	exp := explain.NewEngine()
-	h := New(store, nil, exp, al, nil, nil, nil, met, hc, "")
+	h := New(store, nil, exp, al, nil, nil, nil, nil, met, hc, "")
 	h.SetReady(true)
 	router := h.NewRouter()
 

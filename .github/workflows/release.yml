@@ -14,7 +14,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/ruptura
-  HELM_CHART: deploy/helm/ruptura
+  HELM_CHART: helm
 
 # ── Permissions ───────────────────────────────────────────────────────────────
 # packages: write  → push image + Helm chart to GHCR
@@ -197,7 +197,7 @@ jobs:
   deploy:
     name: Deploy — k3s
     runs-on: ubuntu-latest
-    needs: [check-deploy]
+    needs: [check-deploy, docker]
     if: needs.check-deploy.outputs.has_cluster == 'true'
     environment: production
     steps:

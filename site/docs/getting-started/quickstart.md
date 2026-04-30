@@ -1,6 +1,6 @@
 # Quickstart
 
-Get Kairo running and see the Rupture Index in under 5 minutes.
+Get Ruptura running and see the Rupture Index in under 5 minutes.
 
 ## Step 1 — Start Ruptura
 
@@ -8,9 +8,10 @@ Get Kairo running and see the Rupture Index in under 5 minutes.
 docker run -d \
   --name ruptura \
   -p 8080:8080 \
+  -p 4317:4317 \
   -v ruptura-data:/var/lib/ruptura \
-  -e RUPTURA_JWT_SECRET=dev-secret-change-in-prod \
-  ruptura:6.1.0
+  -e RUPTURA_API_KEY=dev-secret-change-in-prod \
+  ruptura:6.2.1
 ```
 
 ## Step 2 — Verify health
@@ -25,23 +26,20 @@ Expected response:
 {"status":"ok","rupture_detection":"active","uptime_seconds":3}
 ```
 
-## Step 3 — Create an API key
+## Step 3 — Authenticate
+
+Pass the `RUPTURA_API_KEY` value as a Bearer token on all subsequent requests:
 
 ```bash
-curl -s -X POST http://localhost:8080/api/v2/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"dev-secret-change-in-prod"}' \
-  | python3 -m json.tool
+export API_KEY=dev-secret-change-in-prod
 ```
-
-Copy the returned JWT or use `X-API-Key` after creating a key via `/api/v2/apikeys`.
 
 ## Step 4 — Send metrics (Prometheus remote_write)
 
 ```bash
 # Push a sample metric payload
 curl -s -X POST http://localhost:8080/api/v2/write \
-  -H "Authorization: Bearer <your-token>" \
+  -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/x-protobuf" \
   --data-binary @sample.prw
 ```
@@ -52,48 +50,54 @@ Or configure your Prometheus to remote_write to Ruptura:
 # prometheus.yml
 remote_write:
   - url: http://ruptura:8080/api/v2/write
-    basic_auth:
-      password: <your-api-key>
+    authorization:
+      credentials: <your-api-key>
 ```
 
 ## Step 5 — Query the Rupture Index
 
 ```bash
-API_KEY=<your-api-key>
-
-# Get rupture index for a host
+# By host
 curl -s -H "Authorization: Bearer $API_KEY" \
   http://localhost:8080/api/v2/rupture/web-01 | python3 -m json.tool
+
+# By Kubernetes workload (namespace/name)
+curl -s -H "Authorization: Bearer $API_KEY" \
+  http://localhost:8080/api/v2/rupture/default/my-deployment | python3 -m json.tool
 ```
 
-Sample response:
-
-```json
-{
-  "host": "web-01",
-  "rupture_index": 1.2,
-  "state": "elevated",
-  "time_to_failure_seconds": null,
-  "dominant_signal": "stress"
-}
-```
-
-## Step 6 — Query composite signals
+## Step 6 — Query composite KPI signals
 
 ```bash
-# healthscore (0–100 product of stress, fatigue, pressure, contagion)
+# health_score (composite 0–100)
 curl -s -H "Authorization: Bearer $API_KEY" \
-  "http://localhost:8080/api/v2/kpi/healthscore/web-01"
+  "http://localhost:8080/api/v2/kpi/health_score/web-01"
 
-# All 8 signals
-for sig in stress fatigue pressure contagion resilience entropy sentiment healthscore; do
+# All 10 signals
+for sig in stress fatigue mood pressure humidity contagion resilience entropy velocity health_score; do
   echo -n "$sig: "
   curl -s -H "Authorization: Bearer $API_KEY" \
     "http://localhost:8080/api/v2/kpi/$sig/web-01" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('value','?'))"
 done
 ```
 
-## Step 7 — Explain a prediction
+## Step 7 — View anomaly events
+
+```bash
+# All hosts, last 15 min
+curl -s -H "Authorization: Bearer $API_KEY" \
+  http://localhost:8080/api/v2/anomalies | python3 -m json.tool
+
+# Single host
+curl -s -H "Authorization: Bearer $API_KEY" \
+  "http://localhost:8080/api/v2/anomalies/web-01"
+
+# Custom time window
+curl -s -H "Authorization: Bearer $API_KEY" \
+  "http://localhost:8080/api/v2/anomalies?since=2026-04-30T00:00:00Z"
+```
+
+## Step 8 — Explain a prediction
 
 ```bash
 curl -s -H "Authorization: Bearer $API_KEY" \

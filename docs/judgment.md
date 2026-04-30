@@ -727,7 +727,7 @@ Building the dashboard before items 1–6 produces a UI that looks impressive an
 **Still not done (deferred to v7.0)**:
 - Per-tenant isolation via X-Org-ID (MISSING FR-10) — v7.0 target, requires namespace-level auth.
 - Web dashboard v2 (Svelte) and `ruptura-ctl` CLI — surface layer, deferred until API is fully stable.
-- GAP-04: AnomalyStore not wired (anomalies evaluated by alerter and forwarded to action engine, but not stored for replay).
+- GAP-04: closed in v6.2.2 — anomaly REST endpoints added, dead duplicate engine removed.
 
 ---
 
@@ -760,7 +760,7 @@ Before cutting any release tag, verify:
 **Still not done (deferred to v7.0)**:
 - Per-tenant isolation via X-Org-ID (FR-10) — requires namespace-level auth.
 - Web dashboard v2 (Svelte) and `ruptura-ctl` CLI — surface layer.
-- GAP-04: AnomalyStore durable replay path.
+- GAP-04: closed in v6.2.2.
 
 **Judgment for v7.0**:
 The engine is now honest, wired end-to-end, and stable. The next meaningful addition is:
@@ -788,7 +788,7 @@ The engine is now honest, wired end-to-end, and stable. The next meaningful addi
 | GAP-01 Dual engine | ✅ Closed | v6.2.0-dev |
 | GAP-02 API stubs | ✅ Closed | v6.2.0-dev |
 | GAP-03 Fusion wiring + FusedR in API | ✅ Closed | v6.2.0 (wiring) + v6.2.1 (field + test) |
-| GAP-04 AnomalyStore | ⏭ Deferred | v7.0 |
+| GAP-04 AnomalyStore | ✅ Closed | v6.2.2 |
 | GAP-05 Throughput collapse | ✅ Closed | v6.2.0-dev |
 | GAP-06 BadgerDB persistence | ✅ Closed | v6.2.0-dev |
 | GAP-07 Grafana dashboard | ✅ Closed | v6.2.1 (correct metric names + 6 panels) |
@@ -799,3 +799,20 @@ The engine is now honest, wired end-to-end, and stable. The next meaningful addi
 | MISSING-02 Narrative explain | ✅ Closed | v6.2.0-dev |
 | MISSING-03 Topology contagion | ✅ Closed | v6.2.0-dev |
 | MISSING-04 Maintenance windows | ✅ Closed | v6.2.0-dev |
+
+---
+
+### v6.2.2 (shipped 2026-04-30 — patch: close GAP-04, fix workflows and docs)
+
+**What shipped in v6.2.2**:
+- **GAP-04 closed**: Dead duplicate `internal/predictor/anomaly_engine.go` removed. `MetricPipeline` interface extended with `AllHosts()`, `LatestByHost()`, `RecentAnomalies()`. `Handlers` struct gains a `pipeline MetricPipeline` field; `New()` / `NewHandlers()` signatures updated. `handleAnomalies` handler added. Routes `/api/v2/anomalies` and `/api/v2/anomalies/{host}` registered in router. All callers updated (main.go, api_test.go, handlers_rupture_test.go, integration_test.go).
+- **Workflow fix**: `release.yml` `HELM_CHART` env corrected from `deploy/helm/ruptura` to `helm`. Deploy job now lists `docker` in its `needs` array so `image-tag` output is accessible.
+- **Docs update**: README, site/docs/index.md, installation.md, quickstart.md — version references updated to 6.2.1/6.2.2; `RUPTURA_JWT_SECRET` replaced with `RUPTURA_API_KEY`; bogus `/api/v2/auth/login` step removed; "Kairo" brand reference replaced with "Ruptura"; port 9090 → 4317 (OTLP); anomaly endpoint step added to quickstart; KPI signal list updated to all 10 correct names.
+- **`go test -race ./...`**: all packages pass.
+
+**All judgment.md gaps: fully closed as of v6.2.2.** No deferred GAPs remain for v6.x.
+
+**Next target: v7.0**
+1. FR-10 X-Org-ID multi-tenant isolation.
+2. Web dashboard v2 (Svelte).
+3. `ruptura-ctl` CLI.

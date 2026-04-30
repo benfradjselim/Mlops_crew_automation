@@ -10,6 +10,7 @@ import (
     "github.com/benfradjselim/ruptura/internal/alerter"
     apicontext "github.com/benfradjselim/ruptura/internal/context"
     "github.com/benfradjselim/ruptura/internal/explain"
+    pipelinemetrics "github.com/benfradjselim/ruptura/internal/pipeline/metrics"
     "github.com/benfradjselim/ruptura/internal/predictor"
     "github.com/benfradjselim/ruptura/internal/storage"
     "github.com/benfradjselim/ruptura/internal/telemetry"
@@ -21,6 +22,7 @@ type Handlers struct {
     explainer  *explain.Engine
     alerter    *alerter.Alerter
     predictor  *predictor.Predictor
+    pipeline   pipelinemetrics.MetricPipeline
     ctxStore   *apicontext.ManualContextStore
     detector   *apicontext.DeploymentDetector
     metrics    *telemetry.Registry
@@ -36,6 +38,7 @@ func NewHandlers(
     exp *explain.Engine,
     al  *alerter.Alerter,
     pred *predictor.Predictor,
+    pipe pipelinemetrics.MetricPipeline,
     ctx *apicontext.ManualContextStore,
     det *apicontext.DeploymentDetector,
     met *telemetry.Registry,
@@ -44,8 +47,8 @@ func NewHandlers(
 ) *Handlers {
     return &Handlers{
         store: store, engine: eng, explainer: exp, alerter: al,
-        predictor: pred, ctxStore: ctx, detector: det, metrics: met, health: hc,
-        startTime: time.Now(), apiKey: apiKey,
+        predictor: pred, pipeline: pipe, ctxStore: ctx, detector: det,
+        metrics: met, health: hc, startTime: time.Now(), apiKey: apiKey,
     }
 }
 
@@ -56,13 +59,14 @@ func New(
 	exp *explain.Engine,
 	al  *alerter.Alerter,
 	pred *predictor.Predictor,
+	pipe pipelinemetrics.MetricPipeline,
 	ctx *apicontext.ManualContextStore,
 	det *apicontext.DeploymentDetector,
 	met *telemetry.Registry,
 	hc *telemetry.HealthChecker,
 	apiKey string,
 ) *Handlers {
-	return NewHandlers(store, eng, exp, al, pred, ctx, det, met, hc, apiKey)
+	return NewHandlers(store, eng, exp, al, pred, pipe, ctx, det, met, hc, apiKey)
 }
 
 func (h *Handlers) SetReady(v bool) {

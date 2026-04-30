@@ -10,7 +10,7 @@ import (
 func TestAPI(t *testing.T) {
     met := telemetry.NewRegistry("6.0.0")
     hc := telemetry.NewHealthChecker()
-    h := New(nil, nil, nil, nil, nil, nil, nil, met, hc, "token")
+    h := New(nil, nil, nil, nil, nil, nil, nil, nil, met, hc, "token")
     h.SetReady(true)
     router := h.NewRouter()
 

@@ -14,6 +14,42 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// handleAnomalies returns recent anomaly events, optionally filtered by host.
+//
+//	GET /api/v2/anomalies                  — all hosts, last 15 min
+//	GET /api/v2/anomalies?since=<RFC3339>  — custom time window
+//	GET /api/v2/anomalies/{host}           — single host
+func (h *Handlers) handleAnomalies(w http.ResponseWriter, r *http.Request) {
+	if h.pipeline == nil {
+		writeJSON(w, http.StatusOK, []models.AnomalyEvent{})
+		return
+	}
+
+	sinceStr := r.URL.Query().Get("since")
+	since := time.Now().Add(-15 * time.Minute)
+	if sinceStr != "" {
+		if t, err := time.Parse(time.RFC3339, sinceStr); err == nil {
+			since = t
+		}
+	}
+
+	vars := mux.Vars(r)
+	host := vars["host"]
+
+	var events []models.AnomalyEvent
+	if host != "" {
+		events = h.pipeline.RecentAnomalies(host, since)
+	} else {
+		for _, hostKey := range h.pipeline.AllHosts() {
+			events = append(events, h.pipeline.RecentAnomalies(hostKey, since)...)
+		}
+	}
+	if events == nil {
+		events = []models.AnomalyEvent{}
+	}
+	writeJSON(w, http.StatusOK, events)
+}
+
 // handleRupture returns the latest KPISnapshot for the given host.
 func (h *Handlers) handleRupture(w http.ResponseWriter, r *http.Request) {
 	if h.store == nil {

@@ -14,6 +14,7 @@ Ruptura detects infrastructure failures before they happen — using the Rupture
 
 | Version | Date | Status |
 |---------|------|--------|
+| v6.2.1 | 2026-04-30 | ✅ Released — FusedR API exposure, anomaly REST endpoints, WorkloadRef-native pipeline |
 | v6.1.0 | 2026-04-27 | ✅ Released — gRPC, eventbus, adaptive ensemble, K8s operator |
 | v6.0.0 | 2026-04-25 | ✅ Released — full clean rewrite |
 | v5.1.0 (OHE) | 2026-04-19 | ✅ Released — SDKs, Vault, plugin system |
@@ -25,7 +26,7 @@ Ruptura detects infrastructure failures before they happen — using the Rupture
 ## What's Inside
 
 ```
-workdir/               Ruptura Go source (v6.1.0)
+workdir/               Ruptura Go source (v6.2.1)
   cmd/ruptura/      Main binary
   internal/            Engine, pipelines, API, storage, actions
   pkg/                 Public Go packages (rupture, composites, client)
@@ -49,9 +50,9 @@ deploy/                Raw Kubernetes manifests
 ## Roadmap
 
 ```
+v6.2.x ✅  FusedR in API · anomaly REST endpoints · WorkloadRef-native pipeline · stable engine
 v6.1.0 ✅  gRPC ingest · NATS/Kafka eventbus · adaptive ensemble · K8s operator
-v6.2.0 ⏳  ruptura-ctl CLI · web dashboard v2 · multi-tenant opt-in
-v6.3.0 ⏳  SaaS self-serve · billing · managed cloud deployment
+v7.0.0 ⏳  ruptura-ctl CLI · web dashboard v2 · multi-tenant opt-in
 ```
 
 Full roadmap: [docs/v6.0.0/ROADMAP.md](docs/v6.0.0/ROADMAP.md)

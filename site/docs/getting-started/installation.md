@@ -11,7 +11,7 @@ git clone https://github.com/benfradjselim/ruptura.git
 cd ruptura
 
 # Build the image (or use a pre-built tag)
-docker build -t ruptura:6.1.0 .
+docker build -t ruptura:6.2.1 .
 
 # Create namespace + deploy
 kubectl apply -f deploy/
@@ -30,7 +30,7 @@ curl http://localhost:8080/api/v2/health
 helm install ruptura ./helm \
   --namespace ruptura-system \
   --create-namespace \
-  --set auth.jwtSecret=$(openssl rand -hex 32) \
+  --set apiKey=$(openssl rand -hex 32) \
   --set storage.size=20Gi
 ```
 
@@ -51,7 +51,7 @@ metadata:
   name: production
   namespace: ruptura-system
 spec:
-  image: ruptura:6.1.0
+  image: ruptura:6.2.1
   port: 8080
   storageSize: 20Gi
   apiKey:
@@ -73,16 +73,16 @@ See [Operator →](../architecture/operator.md) for full CRD reference.
 docker run -d \
   --name ruptura \
   -p 8080:8080 \
-  -p 9090:9090 \
+  -p 4317:4317 \
   -v ruptura-data:/var/lib/ruptura \
-  -e RUPTURA_JWT_SECRET=$(openssl rand -hex 32) \
-  ruptura:6.1.0
+  -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
+  ruptura:6.2.1
 ```
 
 | Port | Protocol | Purpose |
 |------|----------|---------|
 | 8080 | HTTP | REST API v2, Prometheus metrics |
-| 9090 | gRPC | gRPC ingest (v6.1) |
+| 4317 | HTTP | OTLP ingest (metrics, logs, traces) |
 
 Verify:
 

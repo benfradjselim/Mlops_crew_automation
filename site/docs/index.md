@@ -48,7 +48,7 @@ Each maps raw metrics to a single interpretable 0–1 index with published formu
     ```bash
     git clone https://github.com/benfradjselim/ruptura.git
     cd ruptura
-    docker build -t ruptura:6.1.0 .
+    docker build -t ruptura:6.2.1 .
     kubectl apply -f deploy/
     kubectl port-forward svc/ruptura 8080:8080 -n ruptura-system
     curl http://localhost:8080/api/v2/health
@@ -59,9 +59,10 @@ Each maps raw metrics to a single interpretable 0–1 index with published formu
     ```bash
     docker run -d \
       -p 8080:8080 \
+      -p 4317:4317 \
       -v ruptura-data:/var/lib/ruptura \
-      -e RUPTURA_JWT_SECRET=$(openssl rand -hex 32) \
-      ruptura:6.1.0
+      -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
+      ruptura:6.2.1
 
     curl http://localhost:8080/api/v2/health
     ```
@@ -72,14 +73,14 @@ Each maps raw metrics to a single interpretable 0–1 index with published formu
     helm install ruptura ./helm \
       --namespace ruptura-system \
       --create-namespace \
-      --set auth.jwtSecret=$(openssl rand -hex 32)
+      --set apiKey=$(openssl rand -hex 32)
     ```
 
 ---
 
 ## Current Release
 
-**v6.1.1** — gRPC ingest · NATS/Kafka eventbus · Adaptive ensemble weighting · K8s Operator · Go SDK
+**v6.2.1** — FusedR in API · anomaly REST endpoints (`/api/v2/anomalies`) · WorkloadRef-native pipeline · stable engine
 
 [Full changelog →](community/roadmap.md) · [Getting Started →](getting-started/installation.md) · [API Reference →](api/reference.md)
 

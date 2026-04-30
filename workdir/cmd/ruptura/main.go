@@ -29,7 +29,7 @@ import (
 	"github.com/benfradjselim/ruptura/pkg/models"
 )
 
-const version = "6.2.1"
+const version = "6.2.2"
 
 // Config holds all runtime configuration parsed from CLI flags.
 type Config struct {
@@ -235,7 +235,7 @@ func runWithContext(ctx context.Context, cfg Config) error {
 	detector := apicontext.NewDeploymentDetector()
 	healthCheck := telemetry.NewHealthChecker()
 
-	handlers := api.New(store, actionEngine, explainer, al, predictorEngine, ctxStore, detector, metricsReg, healthCheck, cfg.APIKey)
+	handlers := api.New(store, actionEngine, explainer, al, predictorEngine, pipelineEngine, ctxStore, detector, metricsReg, healthCheck, cfg.APIKey)
 	handlers.SetReady(true)
 
 	router := handlers.NewRouter()

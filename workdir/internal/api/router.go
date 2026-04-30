@@ -50,6 +50,9 @@ func (h *Handlers) NewRouter() http.Handler {
 	r.HandleFunc("/api/v2/suppressions", h.handleSuppressions).Methods("POST", "GET")
 	r.HandleFunc("/api/v2/suppressions/{id}", h.handleSuppressions).Methods("DELETE")
 
+	r.HandleFunc("/api/v2/anomalies", h.handleAnomalies).Methods("GET")
+	r.HandleFunc("/api/v2/anomalies/{host}", h.handleAnomalies).Methods("GET")
+
 	r.HandleFunc("/api/v2/explain/{rupture_id}", h.handleExplain).Methods("GET")
 	r.HandleFunc("/api/v2/explain/{rupture_id}/formula", h.handleExplain).Methods("GET")
 	r.HandleFunc("/api/v2/explain/{rupture_id}/pipeline", h.handleExplain).Methods("GET")
