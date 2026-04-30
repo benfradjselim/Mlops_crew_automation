@@ -1,16 +1,18 @@
+{{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) -}}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ .Values.pvc.name }}
-  namespace: {{ .Values.namespace }}
+  name: {{ include "ruptura.fullname" . }}-data
+  namespace: {{ .Release.Namespace }}
   labels:
-    app.kubernetes.io/name: mlops-anomaly-detection
+    {{- include "ruptura.labels" . | nindent 4 }}
 spec:
   accessModes:
-    - {{ .Values.pvc.accessMode }}
+    - {{ .Values.persistence.accessMode }}
+  {{- if .Values.persistence.storageClass }}
+  storageClassName: {{ .Values.persistence.storageClass }}
+  {{- end }}
   resources:
     requests:
-      storage: {{ .Values.pvc.size }}
-  {{- if .Values.pvc.storageClass }}
-  storageClassName: {{ .Values.pvc.storageClass }}
-  {{- end }}
+      storage: {{ .Values.persistence.size }}
+{{- end }}

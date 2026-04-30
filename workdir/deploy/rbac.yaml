@@ -2,56 +2,48 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: ohe-system
+  name: ruptura-system
   labels:
-    app.kubernetes.io/name: ohe
+    app.kubernetes.io/name: ruptura
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: ohe-central
-  namespace: ohe-system
+  name: ruptura
+  namespace: ruptura-system
   labels:
-    app.kubernetes.io/name: ohe
-    app.kubernetes.io/component: central
+    app.kubernetes.io/name: ruptura
+    app.kubernetes.io/component: server
+automountServiceAccountToken: true
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: ohe-agent
-  namespace: ohe-system
-  labels:
-    app.kubernetes.io/name: ohe
-    app.kubernetes.io/component: agent
----
-# Central needs no K8s API access — it only reads/writes its own data
-# Agent needs to read Pod metadata for container metric enrichment
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: ohe-agent
+  name: ruptura
   labels:
-    app.kubernetes.io/name: ohe
-    app.kubernetes.io/component: agent
+    app.kubernetes.io/name: ruptura
 rules:
-  - apiGroups: [""]
-    resources: ["pods", "nodes"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
-    resources: ["nodes/metrics"]
-    verbs: ["get"]
+    resources: ["pods", "nodes", "namespaces", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: ohe-agent
+  name: ruptura
   labels:
-    app.kubernetes.io/name: ohe
+    app.kubernetes.io/name: ruptura
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ruptura
 subjects:
   - kind: ServiceAccount
-    name: ohe-agent
-    namespace: ohe-system
-roleRef:
-  kind: ClusterRole
-  name: ohe-agent
-  apiGroup: rbac.authorization.k8s.io
+    name: ruptura
+    namespace: ruptura-system

@@ -1,103 +1,105 @@
-namespace: mlops
+# Ruptura Helm chart values
+# Install: helm install ruptura oci://ghcr.io/benfradjselim/charts/ruptura
+
+replicaCount: 1
 
 image:
-  repository: mlops-anomaly
-  tag: latest
+  repository: ghcr.io/benfradjselim/ruptura
+  tag: ""  # defaults to Chart.appVersion
   pullPolicy: IfNotPresent
 
-# Shared SQLite PVC
-pvc:
-  name: mlops-data
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# -- API bearer token for authentication. Generate a strong random value.
+# If empty, authentication is disabled (dev/testing only).
+apiKey: ""
+
+# -- Auto-discovery: Ruptura discovers all Deployments/StatefulSets in the cluster
+# when workloads send OTLP metrics with k8s.* resource attributes.
+autodiscovery:
+  enabled: true
+
+ports:
+  api: 8080    # REST API + Prometheus metrics
+  otlp: 4317   # OTLP ingest (metrics/logs/traces)
+
+service:
+  type: ClusterIP
+  annotations: {}
+
+otlpService:
+  type: ClusterIP
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: ruptura.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+persistence:
+  enabled: true
   storageClass: ""
-  size: 5Gi
   accessMode: ReadWriteOnce
+  size: 10Gi
+  existingClaim: ""
 
-# ConfigMap environment variables
-config:
-  DB_PATH: /data/mlops.db
-  LOG_LEVEL: INFO
-  PROMETHEUS_URL: http://prometheus-server.monitoring:9090
-  K8S_NAMESPACES: default,mlops
-  COLLECT_INTERVAL_SEC: "15"
-  BATCH_SIZE: "50"
-  HST_N_TREES: "10"
-  HST_HEIGHT: "8"
-  HST_WINDOW_SIZE: "250"
-  MODEL_SAVE_EVERY_N: "100"
-  ANOMALY_THRESHOLD: "0.7"
-  DASHBOARD_REFRESH_SEC: "5"
-  COLLECTOR_URL: http://collector:8001
-  PROCESSOR_URL: http://processor:8002
-  TRAINER_URL: http://trainer:8003
-  DETECTOR_URL: http://detector:8004
-  EXPORTER_URL: http://exporter:8005
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
 
-services:
-  collector:
-    port: 8001
-    replicas: 1
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
-      limits:
-        cpu: 500m
-        memory: 256Mi
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
 
-  processor:
-    port: 8002
-    replicas: 1
-    resources:
-      requests:
-        cpu: 200m
-        memory: 256Mi
-      limits:
-        cpu: 1000m
-        memory: 512Mi
+# -- ClusterRole to read Kubernetes workload metadata (Deployments, StatefulSets, Pods).
+# Required for workload auto-discovery via the Kubernetes API.
+rbac:
+  create: true
 
-  trainer:
-    port: 8003
-    replicas: 1
-    resources:
-      requests:
-        cpu: 200m
-        memory: 256Mi
-      limits:
-        cpu: 1000m
-        memory: 512Mi
+podAnnotations: {}
 
-  detector:
-    port: 8004
-    replicas: 1
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
-      limits:
-        cpu: 500m
-        memory: 256Mi
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
 
-  exporter:
-    port: 8005
-    replicas: 1
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
-      limits:
-        cpu: 250m
-        memory: 256Mi
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
 
-  dashboard:
-    port: 8501
-    replicas: 1
-    resources:
-      requests:
-        cpu: 100m
-        memory: 256Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
+# -- Kafka broker list for event streaming (optional). Leave empty for in-process bus.
+kafka:
+  brokers: ""
 
-# Node affinity for ReadWriteOnce PVC (all pods on same node)
-nodeAffinityKey: kubernetes.io/hostname
+# -- Ingest rate limit in requests/second (default 1000).
+ingestRPS: 1000
+
+# -- ServiceMonitor for Prometheus Operator scraping (optional).
+serviceMonitor:
+  enabled: false
+  namespace: ""
+  interval: 15s
+  scrapeTimeout: 10s
+  labels: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

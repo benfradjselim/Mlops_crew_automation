@@ -1,13 +1,19 @@
 apiVersion: v2
-name: mlops-anomaly-detection
-description: MLOps real-time anomaly detection platform with microservices on Kubernetes
+name: ruptura
+description: Predictive workload health platform for Kubernetes — detect ruptures before they happen
 type: application
-version: 1.0.0
-appVersion: "1.0.0"
+version: 0.6.2
+appVersion: "6.2.0"
 keywords:
-  - mlops
-  - anomaly-detection
-  - machine-learning
+  - observability
   - kubernetes
+  - health
+  - anomaly-detection
+  - sre
+  - cncf
 maintainers:
-  - name: MLOps Team
+  - name: Ruptura Maintainers
+    email: benfradjselim@gmail.com
+home: https://ruptura.dev
+sources:
+  - https://github.com/benfradjselim/ruptura

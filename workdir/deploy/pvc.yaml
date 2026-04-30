@@ -1,18 +1,16 @@
 ---
-# PersistentVolumeClaim for ohe-central (Badger time-series data).
+# PersistentVolumeClaim for the Ruptura server (BadgerDB time-series data).
 # Apply this BEFORE central-deployment.yaml.
-# This file is kept separate so a re-deploy of the Deployment/Service
-# never accidentally deletes data.
+# Kept separate so re-deploying the Deployment never accidentally deletes data.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: ohe-data
-  namespace: ohe-system
+  name: ruptura-data
+  namespace: ruptura-system
   labels:
-    app.kubernetes.io/name: ohe
-    app.kubernetes.io/component: central
+    app.kubernetes.io/name: ruptura
+    app.kubernetes.io/component: server
   annotations:
-    # Prevent accidental deletion via kubectl delete -f deploy/
     helm.sh/resource-policy: keep
 spec:
   accessModes: [ReadWriteOnce]

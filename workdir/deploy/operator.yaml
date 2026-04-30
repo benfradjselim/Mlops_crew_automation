@@ -4,13 +4,13 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: ohe-operator
-  namespace: ohe-system
+  name: ruptura-operator
+  namespace: ruptura-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: ohe-operator
+  name: ruptura-operator
 rules:
 - apiGroups: ["ohe.io"]
   resources: ["oheclusters", "oheclusters/status"]
@@ -25,41 +25,41 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: ohe-operator
+  name: ruptura-operator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: ohe-operator
+  name: ruptura-operator
 subjects:
 - kind: ServiceAccount
-  name: ohe-operator
-  namespace: ohe-system
+  name: ruptura-operator
+  namespace: ruptura-system
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ohe-operator
-  namespace: ohe-system
+  name: ruptura-operator
+  namespace: ruptura-system
   labels:
-    app: ohe-operator
-    app.kubernetes.io/name: ohe
+    app: ruptura-operator
+    app.kubernetes.io/name: ruptura
     app.kubernetes.io/component: operator
     app.kubernetes.io/version: "4.0.0"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ohe-operator
+      app: ruptura-operator
   template:
     metadata:
       labels:
-        app: ohe-operator
-        app.kubernetes.io/name: ohe
+        app: ruptura-operator
+        app.kubernetes.io/name: ruptura
         app.kubernetes.io/component: operator
     spec:
       serviceAccountName: ohe-operator
       containers:
-      - name: ohe-operator
+      - name: ruptura-operator
         image: ghcr.io/benfradjselim/ohe-operator:4.0.0
         imagePullPolicy: IfNotPresent
         args: ["--interval=30s"]

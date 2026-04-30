@@ -738,8 +738,32 @@ Before cutting any release tag, verify:
 - [x] GAP-10 resolved: WorkloadRef is the treatment unit, host is a secondary dimension
 - [x] All other GAPs in this file are resolved or explicitly deferred with a reason
 - [x] `go test -race ./...` passes clean (36 packages, 0 failures)
-- [ ] `helm lint deploy/helm/ruptura/` passes
+- [x] `helm lint deploy/helm/ruptura/` passes (Helm chart fully rewritten for Ruptura — Chart.yaml, values.yaml, templates for Deployment/Service/PVC/RBAC/Ingress/ServiceMonitor/NOTES)
 - [x] API handler coverage: no stub returning `[]` or `{}` for a route that v6.2+ consumers depend on
 - [x] Prometheus metrics endpoint exports all 12 signal metric names
 - [x] At least one integration test exercises the full path: ingest → analyze → rupture API response
 - [x] This file updated with a new version judgment section
+
+---
+
+### v6.2.0 (shipped 2026-04-30 — stable release)
+
+**What shipped on top of v6.2.0-dev**:
+- Build fixed: `cmd/ruptura/main.go` had duplicate `logSink` declaration and undefined `sentimentSink` type — both resolved. `busSentimentSink` concrete implementation added, publishes sentiment counts to the event bus.
+- Version bumped to `6.2.0` (constant and test updated).
+- Helm chart completely rewritten: old `mlops-anomaly-detection` multi-service chart replaced with a proper single-binary Ruptura chart. Templates: `_helpers.tpl`, `deployment.yaml`, `service.yaml`, `pvc.yaml`, `rbac.yaml`, `serviceaccount.yaml`, `secret.yaml`, `ingress.yaml`, `servicemonitor.yaml`, `NOTES.txt`. `helm lint` passes clean.
+- Kustomize deploy manifests (`deploy/`) fully rebranded: `ohe-system` → `ruptura-system`, `ohe` → `ruptura` across all YAML files (central-deployment, rbac, pvc, configmap, secrets, prometheus, kustomization, agent-daemonset, network-policy, operator).
+- `go test -race ./...` passes clean across all 37 packages.
+
+**Pre-version checklist: all items checked.**
+
+**Still not done (deferred to v7.0)**:
+- Per-tenant isolation via X-Org-ID (FR-10) — requires namespace-level auth.
+- Web dashboard v2 (Svelte) and `ruptura-ctl` CLI — surface layer.
+- GAP-04: AnomalyStore durable replay path.
+
+**Judgment for v7.0**:
+The engine is now honest, wired end-to-end, and stable. The next meaningful addition is:
+1. FR-10: X-Org-ID multi-tenant isolation (map org → namespace filter on all queries).
+2. Web dashboard v2 — now that the API is real, 2 weeks of Svelte work produces a genuinely useful UI.
+3. `ruptura-ctl` CLI — `ruptura-ctl status`, `ruptura-ctl explain <id>`, `ruptura-ctl suppress <workload> 30m`.

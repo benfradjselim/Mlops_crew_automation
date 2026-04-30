@@ -29,7 +29,7 @@ import (
 	"github.com/benfradjselim/ruptura/pkg/models"
 )
 
-const version = "6.1.0"
+const version = "6.2.0"
 
 // Config holds all runtime configuration parsed from CLI flags.
 type Config struct {
@@ -80,24 +80,39 @@ func run(cfg Config) error {
 	return runWithContext(ctx, cfg)
 }
 
-	// burstLogSink wraps a BurstDetector to satisfy the ingest.LogSink interface.
-	// It classifies log lines by scanning for "error" or "warn" level keywords.
-	type burstLogSink struct {
-		detector *correlator.BurstDetector
-	}
+// burstLogSink wraps a BurstDetector to satisfy the ingest.LogSink interface.
+// It classifies log lines by scanning for "error" or "warn" level keywords.
+type burstLogSink struct {
+	detector *correlator.BurstDetector
+}
 
-	func (b *burstLogSink) IngestLine(service string, line []byte, ts time.Time) {
-		lower := bytes.ToLower(line)
-		switch {
-		case bytes.Contains(lower, []byte("error")):
-			b.detector.Observe(service, "error", ts)
-		case bytes.Contains(lower, []byte("warn")):
-			b.detector.Observe(service, "warn", ts)
-		}
+func (b *burstLogSink) IngestLine(service string, line []byte, ts time.Time) {
+	lower := bytes.ToLower(line)
+	switch {
+	case bytes.Contains(lower, []byte("error")):
+		b.detector.Observe(service, "error", ts)
+	case bytes.Contains(lower, []byte("warn")):
+		b.detector.Observe(service, "warn", ts)
 	}
+}
 
-	// runWithContext is the testable entrypoint — it uses the provided context for shutdown.
-	func runWithContext(ctx context.Context, cfg Config) error {
+// busSentimentSink publishes sentiment log counts to the event bus.
+// Downstream subscribers can use these counts to compute the Sentiment KPI.
+type busSentimentSink struct {
+	bus eventbus.Bus
+	ctx context.Context
+}
+
+func (s *busSentimentSink) UpdateSentiment(service string, positive, negative int) {
+	_ = s.bus.Publish(s.ctx, "ruptura.sentiment.update", "", map[string]interface{}{
+		"service":  service,
+		"positive": positive,
+		"negative": negative,
+	})
+}
+
+// runWithContext is the testable entrypoint — it uses the provided context for shutdown.
+func runWithContext(ctx context.Context, cfg Config) error {
 	logger.Default.Info("ruptura starting", "version", version, "port", cfg.Port)
 
 	store, err := storage.Open(cfg.StoragePath)
@@ -116,7 +131,8 @@ func run(cfg Config) error {
 	logSink := &burstLogSink{detector: burstDet}
 	fusionEngine := fusion.NewEngine()
 	predictorEngine := predictor.NewPredictor()
-	ingestEngine := ingest.New(pipelineEngine, logSink, nil, nil, fusionEngine)
+	sentSink := &busSentimentSink{bus: bus, ctx: ctx}
+	ingestEngine := ingest.New(pipelineEngine, logSink, nil, sentSink, fusionEngine)
 	analyzerEngine := analyzer.NewAnalyzer()
 	analyzerEngine.SetTopology(topoBuilder)
 

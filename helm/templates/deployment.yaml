@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ruptura.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ruptura.labels" . | nindent 4 }}
+  {{- with .Values.podAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  # BadgerDB is single-writer — use Recreate when PVC is ReadWriteOnce.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ruptura.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ruptura.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "ruptura.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: ruptura
+          image: {{ include "ruptura.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          args:
+            - --port={{ .Values.ports.api }}
+            - --otlp-port={{ .Values.ports.otlp }}
+            - --storage=/var/lib/ruptura/data
+            {{- if .Values.apiKey }}
+            - --api-key=$(RUPTURA_API_KEY)
+            {{- end }}
+          ports:
+            - name: api
+              containerPort: {{ .Values.ports.api }}
+              protocol: TCP
+            - name: otlp
+              containerPort: {{ .Values.ports.otlp }}
+              protocol: TCP
+          env:
+            {{- if .Values.apiKey }}
+            - name: RUPTURA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ruptura.fullname" . }}-secret
+                  key: api-key
+            {{- end }}
+            {{- if .Values.kafka.brokers }}
+            - name: KAFKA_BROKERS
+              value: {{ .Values.kafka.brokers | quote }}
+            {{- end }}
+            - name: RUPTURA_INGEST_RPS
+              value: {{ .Values.ingestRPS | quote }}
+          livenessProbe:
+            httpGet:
+              path: /api/v2/health
+              port: api
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v2/ready
+              port: api
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 2
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/ruptura/data
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-data" (include "ruptura.fullname" .)) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
