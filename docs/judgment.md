@@ -767,3 +767,35 @@ The engine is now honest, wired end-to-end, and stable. The next meaningful addi
 1. FR-10: X-Org-ID multi-tenant isolation (map org → namespace filter on all queries).
 2. Web dashboard v2 — now that the API is real, 2 weeks of Svelte work produces a genuinely useful UI.
 3. `ruptura-ctl` CLI — `ruptura-ctl status`, `ruptura-ctl explain <id>`, `ruptura-ctl suppress <workload> 30m`.
+
+---
+
+### v6.2.1 (shipped 2026-04-30 — patch: close remaining audit gaps)
+
+**What was found in post-release audit:**
+- `FusedRuptureIndex` was added to `KPISnapshot` in v6.2.0 but the integration test did not assert it was non-zero — so the field could silently regress.
+- Grafana dashboard Panel 3 ("Rupture Index") queried `ruptura_rupture_index` (the CAILR per-host-metric gauge, not FusedR). The new `fused_rupture_index` gauge from `RecordKPISnapshot` was not in the dashboard at all.
+
+**What shipped in v6.2.1**:
+- `internal/api/integration_test.go`: sets metricR=2.5 and logR=0.5 in the fusion engine before storing the snapshot; asserts `FusedRuptureIndex > 0` in the API response. FusedR requires ≥2 signals — tested and confirmed.
+- `deploy/grafana/dashboards/ruptura_overview.json`: Panel 3 now queries `fused_rupture_index`; added Panel 4 (Pressure + Contagion timeseries); added Panel 6 (Throughput Collapse); added workload template variable; all panels use `ruptura_kpi_signals` label selectors with `namespace/kind/name` labels; 15s auto-refresh.
+- Version bumped to `6.2.1`.
+
+**All judgment.md gaps: fully closed as of v6.2.1.**
+
+| GAP / MISSING | Status | Version closed |
+|---------------|--------|---------------|
+| GAP-01 Dual engine | ✅ Closed | v6.2.0-dev |
+| GAP-02 API stubs | ✅ Closed | v6.2.0-dev |
+| GAP-03 Fusion wiring + FusedR in API | ✅ Closed | v6.2.0 (wiring) + v6.2.1 (field + test) |
+| GAP-04 AnomalyStore | ⏭ Deferred | v7.0 |
+| GAP-05 Throughput collapse | ✅ Closed | v6.2.0-dev |
+| GAP-06 BadgerDB persistence | ✅ Closed | v6.2.0-dev |
+| GAP-07 Grafana dashboard | ✅ Closed | v6.2.1 (correct metric names + 6 panels) |
+| GAP-08 OTLP route | ✅ Closed | v6.2.0-dev |
+| GAP-09 Sentiment | ✅ Closed | v6.2.0 |
+| GAP-10 WorkloadRef | ✅ Closed | v6.2.0-dev |
+| MISSING-01 Adaptive baselines | ✅ Closed | v6.2.0-dev |
+| MISSING-02 Narrative explain | ✅ Closed | v6.2.0-dev |
+| MISSING-03 Topology contagion | ✅ Closed | v6.2.0-dev |
+| MISSING-04 Maintenance windows | ✅ Closed | v6.2.0-dev |
