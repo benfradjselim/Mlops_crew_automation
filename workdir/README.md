@@ -109,7 +109,7 @@ When OTLP trace spans are ingested, Ruptura builds a real service dependency gra
 
 ```bash
 # Option 1: Helm (recommended)
-helm install ruptura helm \
+helm install ruptura ../helm \
   --namespace ruptura-system \
   --create-namespace \
   --set apiKey=$(openssl rand -hex 32)
@@ -263,23 +263,18 @@ For Grafana: import `deploy/grafana/dashboards/ruptura_overview.json` or use the
 
 ---
 
-## SDKs
+## Client library (Go)
 
-**Go**
+The embeddable Go client is in `pkg/client`:
+
 ```go
-import ruptura "github.com/benfradjselim/ruptura/sdk/go"
+import "github.com/benfradjselim/ruptura/pkg/client"
 
-client := ruptura.New("http://ruptura:8080", ruptura.WithAPIKey("your-key"))
-rupture, _ := client.RuptureIndex("default", "payment-api")
+c := client.New("http://ruptura:8080", client.WithAPIKey("your-key"))
+rupture, _ := c.RuptureIndex(ctx, "default", "payment-api")
 ```
 
-**Python**
-```python
-from ruptura import Client
-
-client = Client("http://ruptura:8080", api_key="your-key")
-rupture = client.rupture_index("default", "payment-api")
-```
+For REST-only access from any language, use the API directly with a Bearer token — see [API reference](../docs/v6.0.0/SPECS.md).
 
 ---
 

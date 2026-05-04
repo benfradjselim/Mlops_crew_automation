@@ -54,6 +54,67 @@ Every workload gets 10 auditable signals computed from raw telemetry with publis
 
 Ruptura groups all signals by **Kubernetes workload** (`namespace/kind/name`), not by host. Multiple pods from the same Deployment are merged into a single health view. OTLP resource attributes (`k8s.deployment.name`, `k8s.namespace.name`, etc.) are extracted automatically.
 
+### Adaptive Ensemble — 5 models, no configuration
+
+Ruptura runs five prediction models in parallel and weights them by recent prediction accuracy:
+
+| Model | Strengths |
+|-------|-----------|
+| **CA-ILR** (dual-scale) | O(1) update · detects acceleration · edge-native |
+| **ARIMA** | Stationary series with trends |
+| **Holt-Winters** | Seasonal / periodic patterns |
+| **MAD** | Robust to outliers |
+| **EWMA** | Reacts quickly to recent shifts |
+
+Every 60 seconds, each model's weight is recomputed from its MAE over the past hour. A batch job that runs every night at 02:00 gradually shifts weight toward Holt-Winters — no manual configuration needed.
+
+### Action Engine — three tiers, multiple safety gates
+
+| Tier | Trigger | Mode |
+|------|---------|------|
+| Tier-1 | FusedR ≥ 5.0 + confidence ≥ 0.85 | Automatic (K8s scale/restart/cordon) |
+| Tier-2 | FusedR ≥ 3.0 + confidence ≥ 0.60 | Suggested — approve via `POST /api/v2/actions/{id}/approve` |
+| Tier-3 | FusedR ≥ 1.5 | Alert only (Alertmanager / PagerDuty / webhook) |
+
+Safety gates: per-target rate limit (6/hour), cooldown (300s), namespace allowlist, confidence threshold, emergency stop.
+
+---
+
+## How it works end to end
+
+```
+Prometheus remote_write ──┐
+OTLP metrics/logs/traces ─┼─► metric · log · trace pipelines
+gRPC ingest ──────────────┘
+                           │
+              WorkloadRef grouping
+         (namespace / kind / name — pods merged)
+                           │
+              Adaptive per-workload baselines
+           (Welford online stats · active after 24h)
+                           │
+              10 Composite KPI signals computed
+      stress · fatigue · mood · pressure · humidity
+      contagion · resilience · entropy · velocity · health_score
+                           │
+              5-model adaptive ensemble
+         CA-ILR · ARIMA · Holt-Winters · MAD · EWMA
+               online MAE-based weights · 60s update
+                           │
+           Fused Rupture Index™  (FusedR)
+       metricR + logR + traceR  ─ requires ≥ 2 sources
+                           │
+           ┌───────────────┼───────────────┐
+           │               │               │
+       Tier-3 alert    Tier-2 suggest  Tier-1 auto
+     (FusedR ≥ 1.5)  (FusedR ≥ 3.0)  (FusedR ≥ 5.0)
+           │               │               │
+     AM / PagerDuty    approve via API   K8s / webhook
+                           │
+              Narrative explain
+         GET /api/v2/explain/{id}/narrative
+```
+
 ---
 
 ## Quick Start
@@ -61,7 +122,10 @@ Ruptura groups all signals by **Kubernetes workload** (`namespace/kind/name`), n
 === "Helm (recommended)"
 
     ```bash
-    helm install ruptura oci://ghcr.io/benfradjselim/charts/ruptura \
+    git clone https://github.com/benfradjselim/ruptura.git
+    cd ruptura
+
+    helm install ruptura helm \
       --namespace ruptura-system \
       --create-namespace \
       --set apiKey=$(openssl rand -hex 32)
