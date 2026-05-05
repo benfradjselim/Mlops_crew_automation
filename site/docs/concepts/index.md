@@ -51,6 +51,7 @@ graph TD
 | Page | What it covers |
 |------|---------------|
 | [Rupture Index™](rupture-index.md) | The core prediction metric — dual-scale CA-ILR maths, three-source fusion |
-| [Composite Signals](composite-signals.md) | All 10 KPI signals with published formulas and threshold tables |
+| [Composite Signals](composite-signals.md) | All 10 KPI signals with formulas, calibration warm-up, and HealthScore forecast |
 | [Surge Profiles / Adaptive Ensemble](surge-profiles.md) | How the 5-model ensemble adapts online to your traffic patterns |
-| [Action Engine](action-engine.md) | Tier system, safety gates, K8s and webhook integrations |
+| [Action Engine](action-engine.md) | Tier system, safety gates, edition gate, K8s and webhook integrations |
+| [Fingerprinting & Business Signals](fingerprinting.md) | Pattern matching across past ruptures + SLO burn velocity, blast radius, recovery debt |

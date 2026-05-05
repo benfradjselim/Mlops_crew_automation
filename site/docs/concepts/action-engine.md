@@ -112,6 +112,41 @@ curl -X POST -H "Authorization: Bearer $API_KEY" \
   http://localhost:8080/api/v2/actions/emergency-stop
 ```
 
+## Edition gate
+
+Ruptura ships in two editions controlled by the `RUPTURA_EDITION` environment variable:
+
+| Edition | Approve endpoint | Tier-1 auto-execution |
+|---------|-----------------|----------------------|
+| `community` (default) | Returns `402 Payment Required` | Disabled |
+| `autopilot` | Full approval flow | Enabled |
+
+In `community` mode, all action **recommendations are visible** via `GET /api/v2/actions` — you can read what Ruptura would do. Only the execution step is gated.
+
+Set the edition in Helm:
+
+```yaml
+# helm/values.yaml
+edition: autopilot
+```
+
+Or at runtime:
+
+```bash
+RUPTURA_EDITION=autopilot ./ruptura
+```
+
+Attempting to approve in `community` mode returns:
+
+```json
+{
+  "error": "action execution requires the Autopilot edition",
+  "upgrade": "set RUPTURA_EDITION=autopilot to enable automated and manual action approval"
+}
+```
+
+---
+
 ## Maintenance windows
 
 To suppress action dispatch during planned deploys (preventing false alarms):

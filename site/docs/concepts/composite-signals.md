@@ -167,6 +167,64 @@ Weights are configurable per workload or namespace (v6.6.0+). See [Signal Weight
 
 ---
 
+## Calibration Warm-Up
+
+For the first 96 observations (~24 hours at the default 15-second interval), Ruptura is in **calibrating** state. During this period:
+
+- KPI signals are computed and stored normally
+- Rupture predictions and Tier-1/Tier-2 action recommendations are **suppressed** — the baseline is not yet reliable enough to act on
+- The API response includes a clear calibration status so you are never confused by the silence
+
+Every rupture snapshot carries:
+
+```json
+{
+  "status": "calibrating",
+  "calibration_progress": 43,
+  "calibration_eta_minutes": 820
+}
+```
+
+Once calibration completes, `status` switches to `"active"` and the full prediction + action pipeline comes online.
+
+```json
+{
+  "status": "active",
+  "calibration_progress": 100,
+  "calibration_eta_minutes": 0
+}
+```
+
+You can fast-track calibration in demos using [ruptura-sim](../operations/simulation.md).
+
+---
+
+## HealthScore Trend Forecast
+
+When a workload is `active` (calibration complete) and at least 10 health history points are available, Ruptura runs an OLS linear regression over the rolling 60-point health history and projects the critical-threshold crossing time.
+
+```json
+{
+  "health_forecast": {
+    "trend": "degrading",
+    "in_15min": 51.2,
+    "in_30min": 38.7,
+    "critical_eta_minutes": 28
+  }
+}
+```
+
+| field | Meaning |
+|-------|---------|
+| `trend` | `"improving"` \| `"stable"` \| `"degrading"` |
+| `in_15min` | Projected HealthScore (0–100) in 15 minutes |
+| `in_30min` | Projected HealthScore (0–100) in 30 minutes |
+| `critical_eta_minutes` | Minutes until HealthScore is projected to fall below 40 (Fair → Poor). `0` if not degrading toward critical. |
+
+This turns "your score is 54" into "you have 28 minutes." The forecast is `null` during calibration and when the trend is flat (insufficient variance to project).
+
+---
+
 ## Adaptive Per-Workload Baselines
 
 After 96 observations (~24 hours at the default 15s interval), Ruptura switches from global thresholds to **workload-specific baselines** using Welford online statistics.

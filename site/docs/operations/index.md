@@ -5,6 +5,7 @@ Guides for running Ruptura in production.
 | Guide | What it covers |
 |-------|---------------|
 | [Deployment](deploy.md) | Kubernetes, Helm, Docker, bare-metal production configs |
+| [Simulation](simulation.md) | Demo and test with `ruptura-sim` — no real incidents required |
 | [Self Monitoring](self-monitoring.md) | Prometheus metrics Ruptura exports about itself |
 | [Troubleshooting](troubleshooting.md) | Common failure modes and how to resolve them |
 
