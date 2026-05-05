@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ruptura — Predictive Action Layer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:       #080c14;
+    --surface:  #0f1623;
+    --surface2: #161e2e;
+    --border:   #1e2d40;
+    --border2:  #253448;
+    --text:     #e2e8f0;
+    --muted:    #64748b;
+    --dim:      #334155;
+    --accent:   #38bdf8;
+    --indigo:   #6366f1;
+    --green:    #10b981;
+    --yellow:   #f59e0b;
+    --red:      #ef4444;
+    --orange:   #f97316;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 13px; line-height: 1.5; overflow-x: hidden; }
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: var(--bg); } ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .card-sm { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; }
+
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 0.03em; }
+  .badge-green { background: rgba(16,185,129,.15); color: var(--green); }
+  .badge-yellow { background: rgba(245,158,11,.15); color: var(--yellow); }
+  .badge-red { background: rgba(239,68,68,.15); color: var(--red); }
+  .badge-blue { background: rgba(56,189,248,.12); color: var(--accent); }
+  .badge-gray { background: rgba(100,116,139,.15); color: var(--muted); }
+
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; position: relative; overflow: hidden; transition: border-color .2s; }
+  .stat-card:hover { border-color: var(--border2); }
+  .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+  .stat-card.accent::before { background: linear-gradient(90deg, var(--accent), var(--indigo)); }
+  .stat-card.green::before { background: linear-gradient(90deg, var(--green), #059669); }
+  .stat-card.yellow::before { background: linear-gradient(90deg, var(--yellow), var(--orange)); }
+  .stat-card.red::before { background: linear-gradient(90deg, var(--red), #dc2626); }
+
+  .health-ring { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+  .health-ring canvas { transform: rotate(-90deg); }
+
+  .signal-bar { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+  .signal-fill { height: 100%; border-radius: 2px; transition: width .6s ease; }
+
+  .workload-row { border-bottom: 1px solid var(--border); padding: 10px 16px; cursor: pointer; transition: background .15s; display: grid; align-items: center; gap: 12px; }
+  .workload-row:hover { background: var(--surface2); }
+  .workload-row.selected { background: rgba(56,189,248,.06); border-left: 2px solid var(--accent); }
+
+  .node { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .node-box { border: 1px solid var(--border2); border-radius: 8px; padding: 8px 14px; background: var(--surface2); font-size: 11px; font-weight: 600; text-align: center; white-space: nowrap; transition: border-color .3s, box-shadow .3s; }
+  .node-box.active { border-color: var(--accent); box-shadow: 0 0 12px rgba(56,189,248,.2); }
+  .node-count { font-size: 10px; color: var(--muted); }
+
+  .pulse { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+
+  .spinning { animation: spin 2s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  .fade-in { animation: fadeIn .4s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .tab { padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--muted); transition: all .15s; }
+  .tab.active { background: var(--surface2); color: var(--text); }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; }
+  .btn-primary { background: var(--accent); color: var(--bg); }
+  .btn-primary:hover { background: #7dd3fc; }
+  .btn-danger { background: rgba(239,68,68,.15); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
+  .btn-danger:hover { background: rgba(239,68,68,.25); }
+  .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  input[type=text], input[type=number] { background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); padding: 7px 12px; font-size: 12px; outline: none; }
+  input:focus { border-color: var(--accent); }
+
+  .tooltip { position: relative; }
+  .tooltip-text { visibility: hidden; position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); background: #1e293b; border: 1px solid var(--border2); color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 11px; white-space: nowrap; z-index: 100; }
+  .tooltip:hover .tooltip-text { visibility: visible; }
+
+  #flow-svg path { stroke-dasharray: 8 4; animation: flow 1.5s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -24; } }
+</style>
+</head>
+<body x-data="app()" x-init="init()" class="min-h-screen">
+
+<!-- Top bar -->
+<header class="flex items-center justify-between px-6 py-3 border-b" style="border-color:var(--border); background:var(--surface);">
+  <div class="flex items-center gap-4">
+    <div class="flex items-center gap-2">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="font-bold text-base" style="color:var(--accent);">RUPTURA</span>
+      <span class="text-xs font-mono" style="color:var(--muted);" x-text="'v' + (health.version || '6.6.0')"></span>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full pulse" :class="connected ? 'bg-green-400' : 'bg-red-400'"></span>
+      <span class="text-xs" style="color:var(--muted);" x-text="connected ? health.status || 'connected' : 'disconnected'"></span>
+    </div>
+    <span class="badge badge-blue" x-text="health.edition || 'community'"></span>
+  </div>
+  <div class="flex items-center gap-4">
+    <span class="text-xs" style="color:var(--muted);">uptime <span class="font-mono" x-text="formatUptime(health.uptime_seconds || 0)"></span></span>
+    <div class="flex items-center gap-2">
+      <label class="text-xs" style="color:var(--muted);">URL</label>
+      <input type="text" x-model="apiUrl" @change="reconnect()" style="width:200px;" placeholder="http://localhost:8080">
+    </div>
+    <input type="text" x-model="apiKey" @change="reconnect()" placeholder="API key" style="width:140px;">
+    <button class="btn btn-ghost text-xs" @click="refresh()">
+      <svg :class="loading ? 'spinning' : ''" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+      Refresh
+    </button>
+  </div>
+</header>
+
+<!-- Main layout -->
+<div class="flex h-screen overflow-hidden" style="height: calc(100vh - 53px);">
+
+  <!-- Left sidebar: workload list -->
+  <aside class="flex flex-col" style="width:320px; border-right:1px solid var(--border); background:var(--surface); flex-shrink:0;">
+    <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color:var(--border);">
+      <span class="font-semibold text-sm">Workloads</span>
+      <span class="badge badge-gray" x-text="snapshots.length"></span>
+    </div>
+
+    <!-- filter -->
+    <div class="px-4 py-2 border-b" style="border-color:var(--border);">
+      <input type="text" x-model="nsFilter" placeholder="Filter namespace..." style="width:100%;">
+    </div>
+
+    <!-- list -->
+    <div class="overflow-y-auto flex-1">
+      <template x-for="s in filteredSnaps" :key="s.host">
+        <div class="workload-row" style="grid-template-columns:1fr auto;"
+             :class="selected?.host === s.host ? 'selected' : ''"
+             @click="selected = s">
+          <div>
+            <div class="font-mono text-xs truncate" x-text="workloadRef(s)"></div>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="text-xs font-medium" :style="healthStyle(s.health_score?.value)" x-text="Math.round(s.health_score?.value || 0)"></span>
+              <div class="signal-bar flex-1" style="max-width:60px;">
+                <div class="signal-fill" :style="barStyle(s.health_score?.value, 100)"></div>
+              </div>
+              <span class="badge text-xs" :class="stateBadge(s)" x-text="workloadState(s)"></span>
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="font-mono text-xs font-bold" :style="fusedColor(s.fused_rupture_index)" x-text="(s.fused_rupture_index||0).toFixed(2)"></div>
+            <div class="text-xs mt-0.5" style="color:var(--muted);">FusedR</div>
+          </div>
+        </div>
+      </template>
+      <div x-show="filteredSnaps.length === 0" class="px-4 py-8 text-center text-xs" style="color:var(--muted);">
+        No workloads found.<br>Send telemetry to start.
+      </div>
+    </div>
+
+    <!-- footer stats -->
+    <div class="px-4 py-3 border-t grid grid-cols-3 gap-2 text-center" style="border-color:var(--border);">
+      <div>
+        <div class="text-lg font-bold" style="color:var(--accent);" x-text="snapshots.length"></div>
+        <div class="text-xs" style="color:var(--muted);">total</div>
+      </div>
+      <div>
+        <div class="text-lg font-bold" :style="calibratingCount > 0 ? 'color:var(--yellow)' : 'color:var(--muted)'" x-text="calibratingCount"></div>
+        <div class="text-xs" style="color:var(--muted);">calibrating</div>
+      </div>
+      <div>
+        <div class="text-lg font-bold" :style="criticalCount > 0 ? 'color:var(--red)' : 'color:var(--green)'" x-text="criticalCount"></div>
+        <div class="text-xs" style="color:var(--muted);">critical</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Center: main content -->
+  <main class="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
+
+    <!-- Top stat row -->
+    <div class="grid grid-cols-4 gap-4">
+      <div class="stat-card accent">
+        <div class="text-xs font-semibold mb-2" style="color:var(--muted);">INGESTION RATE</div>
+        <div class="text-2xl font-bold font-mono" style="color:var(--accent);" x-text="fmtNum(ingestTotal)"></div>
+        <div class="text-xs mt-1" style="color:var(--muted);">samples total</div>
+        <div class="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+          <div><div class="font-mono font-bold" style="color:var(--accent);" x-text="fmtNum(ingest.metrics)"></div><div style="color:var(--muted);">metrics</div></div>
+          <div><div class="font-mono font-bold" style="color:var(--indigo);" x-text="fmtNum(ingest.logs)"></div><div style="color:var(--muted);">logs</div></div>
+          <div><div class="font-mono font-bold" style="color:var(--green);" x-text="fmtNum(ingest.traces)"></div><div style="color:var(--muted);">traces</div></div>
+        </div>
+      </div>
+
+      <div class="stat-card green">
+        <div class="text-xs font-semibold mb-2" style="color:var(--muted);">AVG HEALTH SCORE</div>
+        <div class="text-2xl font-bold font-mono" :style="healthStyle(avgHealth)" x-text="Math.round(avgHealth)"></div>
+        <div class="signal-bar mt-2">
+          <div class="signal-fill" :style="barStyle(avgHealth, 100)"></div>
+        </div>
+        <div class="text-xs mt-2" style="color:var(--muted);" x-text="snapshots.length + ' workload' + (snapshots.length !== 1 ? 's' : '') + ' monitored'"></div>
+      </div>
+
+      <div class="stat-card yellow">
+        <div class="text-xs font-semibold mb-2" style="color:var(--muted);">PENDING ACTIONS</div>
+        <div class="text-2xl font-bold font-mono" :style="actions.length > 0 ? 'color:var(--yellow)' : 'color:var(--muted)'" x-text="actions.length"></div>
+        <div class="text-xs mt-1" style="color:var(--muted);">awaiting approval</div>
+        <div x-show="actions.length > 0" class="mt-2">
+          <span class="badge badge-yellow" x-text="actions.filter(a=>a.tier===2).length + ' Tier-2'"></span>
+        </div>
+      </div>
+
+      <div class="stat-card" :class="criticalCount > 0 ? 'red' : 'accent'">
+        <div class="text-xs font-semibold mb-2" style="color:var(--muted);">RUPTURE STATE</div>
+        <div class="text-2xl font-bold font-mono" :style="criticalCount > 0 ? 'color:var(--red)' : 'color:var(--green)'">
+          <span x-text="criticalCount > 0 ? criticalCount : '✓'"></span>
+        </div>
+        <div class="text-xs mt-1" style="color:var(--muted);" x-text="criticalCount > 0 ? 'active rupture(s)' : 'all clear'"></div>
+        <div class="mt-2 text-xs" style="color:var(--muted);">
+          <span x-text="snapshots.filter(s=>s.fused_rupture_index>=1.5 && s.fused_rupture_index<3).length"></span> warning ·
+          <span x-text="snapshots.filter(s=>s.fused_rupture_index>=5).length"></span> emergency
+        </div>
+      </div>
+    </div>
+
+    <!-- Selected workload detail -->
+    <div x-show="selected" class="card p-5 fade-in">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <div class="font-mono font-bold text-sm" style="color:var(--accent);" x-text="workloadRef(selected)"></div>
+          <div class="flex items-center gap-2 mt-1">
+            <span class="badge" :class="stateBadge(selected)" x-text="workloadState(selected)"></span>
+            <span class="text-xs" style="color:var(--muted);">
+              calibration: <span class="font-mono" x-text="(selected?.calibration_progress || 0) + '%'"></span>
+            </span>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="text-3xl font-bold font-mono" :style="fusedColor(selected?.fused_rupture_index)" x-text="(selected?.fused_rupture_index||0).toFixed(2)"></div>
+          <div class="text-xs" style="color:var(--muted);">Fused Rupture Index</div>
+        </div>
+      </div>
+
+      <!-- tabs -->
+      <div class="flex gap-1 mb-4">
+        <div class="tab" :class="tab==='signals' ? 'active' : ''" @click="tab='signals'">KPI Signals</div>
+        <div class="tab" :class="tab==='forecast' ? 'active' : ''" @click="tab='forecast'">Forecast</div>
+        <div class="tab" :class="tab==='business' ? 'active' : ''" @click="tab='business'">Business</div>
+        <div class="tab" :class="tab==='pattern' ? 'active' : ''" @click="tab='pattern'">Pattern Match</div>
+      </div>
+
+      <!-- KPI Signals tab -->
+      <div x-show="tab==='signals'" class="grid grid-cols-2 gap-3">
+        <template x-for="sig in kpiSignals()" :key="sig.name">
+          <div class="card-sm p-3">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold" style="color:var(--muted);" x-text="sig.name.toUpperCase()"></span>
+              <span class="font-mono text-sm font-bold" :style="sig.color" x-text="sig.value.toFixed(3)"></span>
+            </div>
+            <div class="signal-bar">
+              <div class="signal-fill" :style="'width:'+Math.min(100,sig.value*100)+'%;background:'+sig.hex"></div>
+            </div>
+            <div class="text-xs mt-1" style="color:var(--dim);" x-text="sig.desc"></div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Forecast tab -->
+      <div x-show="tab==='forecast'" class="fade-in">
+        <div x-show="!selected?.health_forecast" class="text-center py-8 text-xs" style="color:var(--muted);">
+          Forecast available after calibration completes (≥100%).
+        </div>
+        <div x-show="selected?.health_forecast">
+          <div class="grid grid-cols-3 gap-4 mb-5">
+            <div class="card-sm p-4 text-center">
+              <div class="text-xs mb-2" style="color:var(--muted);">NOW</div>
+              <div class="text-2xl font-bold font-mono" :style="healthStyle(selected?.health_score?.value)" x-text="Math.round(selected?.health_score?.value||0)"></div>
+            </div>
+            <div class="card-sm p-4 text-center">
+              <div class="text-xs mb-2" style="color:var(--muted);">IN 15 MIN</div>
+              <div class="text-2xl font-bold font-mono" :style="healthStyle(selected?.health_forecast?.in_15min)" x-text="Math.round(selected?.health_forecast?.in_15min||0)"></div>
+            </div>
+            <div class="card-sm p-4 text-center">
+              <div class="text-xs mb-2" style="color:var(--muted);">IN 30 MIN</div>
+              <div class="text-2xl font-bold font-mono" :style="healthStyle(selected?.health_forecast?.in_30min)" x-text="Math.round(selected?.health_forecast?.in_30min||0)"></div>
+            </div>
+          </div>
+          <div x-show="selected?.health_forecast?.critical_eta_minutes > 0"
+               class="card-sm p-4 flex items-center gap-3" style="border-color:var(--red);">
+            <span style="color:var(--red); font-size:20px;">⚠</span>
+            <div>
+              <div class="font-bold text-sm" style="color:var(--red);">Critical in <span x-text="selected?.health_forecast?.critical_eta_minutes"></span> minutes</div>
+              <div class="text-xs" style="color:var(--muted);">OLS projection — health will drop below 40 if current trend continues</div>
+            </div>
+          </div>
+          <div x-show="!selected?.health_forecast?.critical_eta_minutes"
+               class="card-sm p-4 flex items-center gap-3" style="border-color:var(--green);">
+            <span style="color:var(--green);">✓</span>
+            <div class="text-sm" style="color:var(--green);">Stable — no critical degradation projected</div>
+          </div>
+          <div class="mt-4" style="height:180px; position:relative;">
+            <canvas id="forecast-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Business tab -->
+      <div x-show="tab==='business'" class="fade-in">
+        <div x-show="!selected?.business" class="text-center py-8 text-xs" style="color:var(--muted);">No business signals available.</div>
+        <div x-show="selected?.business" class="grid grid-cols-3 gap-4">
+          <div class="card-sm p-4">
+            <div class="text-xs font-semibold mb-1" style="color:var(--muted);">SLO BURN VELOCITY</div>
+            <div class="text-2xl font-bold font-mono mt-2"
+                 :style="selected?.business?.slo_burn_velocity > 1 ? 'color:var(--red)' : selected?.business?.slo_burn_velocity > 0.5 ? 'color:var(--yellow)' : 'color:var(--green)'"
+                 x-text="(selected?.business?.slo_burn_velocity||0).toFixed(3)"></div>
+            <div class="text-xs mt-2" style="color:var(--muted);">Ratio: current error rate / allowed</div>
+            <div class="mt-2 badge" :class="selected?.business?.slo_burn_velocity > 1 ? 'badge-red' : selected?.business?.slo_burn_velocity > 0.5 ? 'badge-yellow' : 'badge-green'"
+                 x-text="selected?.business?.slo_burn_velocity > 1 ? '🔥 Burning budget' : selected?.business?.slo_burn_velocity > 0.5 ? 'Elevated' : 'Healthy'"></div>
+          </div>
+          <div class="card-sm p-4">
+            <div class="text-xs font-semibold mb-1" style="color:var(--muted);">BLAST RADIUS</div>
+            <div class="text-2xl font-bold font-mono mt-2"
+                 :style="selected?.business?.blast_radius > 10 ? 'color:var(--red)' : selected?.business?.blast_radius > 5 ? 'color:var(--yellow)' : 'color:var(--green)'"
+                 x-text="selected?.business?.blast_radius || 0"></div>
+            <div class="text-xs mt-2" style="color:var(--muted);">Downstream workloads depending on this</div>
+          </div>
+          <div class="card-sm p-4">
+            <div class="text-xs font-semibold mb-1" style="color:var(--muted);">RECOVERY DEBT</div>
+            <div class="text-2xl font-bold font-mono mt-2"
+                 :style="selected?.business?.recovery_debt >= 7 ? 'color:var(--red)' : selected?.business?.recovery_debt >= 3 ? 'color:var(--yellow)' : 'color:var(--green)'"
+                 x-text="selected?.business?.recovery_debt || 0"></div>
+            <div class="text-xs mt-2" style="color:var(--muted);">Near-misses (FusedR 2–3) in last 7 days</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pattern Match tab -->
+      <div x-show="tab==='pattern'" class="fade-in">
+        <div x-show="!selected?.pattern_match" class="text-center py-8 text-xs" style="color:var(--muted);">No pattern match — this rupture profile is novel.</div>
+        <div x-show="selected?.pattern_match" class="card-sm p-5">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="text-3xl font-bold font-mono" style="color:var(--accent);" x-text="Math.round((selected?.pattern_match?.similarity||0)*100) + '%'"></div>
+            <div>
+              <div class="font-semibold text-sm">Similarity Match</div>
+              <div class="text-xs" style="color:var(--muted);">Cosine similarity against 11-dimensional KPI fingerprint of a past rupture</div>
+            </div>
+          </div>
+          <div class="signal-bar mb-4">
+            <div class="signal-fill" :style="'width:'+(selected?.pattern_match?.similarity||0)*100+'%;background:var(--accent)'"></div>
+          </div>
+          <div x-show="selected?.pattern_match?.prior_note" class="mt-3 p-3 rounded-lg" style="background:var(--bg); border:1px solid var(--border2);">
+            <div class="text-xs font-semibold mb-1" style="color:var(--muted);">PRIOR RESOLUTION</div>
+            <div class="text-sm" x-text="selected?.pattern_match?.prior_note"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Default state when nothing selected -->
+    <div x-show="!selected" class="card p-8 text-center">
+      <div class="text-3xl mb-3">←</div>
+      <div class="font-semibold mb-1">Select a workload</div>
+      <div class="text-xs" style="color:var(--muted);">Click any workload in the left panel to inspect its signals, forecast, and business metrics.</div>
+    </div>
+
+    <!-- Pending actions -->
+    <div x-show="actions.length > 0" class="card p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-semibold text-sm flex items-center gap-2">
+          <span style="color:var(--yellow);">⚡</span> Pending Actions
+        </div>
+        <button class="btn btn-danger text-xs" @click="emergencyStop()">■ Emergency Stop</button>
+      </div>
+      <div class="space-y-2">
+        <template x-for="a in actions" :key="a.id">
+          <div class="card-sm p-3 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <span class="badge" :class="a.tier===1 ? 'badge-red' : a.tier===2 ? 'badge-yellow' : 'badge-gray'" x-text="'Tier-'+a.tier"></span>
+              <div>
+                <div class="font-mono text-xs font-bold" x-text="a.id"></div>
+                <div class="text-xs" style="color:var(--muted);" x-text="a.workload_id + ' · ' + a.type"></div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-xs" :style="fusedColor(a.fused_rupture_index)" x-text="(a.fused_rupture_index||0).toFixed(2)"></span>
+              <button class="btn btn-primary text-xs" @click="approve(a.id)">Approve</button>
+              <button class="btn btn-ghost text-xs" @click="reject(a.id)">Reject</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Right panel: data flow + ingest -->
+  <aside class="flex flex-col" style="width:300px; border-left:1px solid var(--border); background:var(--surface); flex-shrink:0;">
+
+    <!-- Data flow visualization -->
+    <div class="p-4 border-b" style="border-color:var(--border);">
+      <div class="font-semibold text-xs mb-3" style="color:var(--muted);">LIVE DATA FLOW</div>
+      <div style="position:relative; height:280px;">
+        <svg id="flow-svg" width="100%" height="280" viewBox="0 0 260 280" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Source nodes -->
+          <g>
+            <rect x="4" y="10" width="72" height="28" rx="6" fill="#161e2e" stroke="#1e2d40"/>
+            <text x="40" y="29" font-size="9" fill="#64748b" text-anchor="middle" font-weight="600">Prometheus</text>
+          </g>
+          <g>
+            <rect x="4" y="50" width="72" height="28" rx="6" fill="#161e2e" stroke="#1e2d40"/>
+            <text x="40" y="69" font-size="9" fill="#64748b" text-anchor="middle" font-weight="600">OTLP Logs</text>
+          </g>
+          <g>
+            <rect x="4" y="90" width="72" height="28" rx="6" fill="#161e2e" stroke="#1e2d40"/>
+            <text x="40" y="109" font-size="9" fill="#64748b" text-anchor="middle" font-weight="600">OTLP Traces</text>
+          </g>
+          <g>
+            <rect x="4" y="130" width="72" height="28" rx="6" fill="#161e2e" stroke="#1e2d40"/>
+            <text x="40" y="149" font-size="9" fill="#64748b" text-anchor="middle" font-weight="600">gRPC :9090</text>
+          </g>
+
+          <!-- Arrows to ingest -->
+          <path d="M76 24 L106 54" stroke="#253448" stroke-width="1.5" :stroke="ingest.metrics>0 ? '#38bdf8' : '#253448'" stroke-dasharray="4 3"/>
+          <path d="M76 64 L106 64" stroke="#253448" stroke-width="1.5" :stroke="ingest.logs>0 ? '#6366f1' : '#253448'" stroke-dasharray="4 3"/>
+          <path d="M76 104 L106 74" stroke="#253448" stroke-width="1.5" :stroke="ingest.traces>0 ? '#10b981' : '#253448'" stroke-dasharray="4 3"/>
+          <path d="M76 144 L106 84" stroke="#253448" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+          <!-- Ingest engine -->
+          <rect x="106" y="42" width="58" height="44" rx="7" fill="#161e2e" :stroke="connected ? '#38bdf8' : '#1e2d40'" stroke-width="1.5"/>
+          <text x="135" y="60" font-size="8" fill="#38bdf8" text-anchor="middle" font-weight="700">INGEST</text>
+          <text x="135" y="73" font-size="7" fill="#64748b" text-anchor="middle">engine</text>
+          <text x="135" y="83" font-size="7" fill="#64748b" text-anchor="middle" x-text="fmtNum(ingestTotal)"></text>
+
+          <!-- Arrow to analyzer -->
+          <path d="M164 64 L194 84" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+          <!-- Analyzer / Composite signals -->
+          <rect x="194" y="68" width="60" height="52" rx="7" fill="#161e2e" stroke="#6366f1" stroke-width="1.5"/>
+          <text x="224" y="87" font-size="8" fill="#6366f1" text-anchor="middle" font-weight="700">ANALYZER</text>
+          <text x="224" y="99" font-size="7" fill="#64748b" text-anchor="middle">10 signals</text>
+          <text x="224" y="111" font-size="7" fill="#64748b" text-anchor="middle" x-text="snapshots.length + ' workloads'"></text>
+
+          <!-- Down arrow to fusion -->
+          <path d="M224 120 L224 148" stroke="#6366f1" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+          <!-- Fusion -->
+          <rect x="178" y="148" width="92" height="40" rx="7" fill="#161e2e" :stroke="criticalCount > 0 ? '#ef4444' : '#f59e0b'" stroke-width="1.5"/>
+          <text x="224" y="164" font-size="8" fill="#f59e0b" text-anchor="middle" font-weight="700">FUSION ENGINE</text>
+          <text x="224" y="178" font-size="7" fill="#64748b" text-anchor="middle">FusedR · Ensemble</text>
+
+          <!-- Down arrow to action engine -->
+          <path d="M224 188 L224 210" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+          <!-- Action engine -->
+          <rect x="178" y="210" width="92" height="38" rx="7" fill="#161e2e" :stroke="actions.length > 0 ? '#ef4444' : '#1e2d40'" stroke-width="1.5"/>
+          <text x="224" y="226" font-size="8" :fill="actions.length > 0 ? '#ef4444' : '#64748b'" text-anchor="middle" font-weight="700">ACTION ENGINE</text>
+          <text x="224" y="239" font-size="7" fill="#64748b" text-anchor="middle" x-text="actions.length + ' pending'"></text>
+
+          <!-- Outputs -->
+          <path d="M224 248 L224 265" stroke="#253448" stroke-width="1.5"/>
+          <rect x="178" y="264" width="22" height="14" rx="3" fill="#161e2e" stroke="#253448"/>
+          <text x="189" y="275" font-size="7" fill="#64748b" text-anchor="middle">K8s</text>
+          <rect x="205" y="264" width="22" height="14" rx="3" fill="#161e2e" stroke="#253448"/>
+          <text x="216" y="275" font-size="7" fill="#64748b" text-anchor="middle">Hook</text>
+          <rect x="232" y="264" width="36" height="14" rx="3" fill="#161e2e" stroke="#253448"/>
+          <text x="250" y="275" font-size="7" fill="#64748b" text-anchor="middle">PagerDuty</text>
+
+          <!-- Explain branch -->
+          <path d="M178 168 L155 200" stroke="#253448" stroke-width="1" stroke-dasharray="3 3"/>
+          <rect x="90" y="194" width="64" height="24" rx="5" fill="#161e2e" stroke="#253448"/>
+          <text x="122" y="210" font-size="8" fill="#64748b" text-anchor="middle">Narrative</text>
+
+          <!-- Fingerprint branch -->
+          <path d="M178 158 L155 140" stroke="#253448" stroke-width="1" stroke-dasharray="3 3"/>
+          <rect x="90" y="130" width="64" height="24" rx="5" fill="#161e2e" stroke="#253448"/>
+          <text x="122" y="146" font-size="8" fill="#64748b" text-anchor="middle">Fingerprint</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Ingestion stats -->
+    <div class="p-4 border-b" style="border-color:var(--border);">
+      <div class="font-semibold text-xs mb-3" style="color:var(--muted);">INGESTION STATS</div>
+      <div class="space-y-3">
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span style="color:var(--accent);">Metrics (Prometheus)</span>
+            <span class="font-mono" x-text="fmtNum(ingest.metrics)"></span>
+          </div>
+          <div class="signal-bar">
+            <div class="signal-fill" :style="'width:'+ingestPct(ingest.metrics)+'%;background:var(--accent)'"></div>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span style="color:var(--indigo);">Logs (OTLP)</span>
+            <span class="font-mono" x-text="fmtNum(ingest.logs)"></span>
+          </div>
+          <div class="signal-bar">
+            <div class="signal-fill" :style="'width:'+ingestPct(ingest.logs)+'%;background:var(--indigo)'"></div>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span style="color:var(--green);">Traces (gRPC/OTLP)</span>
+            <span class="font-mono" x-text="fmtNum(ingest.traces)"></span>
+          </div>
+          <div class="signal-bar">
+            <div class="signal-fill" :style="'width:'+ingestPct(ingest.traces)+'%;background:var(--green)'"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Server health -->
+    <div class="p-4 flex-1">
+      <div class="font-semibold text-xs mb-3" style="color:var(--muted);">SERVER HEALTH</div>
+      <div class="space-y-2 text-xs">
+        <div class="flex justify-between">
+          <span style="color:var(--muted);">Status</span>
+          <span class="font-semibold" :style="connected ? 'color:var(--green)' : 'color:var(--red)'" x-text="health.status || '—'"></span>
+        </div>
+        <div class="flex justify-between">
+          <span style="color:var(--muted);">Version</span>
+          <span class="font-mono" x-text="health.version || '—'"></span>
+        </div>
+        <div class="flex justify-between">
+          <span style="color:var(--muted);">Edition</span>
+          <span x-text="health.edition || 'community'"></span>
+        </div>
+        <div class="flex justify-between">
+          <span style="color:var(--muted);">Uptime</span>
+          <span class="font-mono" x-text="formatUptime(health.uptime_seconds || 0)"></span>
+        </div>
+        <div class="flex justify-between">
+          <span style="color:var(--muted);">Detection</span>
+          <span x-text="health.rupture_detection || '—'"></span>
+        </div>
+        <div class="flex justify-between">
+          <span style="color:var(--muted);">Last refresh</span>
+          <span class="font-mono" x-text="lastRefresh"></span>
+        </div>
+      </div>
+
+      <!-- Calibration summary -->
+      <div x-show="calibratingCount > 0" class="mt-4 card-sm p-3">
+        <div class="text-xs font-semibold mb-2" style="color:var(--yellow);">◐ Calibrating</div>
+        <template x-for="s in snapshots.filter(s=>s.calibration_progress < 100)" :key="s.host">
+          <div class="mb-2">
+            <div class="flex justify-between text-xs mb-1">
+              <span class="font-mono truncate" style="max-width:150px;" x-text="workloadRef(s)"></span>
+              <span style="color:var(--yellow);" x-text="s.calibration_progress + '%'"></span>
+            </div>
+            <div class="signal-bar">
+              <div class="signal-fill" :style="'width:'+s.calibration_progress+'%;background:var(--yellow)'"></div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- refresh control -->
+    <div class="px-4 py-3 border-t flex items-center justify-between" style="border-color:var(--border);">
+      <div class="flex items-center gap-2 text-xs" style="color:var(--muted);">
+        <input type="checkbox" x-model="autoRefresh" id="auto-refresh">
+        <label for="auto-refresh">Auto-refresh</label>
+        <select x-model="refreshInterval" class="text-xs" style="background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);padding:2px 4px;">
+          <option value="3000">3s</option>
+          <option value="5000">5s</option>
+          <option value="10000">10s</option>
+          <option value="30000">30s</option>
+        </select>
+      </div>
+      <div class="text-xs" style="color:var(--dim);" x-text="'#' + refreshCount + ' polls'"></div>
+    </div>
+
+  </aside>
+</div>
+
+<script>
+function app() {
+  return {
+    apiUrl: 'http://localhost:8080',
+    apiKey: '',
+    connected: false,
+    loading: false,
+    health: {},
+    snapshots: [],
+    actions: [],
+    ingest: { metrics: 0, logs: 0, traces: 0 },
+    selected: null,
+    tab: 'signals',
+    nsFilter: '',
+    autoRefresh: true,
+    refreshInterval: 5000,
+    refreshCount: 0,
+    lastRefresh: '—',
+    _timer: null,
+    _forecastChart: null,
+
+    get filteredSnaps() {
+      if (!this.nsFilter) return this.snapshots;
+      return this.snapshots.filter(s => {
+        const ref = this.workloadRef(s);
+        return ref.toLowerCase().includes(this.nsFilter.toLowerCase());
+      });
+    },
+    get ingestTotal() { return this.ingest.metrics + this.ingest.logs + this.ingest.traces; },
+    get avgHealth() {
+      if (!this.snapshots.length) return 0;
+      return this.snapshots.reduce((a, s) => a + (s.health_score?.value || 0), 0) / this.snapshots.length;
+    },
+    get criticalCount() { return this.snapshots.filter(s => s.fused_rupture_index >= 3).length; },
+    get calibratingCount() { return this.snapshots.filter(s => s.calibration_progress < 100).length; },
+
+    async init() {
+      await this.refresh();
+      this.$watch('autoRefresh', val => {
+        if (val) this.startTimer(); else clearInterval(this._timer);
+      });
+      this.$watch('refreshInterval', () => {
+        if (this.autoRefresh) this.startTimer();
+      });
+      this.$watch('selected', () => {
+        this.tab = 'signals';
+        this.$nextTick(() => this.renderForecastChart());
+      });
+      this.$watch('tab', (t) => {
+        if (t === 'forecast') this.$nextTick(() => this.renderForecastChart());
+      });
+      this.startTimer();
+    },
+
+    startTimer() {
+      clearInterval(this._timer);
+      this._timer = setInterval(() => this.refresh(), parseInt(this.refreshInterval));
+    },
+
+    async refresh() {
+      this.loading = true;
+      try {
+        const [h, snaps, acts, metrics] = await Promise.allSettled([
+          this.api('/api/v2/health'),
+          this.api('/api/v2/ruptures'),
+          this.api('/api/v2/actions'),
+          this.apiRaw('/api/v2/metrics'),
+        ]);
+        if (h.status === 'fulfilled') { this.health = h.value; this.connected = true; }
+        else { this.connected = false; }
+        if (snaps.status === 'fulfilled' && Array.isArray(snaps.value)) {
+          this.snapshots = snaps.value;
+          if (this.selected) {
+            const updated = this.snapshots.find(s => s.host === this.selected.host);
+            if (updated) this.selected = updated;
+          }
+        }
+        if (acts.status === 'fulfilled' && Array.isArray(acts.value)) this.actions = acts.value;
+        if (metrics.status === 'fulfilled') this.parseIngest(metrics.value);
+        this.refreshCount++;
+        this.lastRefresh = new Date().toLocaleTimeString();
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    reconnect() { this.refresh(); },
+
+    async api(path) {
+      const headers = {};
+      if (this.apiKey) headers['Authorization'] = 'Bearer ' + this.apiKey;
+      const r = await fetch(this.apiUrl + path, { headers });
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    },
+
+    async apiRaw(path) {
+      const headers = {};
+      if (this.apiKey) headers['Authorization'] = 'Bearer ' + this.apiKey;
+      const r = await fetch(this.apiUrl + path, { headers });
+      return r.text();
+    },
+
+    async apiPost(path, body) {
+      const headers = { 'Content-Type': 'application/json' };
+      if (this.apiKey) headers['Authorization'] = 'Bearer ' + this.apiKey;
+      const r = await fetch(this.apiUrl + path, { method: 'POST', headers, body: JSON.stringify(body) });
+      return r.ok;
+    },
+
+    parseIngest(raw) {
+      const m = { metrics: 0, logs: 0, traces: 0 };
+      (raw || '').split('\n').forEach(line => {
+        if (!line.startsWith('rpt_ingest_samples_total')) return;
+        const val = parseInt(line.split(' ').pop()) || 0;
+        if (line.includes('"prometheus"')) m.metrics += val;
+        else if (line.includes('"otlp"')) m.logs += val;
+        else if (line.includes('"grpc"')) m.traces += val;
+      });
+      this.ingest = m;
+    },
+
+    workloadRef(s) {
+      if (!s) return '—';
+      if (s.workload?.namespace) return s.workload.namespace + '/' + s.workload.kind + '/' + s.workload.name;
+      return s.host || '—';
+    },
+
+    workloadState(s) {
+      if (!s) return 'unknown';
+      if (s.status) return s.status;
+      if (s.calibration_progress < 100) return 'calibrating';
+      if (s.fused_rupture_index >= 5) return 'emergency';
+      if (s.fused_rupture_index >= 3) return 'critical';
+      if (s.fused_rupture_index >= 1.5) return 'warning';
+      return 'active';
+    },
+
+    stateBadge(s) {
+      const st = this.workloadState(s);
+      if (st === 'emergency' || st === 'critical') return 'badge-red';
+      if (st === 'warning' || st === 'calibrating') return 'badge-yellow';
+      if (st === 'active') return 'badge-green';
+      return 'badge-gray';
+    },
+
+    healthStyle(v) {
+      if (v >= 80) return 'color:var(--green)';
+      if (v >= 40) return 'color:var(--yellow)';
+      return 'color:var(--red)';
+    },
+
+    fusedColor(v) {
+      if (v >= 5) return 'color:var(--red)';
+      if (v >= 3) return 'color:var(--orange)';
+      if (v >= 1.5) return 'color:var(--yellow)';
+      return 'color:var(--green)';
+    },
+
+    barStyle(val, max) {
+      const pct = Math.min(100, (val / max) * 100);
+      const color = val >= 80 ? 'var(--green)' : val >= 40 ? 'var(--yellow)' : 'var(--red)';
+      return `width:${pct}%;background:${color}`;
+    },
+
+    ingestPct(v) {
+      if (this.ingestTotal === 0) return 0;
+      return Math.round((v / this.ingestTotal) * 100);
+    },
+
+    kpiSignals() {
+      const s = this.selected;
+      if (!s) return [];
+      const signalDefs = [
+        { name: 'stress',     key: 'stress',     desc: 'Real-time load pressure',        hex: '#ef4444' },
+        { name: 'fatigue',    key: 'fatigue',     desc: 'Accumulated burden over time',   hex: '#f97316' },
+        { name: 'mood',       key: 'mood',        desc: 'System well-being composite',    hex: '#10b981' },
+        { name: 'pressure',   key: 'pressure',    desc: 'Rate of stress increase',        hex: '#f59e0b' },
+        { name: 'humidity',   key: 'humidity',    desc: 'Error / timeout density',        hex: '#6366f1' },
+        { name: 'contagion',  key: 'contagion',   desc: 'Cross-service error propagation',hex: '#ec4899' },
+        { name: 'resilience', key: 'resilience',  desc: 'Recovery speed',                 hex: '#38bdf8' },
+        { name: 'entropy',    key: 'entropy',     desc: 'Behavioral unpredictability',    hex: '#a78bfa' },
+        { name: 'velocity',   key: 'velocity',    desc: 'Rate of HealthScore change',     hex: '#fb7185' },
+      ];
+      return signalDefs.map(d => ({
+        ...d,
+        value: s[d.key]?.value || 0,
+        color: 'color:' + d.hex,
+      }));
+    },
+
+    renderForecastChart() {
+      const canvas = document.getElementById('forecast-chart');
+      if (!canvas || !this.selected?.health_forecast) return;
+      if (this._forecastChart) this._forecastChart.destroy();
+      const f = this.selected.health_forecast;
+      const now = Math.round(this.selected.health_score?.value || 0);
+      this._forecastChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: ['Now', '+15 min', '+30 min'],
+          datasets: [{
+            label: 'HealthScore',
+            data: [now, Math.round(f.in_15min || 0), Math.round(f.in_30min || 0)],
+            borderColor: '#38bdf8',
+            backgroundColor: 'rgba(56,189,248,.08)',
+            tension: 0.4,
+            fill: true,
+            pointBackgroundColor: '#38bdf8',
+            pointRadius: 5,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: {
+              min: 0, max: 100,
+              grid: { color: '#1e2d40' },
+              ticks: { color: '#64748b', font: { size: 10 } },
+            },
+            x: {
+              grid: { color: '#1e2d40' },
+              ticks: { color: '#64748b', font: { size: 10 } },
+            },
+          },
+        },
+      });
+    },
+
+    async approve(id) {
+      await this.apiPost('/api/v2/actions/' + id + '/approve', {});
+      await this.refresh();
+    },
+
+    async reject(id) {
+      await this.apiPost('/api/v2/actions/' + id + '/reject', {});
+      await this.refresh();
+    },
+
+    async emergencyStop() {
+      if (!confirm('Halt all Tier-1 auto-actions globally?')) return;
+      await this.apiPost('/api/v2/actions/emergency-stop', {});
+      await this.refresh();
+    },
+
+    fmtNum(n) {
+      if (!n) return '0';
+      return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    },
+
+    formatUptime(s) {
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      if (h > 0) return h + 'h ' + String(m).padStart(2,'0') + 'm';
+      return m + 'm';
+    },
+  };
+}
+</script>
+</body>
+</html>

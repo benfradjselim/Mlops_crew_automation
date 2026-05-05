@@ -12,15 +12,15 @@ import (
 
 func TestNew_DefaultTimeout(t *testing.T) {
 	c := New(Config{BaseURL: "http://localhost"})
-	if c.httpClient.Timeout != 10*time.Second {
-		t.Errorf("want 10s, got %v", c.httpClient.Timeout)
+	if c.httpClient.Timeout != 15*time.Second {
+		t.Errorf("want 15s, got %v", c.httpClient.Timeout)
 	}
 }
 
 func TestHealth_OK(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"status":"ready"}`)
+		fmt.Fprint(w, `{"status":"ready","version":"6.6.0"}`)
 	}))
 	defer ts.Close()
 
@@ -32,6 +32,9 @@ func TestHealth_OK(t *testing.T) {
 	if res.Status != "ready" {
 		t.Errorf("want ready, got %s", res.Status)
 	}
+	if res.Version != "6.6.0" {
+		t.Errorf("want 6.6.0, got %s", res.Version)
+	}
 }
 
 func TestHealth_ServerError(t *testing.T) {
@@ -42,12 +45,12 @@ func TestHealth_ServerError(t *testing.T) {
 
 	c := New(Config{BaseURL: ts.URL})
 	_, err := c.Health(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "status 500") {
+	if err == nil || !strings.Contains(err.Error(), "500") {
 		t.Errorf("expected 500 error, got %v", err)
 	}
 }
 
-func TestRuptures_OK(t *testing.T) {
+func TestSnapshots_OK(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `[]`)
@@ -55,46 +58,90 @@ func TestRuptures_OK(t *testing.T) {
 	defer ts.Close()
 
 	c := New(Config{BaseURL: ts.URL})
-	res, err := c.Ruptures(context.Background())
+	res, err := c.Snapshots(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res == nil || len(res) != 0 {
+	if len(res) != 0 {
 		t.Errorf("want empty slice, got %v", res)
 	}
 }
 
-func TestRuptureForHost_OK(t *testing.T) {
+func TestSnapshot_OK(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"host":"h1","metric":"m1","rupture_index":0.5}`)
+		fmt.Fprint(w, `{"host":"payment-api","fused_rupture_index":2.1}`)
 	}))
 	defer ts.Close()
 
 	c := New(Config{BaseURL: ts.URL})
-	res, err := c.RuptureForHost(context.Background(), "h1")
+	res, err := c.Snapshot(context.Background(), "payment-api")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Host != "h1" || res.RuptureIndex != 0.5 {
+	if res.Host != "payment-api" {
+		t.Errorf("want payment-api, got %s", res.Host)
+	}
+	if res.FusedRuptureIndex != 2.1 {
+		t.Errorf("want 2.1, got %f", res.FusedRuptureIndex)
+	}
+}
+
+func TestActions_OK(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[{"id":"act_1","type":"scale","tier":2}]`)
+	}))
+	defer ts.Close()
+
+	c := New(Config{BaseURL: ts.URL})
+	res, err := c.Actions(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res) != 1 || res[0].ID != "act_1" {
 		t.Errorf("unexpected response: %+v", res)
 	}
 }
 
-func TestKPI_OK(t *testing.T) {
+func TestApproveAction_OK(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"name":"stress","host":"h1","value":0.5}`)
+		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
 
 	c := New(Config{BaseURL: ts.URL})
-	res, err := c.KPI(context.Background(), "stress", "h1")
+	if err := c.ApproveAction(context.Background(), "act_1"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEmergencyStop_OK(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	c := New(Config{BaseURL: ts.URL})
+	if err := c.EmergencyStop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWeights_OK(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[{"selector":"production/*","stress":0.4}]`)
+	}))
+	defer ts.Close()
+
+	c := New(Config{BaseURL: ts.URL})
+	res, err := c.Weights(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Name != "stress" || res.Value != 0.5 {
-		t.Errorf("unexpected response: %+v", res)
+	if len(res) != 1 || res[0].Selector != "production/*" {
+		t.Errorf("unexpected: %+v", res)
 	}
 }
 
@@ -102,70 +149,23 @@ func TestAddContext_OK(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"id":"1"}`)
+		fmt.Fprint(w, `{"id":"ctx_1"}`)
 	}))
 	defer ts.Close()
 
 	c := New(Config{BaseURL: ts.URL})
-	res, err := c.AddContext(context.Background(), ContextEntry{ID: "1"})
+	res, err := c.AddContext(context.Background(), ContextEntry{ID: "ctx_1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.ID != "1" {
-		t.Errorf("want 1, got %s", res.ID)
-	}
-}
-
-func TestDeleteContext_OK(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer ts.Close()
-
-	c := New(Config{BaseURL: ts.URL})
-	err := c.DeleteContext(context.Background(), "1")
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestListContexts_OK(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `[{"id":"1"}]`)
-	}))
-	defer ts.Close()
-
-	c := New(Config{BaseURL: ts.URL})
-	res, err := c.ListContexts(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(res) != 1 || res[0].ID != "1" {
-		t.Errorf("unexpected response: %+v", res)
-	}
-}
-
-func TestEmergencyStop_OK(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"emergency_stop":true}`)
-	}))
-	defer ts.Close()
-
-	c := New(Config{BaseURL: ts.URL})
-	res, err := c.EmergencyStop(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !res.EmergencyStop {
-		t.Errorf("want true")
+	if res.ID != "ctx_1" {
+		t.Errorf("want ctx_1, got %s", res.ID)
 	}
 }
 
 func TestMetrics_OK(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, "metric1 1.0")
+		fmt.Fprint(w, "rpt_uptime_seconds 120")
 	}))
 	defer ts.Close()
 
@@ -174,8 +174,8 @@ func TestMetrics_OK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res != "metric1 1.0" {
-		t.Errorf("want metric1 1.0, got %s", res)
+	if !strings.Contains(res, "rpt_uptime_seconds") {
+		t.Errorf("unexpected metrics: %s", res)
 	}
 }
 
@@ -186,17 +186,18 @@ func TestAuth_HeaderSent(t *testing.T) {
 		if auth != "Bearer "+token {
 			t.Errorf("want Bearer %s, got %s", token, auth)
 		}
+		fmt.Fprint(w, `{"status":"ok"}`)
 	}))
 	defer ts.Close()
 
 	c := New(Config{BaseURL: ts.URL, APIKey: token})
-	c.Health(context.Background())
+	c.Health(context.Background()) //nolint:errcheck
 }
 
 func TestClient_NetworkError(t *testing.T) {
-	c := New(Config{BaseURL: "http://invalid-url-that-does-not-exist"})
+	c := New(Config{BaseURL: "http://127.0.0.1:19999"})
 	_, err := c.Health(context.Background())
 	if err == nil {
-		t.Error("expected error")
+		t.Error("expected error for unreachable server")
 	}
 }
