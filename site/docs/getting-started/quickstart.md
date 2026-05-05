@@ -15,7 +15,7 @@ Get Ruptura running and observing your workloads in under 5 minutes.
       -p 4317:4317 \
       -v ruptura-data:/var/lib/ruptura/data \
       -e RUPTURA_API_KEY=$RUPTURA_API_KEY \
-      ghcr.io/benfradjselim/ruptura:6.2.2
+      ghcr.io/benfradjselim/ruptura:6.6.0
     ```
 
 === "Kubernetes / Helm"

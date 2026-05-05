@@ -143,7 +143,7 @@ gRPC ingest ──────────────┘
       -p 4317:4317 \
       -v ruptura-data:/var/lib/ruptura/data \
       -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
-      ghcr.io/benfradjselim/ruptura:6.2.2
+      ghcr.io/benfradjselim/ruptura:6.6.0
 
     curl http://localhost:8080/api/v2/health
     ```
@@ -204,7 +204,7 @@ gRPC ingest ──────────────┘
 
 ## Current Release
 
-**v6.2.2** — all v6.x engineering gaps resolved. Production-ready for Kubernetes evaluation.
+**v6.6.0** — all IMPROVE items shipped. Production-ready for Kubernetes evaluation.
 
 - WorkloadRef-native pipeline (`namespace/kind/workload`, not host)
 - Adaptive per-workload baselines — no false alarms from batch jobs
