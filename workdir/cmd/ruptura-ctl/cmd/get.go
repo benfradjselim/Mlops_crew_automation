@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/benfradjselim/ruptura/pkg/models"
 	"github.com/spf13/cobra"
 )
 
@@ -101,7 +102,7 @@ var getRupturesCmd = &cobra.Command{
 			return err
 		}
 		// filter to active ruptures (FusedR >= 1.5)
-		var active []interface{}
+		var active []models.KPISnapshot
 		for _, s := range snaps {
 			if s.FusedRuptureIndex >= 1.5 {
 				active = append(active, s)
@@ -116,10 +117,7 @@ var getRupturesCmd = &cobra.Command{
 		}
 		t := newTable("WORKLOAD", "FUSEDR", "STATE", "HEALTH", "BLAST RADIUS", "PATTERN MATCH")
 		t.alignRight(1)
-		for _, s := range snaps {
-			if s.FusedRuptureIndex < 1.5 {
-				continue
-			}
+		for _, s := range active {
 			ref := s.Host
 			if s.Workload.Namespace != "" {
 				ref = s.Workload.Namespace + "/" + s.Workload.Kind + "/" + s.Workload.Name
@@ -298,5 +296,4 @@ func init() {
 		RunE:   getRupturesCmd.RunE,
 	})
 
-	getWorkloadsCmd.Flags().StringVarP(&cfgOutput, "output", "o", "table", "Output format: table|json|wide")
 }

@@ -169,7 +169,7 @@ func (t *table) print() {
 		}
 	}
 
-	sep := strings.Repeat("─", totalWidth(widths)+len(widths)*3-1)
+	sep := strings.Repeat("─", totalWidth(widths)+len(widths)*2)
 	fmt.Println()
 
 	// header

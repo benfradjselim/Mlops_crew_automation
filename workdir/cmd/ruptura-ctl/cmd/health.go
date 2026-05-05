@@ -25,7 +25,7 @@ var healthCmd = &cobra.Command{
 		}
 
 		// parse self-metrics for ingest counts
-		metricsRaw, _ := c.Metrics(ctx())
+		metricsRaw, metricsErr := c.Metrics(ctx())
 		ingest := parseIngestMetrics(metricsRaw)
 
 		statusDot := green("●")
@@ -51,7 +51,11 @@ var healthCmd = &cobra.Command{
 		}
 
 		fmt.Println()
-		fmt.Printf("  %s\n\n", bold("Ingestion Statistics"))
+		ingestHeader := bold("Ingestion Statistics")
+		if metricsErr != nil {
+			ingestHeader += "  " + dim("(metrics endpoint unavailable)")
+		}
+		fmt.Printf("  %s\n\n", ingestHeader)
 
 		// metrics
 		fmt.Printf("  %s\n", dim("metrics (prometheus remote_write)"))
@@ -70,7 +74,11 @@ var healthCmd = &cobra.Command{
 		fmt.Printf("  %-22s %s\n\n", bold("total samples"), bold(fmtNum(totalAll)))
 
 		// workload summary
-		snaps, _ := c.Snapshots(ctx())
+		snaps, snapsErr := c.Snapshots(ctx())
+		if snapsErr != nil {
+			fmt.Printf("  %s\n\n", dim("(workload data unavailable: "+snapsErr.Error()+")"))
+			return nil
+		}
 		calibrating := 0
 		active := 0
 		for _, s := range snaps {
@@ -91,7 +99,7 @@ var healthCmd = &cobra.Command{
 
 // parseIngestMetrics parses rpt_ingest_samples_total lines from /api/v2/metrics.
 func parseIngestMetrics(raw string) map[string]int64 {
-	result := map[string]int64{"metrics": 0, "otlp": 0, "grpc": 0, "prometheus": 0}
+	result := map[string]int64{"metrics": 0, "otlp": 0, "grpc": 0}
 	sc := bufio.NewScanner(strings.NewReader(raw))
 	for sc.Scan() {
 		line := sc.Text()
@@ -115,7 +123,6 @@ func parseIngestMetrics(raw string) map[string]int64 {
 		case strings.Contains(parts[0], `"grpc"`):
 			result["grpc"] += val
 		}
-		result["total"] += val
 	}
 	return result
 }

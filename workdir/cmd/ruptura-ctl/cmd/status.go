@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/benfradjselim/ruptura/pkg/models"
 	"github.com/spf13/cobra"
 )
 
@@ -54,7 +55,7 @@ var statusCmd = &cobra.Command{
 		// filter by namespace
 		filtered := snapshots
 		if cfgNS != "" {
-			filtered = filtered[:0]
+			filtered = make([]models.KPISnapshot, 0, len(snapshots))
 			for _, s := range snapshots {
 				if s.Workload.Namespace == cfgNS || s.Host == cfgNS {
 					filtered = append(filtered, s)

@@ -87,7 +87,10 @@ Weights are automatically normalised to sum 1.0.`,
 		}
 
 		c := newClient()
-		existing, _ := c.Weights(ctx())
+		existing, err := c.Weights(ctx())
+		if err != nil {
+			return fmt.Errorf("fetch existing weights: %w", err)
+		}
 
 		// replace or append
 		found := false

@@ -92,23 +92,16 @@ var describeWorkloadCmd = &cobra.Command{
 			{"entropy", snap.Entropy.Value},
 			{"velocity", snap.Velocity.Value},
 		}
-		for i, sig := range signals {
+		for i := 0; i < len(signals); i += 2 {
+			sig := signals[i]
 			bar := progressBar(int(sig.val*100), 12)
 			line := fmt.Sprintf("  %-12s %s  %.3f", dim(sig.name), bar, sig.val)
-			if i%2 == 0 && i+1 < len(signals) {
+			if i+1 < len(signals) {
 				next := signals[i+1]
 				nextBar := progressBar(int(next.val*100), 12)
 				line += fmt.Sprintf("     %-12s %s  %.3f", dim(next.name), nextBar, next.val)
-				i++
 			}
 			fmt.Println(line)
-			_ = i
-		}
-		// print remaining if odd
-		if len(signals)%2 != 0 {
-			last := signals[len(signals)-1]
-			bar := progressBar(int(last.val*100), 12)
-			fmt.Printf("  %-12s %s  %.3f\n", dim(last.name), bar, last.val)
 		}
 
 		// business signals

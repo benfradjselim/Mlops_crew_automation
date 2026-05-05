@@ -42,8 +42,10 @@ Examples:
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		noColor = cfgNoColor
 		// env overrides
-		if v := os.Getenv("RUPTURA_URL"); v != "" && cfgURL == "http://localhost:8080" {
-			cfgURL = v
+		if v := os.Getenv("RUPTURA_URL"); v != "" {
+			if !cmd.Flags().Changed("url") {
+				cfgURL = v
+			}
 		}
 		if v := os.Getenv("RUPTURA_API_KEY"); v != "" && cfgAPIKey == "" {
 			cfgAPIKey = v
