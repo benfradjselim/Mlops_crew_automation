@@ -475,3 +475,31 @@ func (h *Handlers) handleExplain(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 }
+
+// handleConfigWeights manages per-workload HealthScore signal weight overrides.
+//
+//	GET  /api/v2/config/weights — list current weight configs
+//	POST /api/v2/config/weights — replace the full list
+func (h *Handlers) handleConfigWeights(w http.ResponseWriter, r *http.Request) {
+	if h.analyzer == nil {
+		writeError(w, http.StatusServiceUnavailable, "analyzer not available")
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		cfgs := h.analyzer.WeightConfigs()
+		if cfgs == nil {
+			cfgs = []models.SignalWeights{}
+		}
+		writeJSON(w, http.StatusOK, cfgs)
+
+	case http.MethodPost:
+		var cfgs []models.SignalWeights
+		if err := json.NewDecoder(r.Body).Decode(&cfgs); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid body: "+err.Error())
+			return
+		}
+		h.analyzer.SetWeightConfigs(cfgs)
+		writeJSON(w, http.StatusOK, map[string]interface{}{"applied": len(cfgs)})
+	}
+}

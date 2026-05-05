@@ -225,6 +225,8 @@ Get a single action by ID.
 
 Approve a Tier-2 pending action.
 
+> **Edition gate**: requires `RUPTURA_EDITION=autopilot`. Returns `402 Payment Required` in `community` edition with an upgrade message. Action recommendations are always visible via `GET /actions` regardless of edition.
+
 ```bash
 curl -X POST -H "Authorization: Bearer $API_KEY" \
   http://localhost:8080/api/v2/actions/act_abc/approve
@@ -341,6 +343,44 @@ List recent context events.
 ### `DELETE /context/{id}`
 
 Remove a context event.
+
+---
+
+## Signal Weight Configuration
+
+Override HealthScore signal weights per workload or namespace. Weights are normalised to sum to 1.0. First matching selector wins; falls back to global defaults `{stress:0.25, fatigue:0.20, mood:0.20, pressure:0.15, humidity:0.10, contagion:0.10}`.
+
+### `GET /config/weights`
+
+Return current weight override list.
+
+```bash
+curl -H "Authorization: Bearer $API_KEY" \
+  http://localhost:8080/api/v2/config/weights
+```
+
+### `POST /config/weights`
+
+Replace the full list of weight overrides (idempotent). Changes take effect on the next 15-second analyzer tick.
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '[
+    {"selector":"payments/*","stress":0.35,"fatigue":0.15,"mood":0.20,"pressure":0.20,"humidity":0.05,"contagion":0.05},
+    {"selector":"batch/*","stress":0.10,"fatigue":0.30,"mood":0.10,"pressure":0.10,"humidity":0.20,"contagion":0.20}
+  ]' \
+  http://localhost:8080/api/v2/config/weights
+```
+
+**Selector syntax:**
+
+| Selector | Matches |
+|----------|---------|
+| `*` | All workloads |
+| `payments/*` | Any workload in the `payments` namespace |
+| `payments/Deployment/checkout` | Exact workload key |
 
 ---
 

@@ -91,6 +91,33 @@ type PatternMatch struct {
 	Resolution       string    `json:"resolution,omitempty"`
 }
 
+// SignalWeights defines per-selector HealthScore signal weights (v6.6).
+// Selector is a glob pattern matched against workload keys (e.g. "payments/*", "batch/*", "*").
+// Weights are normalised to sum to 1.0 on load. Omitted fields default to 0.
+type SignalWeights struct {
+	Selector  string  `json:"selector" yaml:"selector"`
+	Stress    float64 `json:"stress"   yaml:"stress"`
+	Fatigue   float64 `json:"fatigue"  yaml:"fatigue"`
+	Mood      float64 `json:"mood"     yaml:"mood"`
+	Pressure  float64 `json:"pressure" yaml:"pressure"`
+	Humidity  float64 `json:"humidity" yaml:"humidity"`
+	Contagion float64 `json:"contagion" yaml:"contagion"`
+}
+
+// DefaultSignalWeights returns the canonical HealthScore weights used when no
+// per-workload override matches.
+func DefaultSignalWeights() SignalWeights {
+	return SignalWeights{
+		Selector:  "*",
+		Stress:    0.25,
+		Fatigue:   0.20,
+		Mood:      0.20,
+		Pressure:  0.15,
+		Humidity:  0.10,
+		Contagion: 0.10,
+	}
+}
+
 // SLOConfig defines the error budget contract for a workload.
 type SLOConfig struct {
 	TargetPercent      float64 `json:"target_percent"`       // e.g. 99.9

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -31,7 +32,7 @@ import (
 	"github.com/benfradjselim/ruptura/pkg/utils"
 )
 
-const version = "6.5.0"
+const version = "6.6.0"
 
 // Config holds all runtime configuration parsed from CLI flags.
 type Config struct {
@@ -145,6 +146,15 @@ func runWithContext(ctx context.Context, cfg Config) error {
 	ingestEngine := ingest.New(pipelineEngine, logSink, nil, sentSink, fusionEngine)
 	analyzerEngine := analyzer.NewAnalyzer()
 	analyzerEngine.SetTopology(topoBuilder)
+	if raw := os.Getenv("RUPTURA_WORKLOAD_WEIGHTS"); raw != "" {
+		var cfgs []models.SignalWeights
+		if err := json.Unmarshal([]byte(raw), &cfgs); err == nil {
+			analyzerEngine.SetWeightConfigs(cfgs)
+			logger.Default.Info("loaded workload weight overrides", "count", len(cfgs))
+		} else {
+			logger.Default.Warn("RUPTURA_WORKLOAD_WEIGHTS parse error — using defaults", "err", err)
+		}
+	}
 
 	// Pipe burst events into fusion as logR
 	go fusionEngine.StartLogWatcher(ctx, burstDet.Events())

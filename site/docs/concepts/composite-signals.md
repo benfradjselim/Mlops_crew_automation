@@ -142,16 +142,20 @@ Rate of change of HealthScore. High velocity means the workload is degrading (or
 
 ```
 health_score = 100 × (1 − (
-    0.25 × stress +
-    0.20 × fatigue +
-    0.20 × (1 − mood) +
-    0.15 × pressure +
-    0.10 × humidity +
-    0.10 × contagion
+    w_stress    × stress +
+    w_fatigue   × fatigue +
+    w_mood      × (1 − mood) +
+    w_pressure  × pressure +
+    w_humidity  × humidity +
+    w_contagion × contagion
 ))
 ```
 
+Default weights: `stress=0.25, fatigue=0.20, mood=0.20, pressure=0.15, humidity=0.10, contagion=0.10`.
+
 Additive-penalty model. A single high signal degrades the score proportionally — it does not collapse the score the way a multiplicative model would. Below 60 indicates a workload needing attention.
+
+Weights are configurable per workload or namespace (v6.6.0+). See [Signal Weight Configuration](../api/reference.md#signal-weight-configuration) for the API reference and Helm `workloadWeights` for static bootstrap config.
 
 | health_score | State |
 |-------------|-------|

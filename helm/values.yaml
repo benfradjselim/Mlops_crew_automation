@@ -125,3 +125,25 @@ affinity: {}
 #     windowDays: 30
 #     errorBudgetMinutes: 216
 slos: []
+
+# -- Per-workload HealthScore signal weight overrides (v6.6).
+# Entries are evaluated in order; first selector match wins.
+# Selector is a glob matched against the workload key (e.g. "payments/*", "batch/*").
+# Omitted fields default to 0 (weights are normalised to sum to 1.0 on load).
+# Example:
+# workloadWeights:
+#   - selector: "payments/*"
+#     stress: 0.35
+#     fatigue: 0.15
+#     mood: 0.20
+#     pressure: 0.20
+#     humidity: 0.05
+#     contagion: 0.05
+#   - selector: "batch/*"
+#     stress: 0.10
+#     fatigue: 0.30
+#     mood: 0.10
+#     pressure: 0.10
+#     humidity: 0.20
+#     contagion: 0.20
+workloadWeights: []

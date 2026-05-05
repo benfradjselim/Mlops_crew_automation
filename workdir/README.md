@@ -1,7 +1,7 @@
 # Ruptura
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-6.2.2-0069ff?style=for-the-badge" alt="v6.2.2">
+  <img src="https://img.shields.io/badge/version-6.6.0-0069ff?style=for-the-badge" alt="v6.6.0">
   <img src="https://img.shields.io/badge/go-1.21+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.21+">
   <img src="https://img.shields.io/badge/license-Apache%202.0-green?style=for-the-badge" alt="Apache 2.0">
   <img src="https://img.shields.io/badge/kubernetes-native-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes Native">
@@ -133,7 +133,7 @@ docker run -d \
   -p 4317:4317 \
   -v ruptura-data:/var/lib/ruptura/data \
   -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
-  ghcr.io/benfradjselim/ruptura:6.2.2
+  ghcr.io/benfradjselim/ruptura:6.6.0
 ```
 
 | Port | Purpose |
@@ -287,7 +287,7 @@ metadata:
   name: production
   namespace: ruptura-system
 spec:
-  image: ghcr.io/benfradjselim/ruptura:6.2.2
+  image: ghcr.io/benfradjselim/ruptura:6.6.0
   port: 8080
   storageSize: 20Gi
   apiKey:
@@ -310,6 +310,21 @@ helm lint helm/
 ---
 
 ## Changelog
+
+### v6.6.0 — 2026-05-05
+- **Per-workload signal weight tuning**: `POST/GET /api/v2/config/weights` for runtime override. `RUPTURA_WORKLOAD_WEIGHTS` JSON env var for Helm bootstrap. Selector syntax: exact, `ns/*`, or `*`. Weights auto-normalised to 1.0.
+
+### v6.5.0 — 2026-05-05
+- **Edition gate**: `RUPTURA_EDITION=community|autopilot`. `POST .../approve` returns 402 in community — recommendations stay read-only. Full action execution in autopilot.
+
+### v6.4.0 — 2026-05-05
+- **Rupture fingerprinting**: 11-dimensional KPI vector per confirmed rupture, cosine similarity ≥ 0.85 → `pattern_match` in every rupture response.
+- **Business signal layer**: `slo_burn_velocity`, `blast_radius`, `recovery_debt` in every snapshot's `business` block.
+
+### v6.3.0 — 2026-05-04
+- **Calibration warm-up**: `status`, `calibration_progress`, `calibration_eta_minutes` in every snapshot.
+- **HealthScore trend forecast**: `health_forecast` block — OLS slope → `in_15min`, `in_30min`, `critical_eta_minutes`.
+- **`ruptura-sim`**: four simulation patterns via `POST /api/v2/sim/inject` for local demos.
 
 ### v6.2.2 — 2026-04-30
 - GAP-04 closed: anomaly REST endpoints (`GET /api/v2/anomalies`, `/api/v2/anomalies/{host}`)

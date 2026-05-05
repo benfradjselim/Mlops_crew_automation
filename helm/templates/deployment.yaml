@@ -69,6 +69,10 @@ spec:
               value: {{ .Values.ingestRPS | quote }}
             - name: RUPTURA_EDITION
               value: {{ .Values.edition | default "community" | quote }}
+            {{- if .Values.workloadWeights }}
+            - name: RUPTURA_WORKLOAD_WEIGHTS
+              value: {{ .Values.workloadWeights | toJson | quote }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /api/v2/health

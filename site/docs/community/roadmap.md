@@ -2,6 +2,33 @@
 
 ## Released
 
+### v6.6.0 — 2026-05-05 ✅
+
+| Item | Detail |
+|------|--------|
+| IMPROVE-07: Per-workload signal weight tuning | `POST /api/v2/config/weights` + `GET /api/v2/config/weights` for runtime override. `RUPTURA_WORKLOAD_WEIGHTS` JSON env var for Helm/K8s bootstrap. Selector syntax: exact, `ns/*` prefix, or `*` wildcard. Weights normalised to 1.0 on load. Helm `workloadWeights:` array in `values.yaml`. |
+
+### v6.5.0 — 2026-05-05 ✅
+
+| Item | Detail |
+|------|--------|
+| IMPROVE-06: Edition gate | `RUPTURA_EDITION` env var (`community` \| `autopilot`). `POST .../approve` returns 402 in `community` — recommendations stay visible read-only. Full execution in `autopilot`. Helm `edition: community` in `values.yaml`. |
+
+### v6.4.0 — 2026-05-05 ✅
+
+| Item | Detail |
+|------|--------|
+| IMPROVE-04: Rupture fingerprinting | 11-dimensional KPI vector per confirmed rupture (FusedR > 3.0). Cosine similarity ≥ 0.85 surfaced as `pattern_match` in every rupture response. |
+| IMPROVE-05: Business signal layer | `slo_burn_velocity`, `blast_radius`, `recovery_debt` in every snapshot's `business` block. SLO contracts in Helm `values.yaml`. |
+
+### v6.3.0 — 2026-05-04 ✅
+
+| Item | Detail |
+|------|--------|
+| IMPROVE-01: Calibration warm-up | `status` + `calibration_progress` + `calibration_eta_minutes` in every snapshot. |
+| IMPROVE-02: HealthScore trend forecast | `health_forecast` block — OLS slope → `in_15min`, `in_30min`, `critical_eta_minutes`. |
+| IMPROVE-03: `ruptura-sim` binary | Four simulation patterns (`memory-leak`, `cascade-failure`, `traffic-surge`, `slow-burn`) via `POST /api/v2/sim/inject`. |
+
 ### v6.2.2 — 2026-04-30 ✅
 
 | Item | Detail |

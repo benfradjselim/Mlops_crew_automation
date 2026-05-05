@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,8 +29,11 @@ type Analyzer struct {
 	defaultFatigueRThreshold float64
 	defaultFatigueLambda     float64
 
-	topology    TopologySource
+	topology     TopologySource
 	fingerprints *fingerprintEngine
+
+	// v6.6: per-workload HealthScore signal weight overrides (ordered; first match wins).
+	weightConfigs []models.SignalWeights
 }
 
 // SetTopology injects a live topology source for graph-based contagion computation.
@@ -37,6 +41,71 @@ func (a *Analyzer) SetTopology(t TopologySource) {
 	a.mu.Lock()
 	a.topology = t
 	a.mu.Unlock()
+}
+
+// SetWeightConfigs replaces the list of per-workload HealthScore signal weight overrides.
+// Entries are evaluated in order; the first selector that matches the workload key wins.
+// Each entry is normalised so its weights sum to 1.0 before storing.
+func (a *Analyzer) SetWeightConfigs(cfgs []models.SignalWeights) {
+	normalised := make([]models.SignalWeights, len(cfgs))
+	for i, c := range cfgs {
+		normalised[i] = normaliseWeights(c)
+	}
+	a.mu.Lock()
+	a.weightConfigs = normalised
+	a.mu.Unlock()
+}
+
+// WeightConfigs returns the current list of weight overrides (a copy).
+func (a *Analyzer) WeightConfigs() []models.SignalWeights {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	out := make([]models.SignalWeights, len(a.weightConfigs))
+	copy(out, a.weightConfigs)
+	return out
+}
+
+// resolveWeights returns the first matching SignalWeights for the given workload key,
+// falling back to DefaultSignalWeights when no entry matches.
+// Caller must hold a.mu (any variant).
+func (a *Analyzer) resolveWeights(workloadKey string) models.SignalWeights {
+	for _, cfg := range a.weightConfigs {
+		if matchSelector(cfg.Selector, workloadKey) {
+			return cfg
+		}
+	}
+	return models.DefaultSignalWeights()
+}
+
+// matchSelector matches a workload key against a selector pattern.
+//   - "*"         matches any key
+//   - "ns/*"      matches any key with prefix "ns/"
+//   - "ns/k/name" exact match
+func matchSelector(selector, key string) bool {
+	if selector == "*" {
+		return true
+	}
+	if strings.HasSuffix(selector, "/*") {
+		prefix := strings.TrimSuffix(selector, "*")
+		return strings.HasPrefix(key, prefix)
+	}
+	return selector == key
+}
+
+// normaliseWeights scales the six signal weights so they sum to 1.0.
+// If all weights are zero the default weights are returned unchanged.
+func normaliseWeights(w models.SignalWeights) models.SignalWeights {
+	total := w.Stress + w.Fatigue + w.Mood + w.Pressure + w.Humidity + w.Contagion
+	if total < 1e-9 {
+		return w
+	}
+	w.Stress /= total
+	w.Fatigue /= total
+	w.Mood /= total
+	w.Pressure /= total
+	w.Humidity /= total
+	w.Contagion /= total
+	return w
 }
 
 type workloadState struct {
@@ -270,9 +339,9 @@ func (a *Analyzer) Update(ref models.WorkloadRef, metrics map[string]float64) mo
 	resilience := utils.Clamp(mood*(1-ws.fatigue)*(1-contagion), 0, 1)
 
 	// HealthScore: additive weighted penalty (avoids multiplicative collapse).
-	// penalty = weighted sum of bad signals; healthScore = 1 - penalty, clamped [0,1].
-	// Weights: stress=0.25, fatigue=0.20, mood-inv=0.20, pressure=0.15, humidity=0.10, contagion=0.10
-	penalty := 0.25*stress + 0.20*ws.fatigue + 0.20*(1-mood) + 0.15*pressureNorm + 0.10*humidity + 0.10*contagion
+	// Weights are resolved per-workload; fall back to global defaults when no override matches.
+	w := a.resolveWeights(ref.Key())
+	penalty := w.Stress*stress + w.Fatigue*ws.fatigue + w.Mood*(1-mood) + w.Pressure*pressureNorm + w.Humidity*humidity + w.Contagion*contagion
 	healthScore := utils.Clamp(1-penalty, 0, 1)
 
 	// Entropy: system disorder — how much KPI values deviate from their rolling mean
@@ -328,7 +397,7 @@ func (a *Analyzer) Update(ref models.WorkloadRef, metrics map[string]float64) mo
 		relPressure := adaptiveScore(ws, "pressure", pressureNorm)
 		relHumidity := adaptiveScore(ws, "humidity", humidity)
 		relContagion := adaptiveScore(ws, "contagion", contagion)
-		penalty = 0.25*relStress + 0.20*ws.fatigue + 0.20*relMood + 0.15*relPressure + 0.10*relHumidity + 0.10*relContagion
+		penalty = w.Stress*relStress + w.Fatigue*ws.fatigue + w.Mood*relMood + w.Pressure*relPressure + w.Humidity*relHumidity + w.Contagion*relContagion
 		healthScore = utils.Clamp(1-penalty, 0, 1)
 	}
 

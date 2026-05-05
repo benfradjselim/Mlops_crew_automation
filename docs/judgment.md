@@ -988,7 +988,7 @@ In `autopilot` mode: full execution, no change to existing behavior.
 ---
 
 #### IMPROVE-07 — Per-Workload Signal Weight Tuning
-**Status**: [ ] Not started
+**Status**: [x] shipped v6.6.0
 
 **Problem**: The fixed HealthScore weights (`0.25·stress + 0.20·fatigue + ...`) are calibrated for a generic workload profile. A batch job, a latency-sensitive API, and a message queue have completely different risk profiles. Enterprise buyers will not trust a tool with global constants.
 
@@ -1028,7 +1028,7 @@ workloadWeights:
 | IMPROVE-04 | Rupture fingerprinting | P1 | ~1 week | [x] shipped v6.4.0 |
 | IMPROVE-05 | Business signal layer (3 signals) | P1 | ~1 week | [x] shipped v6.4.0 |
 | IMPROVE-06 | Feature gate / edition flag | P2 | ~2 days | [x] shipped v6.5.0 |
-| IMPROVE-07 | Per-workload weight tuning | P2 | ~3 days | [ ] |
+| IMPROVE-07 | Per-workload weight tuning | P2 | ~3 days | [x] shipped v6.6.0 |
 
 ---
 
@@ -1068,3 +1068,15 @@ workloadWeights:
 **Remaining P2**: IMPROVE-07 (per-workload signal weight tuning).
 
 **Next**: IMPROVE-07.
+
+---
+
+### v6.6.0 (shipped — P2 commercial foundation, complete)
+
+**What shipped**:
+- **IMPROVE-07 — Per-workload signal weight tuning**: `models.SignalWeights` struct with Selector (glob) + 6 weight fields. `DefaultSignalWeights()` returns the canonical `{stress:0.25, fatigue:0.20, mood:0.20, pressure:0.15, humidity:0.10, contagion:0.10}`. `Analyzer.SetWeightConfigs()`/`WeightConfigs()` manage an ordered list of weight overrides. `resolveWeights(key)` walks the list; selector matching supports exact, `ns/*` prefix, and `*` wildcard. Both HealthScore penalty computations (raw + adaptive-baseline) now use resolved weights. New `GET/POST /api/v2/config/weights` endpoint for runtime tuning without restart. `RUPTURA_WORKLOAD_WEIGHTS` env var (JSON array) for Kubernetes/Helm bootstrapping. Helm `values.yaml` gains `workloadWeights: []` with examples; Deployment template injects the JSON env var when non-empty.
+- **`go test -race ./...`**: all 38 packages pass clean.
+
+**Remaining P2**: none — all P2 items complete.
+
+**Full P2 summary**: Edition gate (v6.5.0) + per-workload weights (v6.6.0). Ruptura now has a commercial path and enterprise-grade signal customisation.
