@@ -2,849 +2,985 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ruptura — Predictive Action Layer</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  :root {
-    --bg:       #080c14;
-    --surface:  #0f1623;
-    --surface2: #161e2e;
-    --border:   #1e2d40;
-    --border2:  #253448;
-    --text:     #e2e8f0;
-    --muted:    #64748b;
-    --dim:      #334155;
-    --accent:   #38bdf8;
-    --indigo:   #6366f1;
-    --green:    #10b981;
-    --yellow:   #f59e0b;
-    --red:      #ef4444;
-    --orange:   #f97316;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 13px; line-height: 1.5; overflow-x: hidden; }
-  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: var(--bg); } ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+*{box-sizing:border-box;margin:0;padding:0}
 
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
-  .card-sm { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; }
+:root{
+  --bg:       #020408;
+  --bg2:      #060c14;
+  --surface:  rgba(255,255,255,.03);
+  --surface2: rgba(255,255,255,.05);
+  --border:   rgba(255,255,255,.07);
+  --border2:  rgba(255,255,255,.12);
+  --text:     #e2e8f0;
+  --muted:    #4b5672;
+  --dim:      #1e293b;
+  --cyan:     #00d4ff;
+  --blue:     #3b82f6;
+  --violet:   #7c3aed;
+  --purple:   #a855f7;
+  --green:    #00e5a0;
+  --yellow:   #ffd93d;
+  --orange:   #ff9f43;
+  --red:      #ff3366;
+  --pink:     #ff6b9d;
+}
 
-  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 0.03em; }
-  .badge-green { background: rgba(16,185,129,.15); color: var(--green); }
-  .badge-yellow { background: rgba(245,158,11,.15); color: var(--yellow); }
-  .badge-red { background: rgba(239,68,68,.15); color: var(--red); }
-  .badge-blue { background: rgba(56,189,248,.12); color: var(--accent); }
-  .badge-gray { background: rgba(100,116,139,.15); color: var(--muted); }
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:12px;overflow:hidden}
 
-  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; position: relative; overflow: hidden; transition: border-color .2s; }
-  .stat-card:hover { border-color: var(--border2); }
-  .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
-  .stat-card.accent::before { background: linear-gradient(90deg, var(--accent), var(--indigo)); }
-  .stat-card.green::before { background: linear-gradient(90deg, var(--green), #059669); }
-  .stat-card.yellow::before { background: linear-gradient(90deg, var(--yellow), var(--orange)); }
-  .stat-card.red::before { background: linear-gradient(90deg, var(--red), #dc2626); }
+/* dot-grid background */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:radial-gradient(circle,rgba(255,255,255,.04) 1px,transparent 1px);
+  background-size:28px 28px;
+}
 
-  .health-ring { position: relative; display: inline-flex; align-items: center; justify-content: center; }
-  .health-ring canvas { transform: rotate(-90deg); }
+/* subtle ambient glow top-left */
+body::after{
+  content:'';position:fixed;top:-200px;left:-200px;width:600px;height:600px;
+  background:radial-gradient(circle,rgba(0,212,255,.06) 0%,transparent 70%);
+  pointer-events:none;z-index:0;
+}
 
-  .signal-bar { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
-  .signal-fill { height: 100%; border-radius: 2px; transition: width .6s ease; }
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
 
-  .workload-row { border-bottom: 1px solid var(--border); padding: 10px 16px; cursor: pointer; transition: background .15s; display: grid; align-items: center; gap: 12px; }
-  .workload-row:hover { background: var(--surface2); }
-  .workload-row.selected { background: rgba(56,189,248,.06); border-left: 2px solid var(--accent); }
+/* ─── layout ─────────────────────────────────────────────── */
+#app{position:relative;z-index:1;height:100vh;display:flex;flex-direction:column}
 
-  .node { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-  .node-box { border: 1px solid var(--border2); border-radius: 8px; padding: 8px 14px; background: var(--surface2); font-size: 11px; font-weight: 600; text-align: center; white-space: nowrap; transition: border-color .3s, box-shadow .3s; }
-  .node-box.active { border-color: var(--accent); box-shadow: 0 0 12px rgba(56,189,248,.2); }
-  .node-count { font-size: 10px; color: var(--muted); }
+#topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;height:48px;flex-shrink:0;
+  border-bottom:1px solid var(--border);
+  background:rgba(2,4,8,.85);backdrop-filter:blur(20px);
+}
 
-  .pulse { animation: pulse 2s infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+#alert-banner{
+  display:none;align-items:center;gap:10px;
+  padding:8px 20px;background:rgba(255,51,102,.1);
+  border-bottom:1px solid rgba(255,51,102,.3);
+  animation:slideDown .3s ease;
+}
+#alert-banner.visible{display:flex}
+@keyframes slideDown{from{transform:translateY(-100%);opacity:0}to{transform:none;opacity:1}}
 
-  .spinning { animation: spin 2s linear infinite; }
-  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+#main{display:flex;flex:1;overflow:hidden}
 
-  .fade-in { animation: fadeIn .4s ease; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* sidebar */
+#sidebar{
+  width:260px;flex-shrink:0;display:flex;flex-direction:column;
+  border-right:1px solid var(--border);background:rgba(6,12,20,.7);
+}
 
-  .tab { padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--muted); transition: all .15s; }
-  .tab.active { background: var(--surface2); color: var(--text); }
-  .tab:hover:not(.active) { color: var(--text); }
+/* center */
+#center{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
 
-  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; }
-  .btn-primary { background: var(--accent); color: var(--bg); }
-  .btn-primary:hover { background: #7dd3fc; }
-  .btn-danger { background: rgba(239,68,68,.15); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
-  .btn-danger:hover { background: rgba(239,68,68,.25); }
-  .btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
-  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+/* right panel */
+#rightpanel{
+  width:280px;flex-shrink:0;display:flex;flex-direction:column;
+  border-left:1px solid var(--border);background:rgba(6,12,20,.7);
+  overflow-y:auto;
+}
 
-  input[type=text], input[type=number] { background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); padding: 7px 12px; font-size: 12px; outline: none; }
-  input:focus { border-color: var(--accent); }
+/* ─── glass card ─────────────────────────────────────────── */
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  backdrop-filter:blur(12px);
+}
+.card-sm{background:var(--surface2);border:1px solid var(--border);border-radius:8px}
 
-  .tooltip { position: relative; }
-  .tooltip-text { visibility: hidden; position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); background: #1e293b; border: 1px solid var(--border2); color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 11px; white-space: nowrap; z-index: 100; }
-  .tooltip:hover .tooltip-text { visibility: visible; }
+/* ─── gradient top-border cards ─────────────────────────── */
+.gcard{
+  position:relative;border-radius:10px;padding:16px;
+  background:var(--surface);border:1px solid var(--border);
+  overflow:hidden;
+}
+.gcard::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+}
+.gcard.cyan::before{background:linear-gradient(90deg,var(--cyan),var(--violet))}
+.gcard.green::before{background:linear-gradient(90deg,var(--green),var(--cyan))}
+.gcard.yellow::before{background:linear-gradient(90deg,var(--yellow),var(--orange))}
+.gcard.red::before{background:linear-gradient(90deg,var(--red),var(--pink))}
+.gcard.violet::before{background:linear-gradient(90deg,var(--violet),var(--purple))}
 
-  #flow-svg path { stroke-dasharray: 8 4; animation: flow 1.5s linear infinite; }
-  @keyframes flow { to { stroke-dashoffset: -24; } }
+/* ambient glow on critical */
+.gcard.critical-glow{box-shadow:0 0 30px rgba(255,51,102,.2),0 0 60px rgba(255,51,102,.05)}
+.gcard.warn-glow{box-shadow:0 0 20px rgba(255,217,61,.15)}
+
+/* ─── badges ─────────────────────────────────────────────── */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:.04em}
+.b-cyan{background:rgba(0,212,255,.12);color:var(--cyan);border:1px solid rgba(0,212,255,.2)}
+.b-green{background:rgba(0,229,160,.12);color:var(--green);border:1px solid rgba(0,229,160,.2)}
+.b-yellow{background:rgba(255,217,61,.12);color:var(--yellow);border:1px solid rgba(255,217,61,.2)}
+.b-red{background:rgba(255,51,102,.12);color:var(--red);border:1px solid rgba(255,51,102,.2)}
+.b-violet{background:rgba(124,58,237,.15);color:var(--purple);border:1px solid rgba(124,58,237,.25)}
+.b-gray{background:rgba(255,255,255,.05);color:var(--muted);border:1px solid var(--border)}
+
+/* ─── buttons ────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;border:none;transition:all .15s;font-family:inherit}
+.btn-primary{background:linear-gradient(135deg,var(--cyan),var(--violet));color:#fff}
+.btn-primary:hover{filter:brightness(1.15)}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border2)}
+.btn-ghost:hover{border-color:var(--cyan);color:var(--cyan)}
+.btn-danger{background:rgba(255,51,102,.1);color:var(--red);border:1px solid rgba(255,51,102,.3)}
+.btn-danger:hover{background:rgba(255,51,102,.2)}
+.btn-sm{padding:4px 9px;font-size:10px}
+
+/* ─── inputs ─────────────────────────────────────────────── */
+input[type=text]{background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:6px 10px;font-size:11px;outline:none;font-family:inherit;width:100%}
+input[type=text]:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,212,255,.08)}
+select{background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:5px;color:var(--text);padding:4px 6px;font-size:10px;outline:none}
+
+/* ─── signal bar ─────────────────────────────────────────── */
+.sig-bar{height:3px;border-radius:2px;background:rgba(255,255,255,.06);overflow:hidden}
+.sig-fill{height:100%;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+
+/* ─── health ring ────────────────────────────────────────── */
+.ring-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center}
+.ring-wrap canvas{transform:rotate(-90deg)}
+.ring-label{position:absolute;font-family:'JetBrains Mono',monospace;font-weight:600;font-size:13px}
+
+/* ─── workload row ───────────────────────────────────────── */
+.wl-row{
+  padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.04);
+  cursor:pointer;transition:background .15s;display:flex;align-items:center;gap:10px;
+}
+.wl-row:hover{background:rgba(255,255,255,.03)}
+.wl-row.active{background:rgba(0,212,255,.05);border-left:2px solid var(--cyan)}
+
+/* ─── tab bar ────────────────────────────────────────────── */
+.tab-bar{display:flex;gap:2px;padding:3px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid var(--border)}
+.tab{padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:500;color:var(--muted);transition:all .15s;white-space:nowrap}
+.tab.on{background:rgba(255,255,255,.07);color:var(--text)}
+
+/* ─── heatmap ────────────────────────────────────────────── */
+.heatmap-cell{border-radius:3px;transition:opacity .4s;cursor:default;aspect-ratio:1.4}
+
+/* ─── event log ──────────────────────────────────────────── */
+.ev-row{display:flex;gap:8px;padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.03);transition:background .1s}
+.ev-row:hover{background:rgba(255,255,255,.02)}
+.ev-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:4px}
+
+/* ─── animations ─────────────────────────────────────────── */
+.pulse{animation:pulse 2.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.blink{animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+.spin{animation:spin 1.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.fade-in{animation:fi .35s ease}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+/* ─── number font ────────────────────────────────────────── */
+.mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+
+/* ─── section label ──────────────────────────────────────── */
+.sec-label{font-size:9px;font-weight:700;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+
+/* ─── RESPONSIVE ─────────────────────────────────────────── */
+@media(max-width:1200px){#rightpanel{display:none}}
+@media(max-width:900px){#sidebar{width:200px}}
 </style>
 </head>
-<body x-data="app()" x-init="init()" class="min-h-screen">
+<body>
+<div id="app" x-data="app()" x-init="boot()">
 
-<!-- Top bar -->
-<header class="flex items-center justify-between px-6 py-3 border-b" style="border-color:var(--border); background:var(--surface);">
-  <div class="flex items-center gap-4">
-    <div class="flex items-center gap-2">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<!-- ═══════════════════════════════════════════ TOP BAR -->
+<header id="topbar">
+  <div style="display:flex;align-items:center;gap:14px">
+    <!-- logo -->
+    <div style="display:flex;align-items:center;gap:8px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="url(#lg)" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M2 17l10 5 10-5" stroke="url(#lg)" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M2 12l10 5 10-5" stroke="url(#lg)" stroke-width="1.8" stroke-linejoin="round"/>
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#00d4ff"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
       </svg>
-      <span class="font-bold text-base" style="color:var(--accent);">RUPTURA</span>
-      <span class="text-xs font-mono" style="color:var(--muted);" x-text="'v' + (health.version || '6.6.0')"></span>
+      <span style="font-weight:700;font-size:13px;letter-spacing:.06em;background:linear-gradient(135deg,var(--cyan),var(--violet));-webkit-background-clip:text;-webkit-text-fill-color:transparent">RUPTURA</span>
+      <span class="mono" style="font-size:10px;color:var(--muted)" x-text="'v'+(health.version||'6.6.0')"></span>
     </div>
-    <div class="flex items-center gap-2">
-      <span class="w-2 h-2 rounded-full pulse" :class="connected ? 'bg-green-400' : 'bg-red-400'"></span>
-      <span class="text-xs" style="color:var(--muted);" x-text="connected ? health.status || 'connected' : 'disconnected'"></span>
+    <!-- status -->
+    <div style="display:flex;align-items:center;gap:6px">
+      <div :class="connected?'pulse':'blink'" style="width:7px;height:7px;border-radius:50%" :style="connected?'background:var(--green)':'background:var(--red)'"></div>
+      <span style="color:var(--muted);font-size:11px" x-text="connected?(health.status||'online'):'offline'"></span>
     </div>
-    <span class="badge badge-blue" x-text="health.edition || 'community'"></span>
+    <span class="badge b-violet" x-text="health.edition||'community'"></span>
+    <span class="badge b-gray mono" x-text="'↑ '+formatUptime(health.uptime_seconds||0)"></span>
   </div>
-  <div class="flex items-center gap-4">
-    <span class="text-xs" style="color:var(--muted);">uptime <span class="font-mono" x-text="formatUptime(health.uptime_seconds || 0)"></span></span>
-    <div class="flex items-center gap-2">
-      <label class="text-xs" style="color:var(--muted);">URL</label>
-      <input type="text" x-model="apiUrl" @change="reconnect()" style="width:200px;" placeholder="http://localhost:8080">
+
+  <div style="display:flex;align-items:center;gap:8px">
+    <!-- ingest totals quick view -->
+    <div style="display:flex;gap:12px;margin-right:8px">
+      <div style="text-align:center">
+        <div class="mono" style="font-size:11px;color:var(--cyan)" x-text="fmtNum(ingest.metrics)"></div>
+        <div style="font-size:9px;color:var(--muted)">metrics</div>
+      </div>
+      <div style="text-align:center">
+        <div class="mono" style="font-size:11px;color:var(--violet)" x-text="fmtNum(ingest.logs)"></div>
+        <div style="font-size:9px;color:var(--muted)">logs</div>
+      </div>
+      <div style="text-align:center">
+        <div class="mono" style="font-size:11px;color:var(--green)" x-text="fmtNum(ingest.traces)"></div>
+        <div style="font-size:9px;color:var(--muted)">traces</div>
+      </div>
     </div>
-    <input type="text" x-model="apiKey" @change="reconnect()" placeholder="API key" style="width:140px;">
-    <button class="btn btn-ghost text-xs" @click="refresh()">
-      <svg :class="loading ? 'spinning' : ''" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+    <input type="text" x-model="apiUrl" @change="reconnect()" placeholder="http://localhost:8080" style="width:190px">
+    <input type="text" x-model="apiKey" @change="reconnect()" placeholder="API key (optional)" style="width:140px">
+    <button class="btn btn-ghost" style="font-size:10px" @click="doRefresh()">
+      <svg :class="loading?'spin':''" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
       Refresh
     </button>
+    <button class="btn btn-danger btn-sm" @click="emergencyStop()">■ E-Stop</button>
   </div>
 </header>
 
-<!-- Main layout -->
-<div class="flex h-screen overflow-hidden" style="height: calc(100vh - 53px);">
+<!-- ═══════════════════════════════════════════ ALERT BANNER -->
+<div id="alert-banner" :class="criticalSnaps.length>0?'visible':''">
+  <span style="color:var(--red);font-size:14px">⚠</span>
+  <span style="font-weight:600;color:var(--red);font-size:11px" x-text="criticalSnaps.length+' critical rupture'+(criticalSnaps.length!==1?'s':'')"></span>
+  <span style="color:var(--muted)" x-text="'→ '+criticalSnaps.map(s=>workloadName(s)).join(', ')"></span>
+  <div style="flex:1"></div>
+  <span style="color:var(--muted);font-size:10px" x-text="'FusedR max: '+(Math.max(...criticalSnaps.map(s=>s.fused_rupture_index||0))).toFixed(2)"></span>
+</div>
 
-  <!-- Left sidebar: workload list -->
-  <aside class="flex flex-col" style="width:320px; border-right:1px solid var(--border); background:var(--surface); flex-shrink:0;">
-    <div class="px-4 py-3 border-b flex items-center justify-between" style="border-color:var(--border);">
-      <span class="font-semibold text-sm">Workloads</span>
-      <span class="badge badge-gray" x-text="snapshots.length"></span>
+<!-- ═══════════════════════════════════════════ MAIN -->
+<div id="main">
+
+<!-- ─────────── SIDEBAR ─────────── -->
+<aside id="sidebar">
+  <!-- header -->
+  <div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+    <span class="sec-label">Workloads</span>
+    <div style="display:flex;gap:5px;align-items:center">
+      <span class="badge b-cyan" x-text="snapshots.length"></span>
     </div>
-
-    <!-- filter -->
-    <div class="px-4 py-2 border-b" style="border-color:var(--border);">
-      <input type="text" x-model="nsFilter" placeholder="Filter namespace..." style="width:100%;">
-    </div>
-
-    <!-- list -->
-    <div class="overflow-y-auto flex-1">
-      <template x-for="s in filteredSnaps" :key="s.host">
-        <div class="workload-row" style="grid-template-columns:1fr auto;"
-             :class="selected?.host === s.host ? 'selected' : ''"
-             @click="selected = s">
-          <div>
-            <div class="font-mono text-xs truncate" x-text="workloadRef(s)"></div>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="text-xs font-medium" :style="healthStyle(s.health_score?.value)" x-text="Math.round(s.health_score?.value || 0)"></span>
-              <div class="signal-bar flex-1" style="max-width:60px;">
-                <div class="signal-fill" :style="barStyle(s.health_score?.value, 100)"></div>
-              </div>
-              <span class="badge text-xs" :class="stateBadge(s)" x-text="workloadState(s)"></span>
+  </div>
+  <!-- search -->
+  <div style="padding:8px 12px;border-bottom:1px solid var(--border)">
+    <input type="text" x-model="search" placeholder="Filter…">
+  </div>
+  <!-- workload list -->
+  <div style="flex:1;overflow-y:auto">
+    <template x-for="s in filteredSnaps" :key="s.host">
+      <div class="wl-row" :class="selected?.host===s.host?'active':''" @click="selectWorkload(s)">
+        <!-- mini ring -->
+        <div class="ring-wrap" style="width:32px;height:32px">
+          <canvas :id="'ring-'+s.host" width="32" height="32"></canvas>
+          <div class="ring-label" style="font-size:9px" :style="healthColor(s.health_score?.value)" x-text="Math.round(s.health_score?.value||0)"></div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="mono" style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" x-text="workloadName(s)"></div>
+          <div style="display:flex;align-items:center;gap:5px;margin-top:3px">
+            <div class="sig-bar" style="flex:1">
+              <div class="sig-fill" :style="hbar(s.health_score?.value,100)"></div>
             </div>
+            <span class="badge btn-sm" :class="stateBadge(s)" style="padding:1px 5px;font-size:9px" x-text="stateLabel(s)"></span>
           </div>
-          <div class="text-right">
-            <div class="font-mono text-xs font-bold" :style="fusedColor(s.fused_rupture_index)" x-text="(s.fused_rupture_index||0).toFixed(2)"></div>
-            <div class="text-xs mt-0.5" style="color:var(--muted);">FusedR</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div class="mono" style="font-size:10px;font-weight:600" :style="frColor(s.fused_rupture_index)" x-text="(s.fused_rupture_index||0).toFixed(2)"></div>
+          <div style="font-size:8px;color:var(--muted)">FusedR</div>
+        </div>
+      </div>
+    </template>
+    <div x-show="!filteredSnaps.length" style="padding:24px 12px;text-align:center;color:var(--muted);font-size:11px">
+      No workloads found.<br>Send telemetry to Ruptura to begin.
+    </div>
+  </div>
+  <!-- fleet summary -->
+  <div style="padding:10px 12px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+    <div>
+      <div class="mono" style="font-size:16px;font-weight:700;color:var(--cyan)" x-text="snapshots.length"></div>
+      <div style="font-size:9px;color:var(--muted)">total</div>
+    </div>
+    <div>
+      <div class="mono" style="font-size:16px;font-weight:700" :style="calibCount>0?'color:var(--yellow)':'color:var(--muted)'" x-text="calibCount"></div>
+      <div style="font-size:9px;color:var(--muted)">calibrating</div>
+    </div>
+    <div>
+      <div class="mono" style="font-size:16px;font-weight:700" :style="critCount>0?'color:var(--red)':'color:var(--green)'" x-text="critCount"></div>
+      <div style="font-size:9px;color:var(--muted)">critical</div>
+    </div>
+  </div>
+</aside>
+
+<!-- ─────────── CENTER ─────────── -->
+<main id="center">
+
+  <!-- ── stat row ── -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+    <div class="gcard cyan">
+      <div class="sec-label" style="margin-bottom:8px">Ingest Rate</div>
+      <div class="mono" style="font-size:24px;font-weight:700;color:var(--cyan)" x-text="fmtNum(ingestTotal)"></div>
+      <div style="color:var(--muted);font-size:10px;margin-top:2px">total samples</div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <div style="flex:1">
+          <div class="mono" style="font-size:11px;color:var(--cyan)" x-text="fmtNum(ingest.metrics)"></div>
+          <div style="font-size:9px;color:var(--muted)">metrics</div>
+        </div>
+        <div style="flex:1">
+          <div class="mono" style="font-size:11px;color:var(--violet)" x-text="fmtNum(ingest.logs)"></div>
+          <div style="font-size:9px;color:var(--muted)">logs</div>
+        </div>
+        <div style="flex:1">
+          <div class="mono" style="font-size:11px;color:var(--green)" x-text="fmtNum(ingest.traces)"></div>
+          <div style="font-size:9px;color:var(--muted)">traces</div>
+        </div>
+      </div>
+    </div>
+    <div class="gcard green">
+      <div class="sec-label" style="margin-bottom:8px">Fleet Health</div>
+      <div class="mono" style="font-size:24px;font-weight:700" :style="healthColor(avgHealth)" x-text="Math.round(avgHealth)"></div>
+      <div style="color:var(--muted);font-size:10px;margin-top:2px">avg health score</div>
+      <div class="sig-bar" style="margin-top:10px;height:4px">
+        <div class="sig-fill" :style="hbar(avgHealth,100)"></div>
+      </div>
+    </div>
+    <div class="gcard yellow" :class="actions.length>0?'warn-glow':''">
+      <div class="sec-label" style="margin-bottom:8px">Pending Actions</div>
+      <div class="mono" style="font-size:24px;font-weight:700" :style="actions.length>0?'color:var(--yellow)':'color:var(--muted)'" x-text="actions.length"></div>
+      <div style="color:var(--muted);font-size:10px;margin-top:2px">awaiting approval</div>
+      <div style="margin-top:10px;display:flex;gap:5px" x-show="actions.length>0">
+        <span class="badge b-red" x-text="actions.filter(a=>a.tier===1).length+' Tier-1'"></span>
+        <span class="badge b-yellow" x-text="actions.filter(a=>a.tier===2).length+' Tier-2'"></span>
+      </div>
+    </div>
+    <div class="gcard" :class="critCount>0?'red critical-glow':'green'">
+      <div class="sec-label" style="margin-bottom:8px">Rupture State</div>
+      <div class="mono" style="font-size:24px;font-weight:700" :style="critCount>0?'color:var(--red)':'color:var(--green)'" x-text="critCount>0?critCount:'✓'"></div>
+      <div style="color:var(--muted);font-size:10px;margin-top:2px" x-text="critCount>0?'active rupture(s)':'all clear'"></div>
+      <div style="margin-top:10px;display:flex;gap:5px">
+        <span class="badge b-yellow" x-text="snapshots.filter(s=>s.fused_rupture_index>=1.5&&s.fused_rupture_index<3).length+' warn'"></span>
+        <span class="badge b-red" x-text="snapshots.filter(s=>s.fused_rupture_index>=5).length+' emerg'"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── selected workload detail ── -->
+  <div class="card p-4 fade-in" x-show="selected" style="padding:16px">
+    <!-- header row -->
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <div class="mono" style="font-size:13px;font-weight:600;background:linear-gradient(135deg,var(--cyan),var(--violet));-webkit-background-clip:text;-webkit-text-fill-color:transparent" x-text="workloadRef(selected)"></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+          <span class="badge" :class="stateBadge(selected)" x-text="stateLabel(selected)"></span>
+          <span style="color:var(--muted);font-size:10px">calib: <span class="mono" x-text="(selected?.calibration_progress||0)+'%'"></span></span>
+          <span x-show="selected?.pattern_match" class="badge b-violet" x-text="'⬡ '+ Math.round((selected?.pattern_match?.similarity||0)*100)+'% match'"></span>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div class="mono" style="font-size:28px;font-weight:700;line-height:1" :style="frColor(selected?.fused_rupture_index)" x-text="(selected?.fused_rupture_index||0).toFixed(2)"></div>
+        <div style="font-size:9px;color:var(--muted);margin-top:2px">Fused Rupture Index</div>
+      </div>
+    </div>
+
+    <!-- tab bar -->
+    <div class="tab-bar" style="margin-bottom:12px">
+      <div class="tab" :class="tab==='signals'?'on':''" @click="tab='signals'">KPI Signals</div>
+      <div class="tab" :class="tab==='history'?'on':''" @click="tab='history';loadHistory()">Timeseries</div>
+      <div class="tab" :class="tab==='forecast'?'on':''" @click="tab='forecast';$nextTick(()=>drawForecast())">Forecast</div>
+      <div class="tab" :class="tab==='business'?'on':''" @click="tab='business'">Business</div>
+      <div class="tab" :class="tab==='pattern'?'on':''" @click="tab='pattern'">Pattern</div>
+    </div>
+
+    <!-- ── SIGNALS TAB ── -->
+    <div x-show="tab==='signals'" class="fade-in">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <template x-for="sig in kpiSignals()" :key="sig.name">
+          <div class="card-sm" style="padding:10px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <span class="sec-label" x-text="sig.name.toUpperCase()"></span>
+              <span class="mono" style="font-size:12px;font-weight:600" :style="'color:'+sig.hex" x-text="sig.val.toFixed(3)"></span>
+            </div>
+            <div class="sig-bar">
+              <div class="sig-fill" :style="'width:'+Math.min(100,sig.val*100)+'%;background:'+sig.hex"></div>
+            </div>
+            <div style="font-size:9px;color:var(--muted);margin-top:5px" x-text="sig.desc"></div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ── TIMESERIES TAB ── -->
+    <div x-show="tab==='history'" class="fade-in">
+      <div x-show="historyData.length===0" style="text-align:center;padding:32px;color:var(--muted);font-size:11px">
+        No historical data yet. Ruptura collects one point every 30s.<br>Check back shortly.
+      </div>
+      <div x-show="historyData.length>0">
+        <div style="height:180px;position:relative;margin-bottom:10px">
+          <canvas id="ts-chart"></canvas>
+        </div>
+        <div style="height:100px;position:relative">
+          <canvas id="fusedr-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── FORECAST TAB ── -->
+    <div x-show="tab==='forecast'" class="fade-in">
+      <div x-show="!selected?.health_forecast" style="text-align:center;padding:32px;color:var(--muted);font-size:11px">
+        Forecast requires calibration ≥ 100%. Currently: <span class="mono" x-text="(selected?.calibration_progress||0)+'%'"></span>
+      </div>
+      <div x-show="selected?.health_forecast">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+          <div class="card-sm" style="padding:12px;text-align:center">
+            <div class="sec-label" style="margin-bottom:8px">NOW</div>
+            <div class="mono" style="font-size:22px;font-weight:700" :style="healthColor(selected?.health_score?.value)" x-text="Math.round(selected?.health_score?.value||0)"></div>
+          </div>
+          <div class="card-sm" style="padding:12px;text-align:center">
+            <div class="sec-label" style="margin-bottom:8px">+15 MIN</div>
+            <div class="mono" style="font-size:22px;font-weight:700" :style="healthColor(selected?.health_forecast?.in_15min)" x-text="Math.round(selected?.health_forecast?.in_15min||0)"></div>
+          </div>
+          <div class="card-sm" style="padding:12px;text-align:center">
+            <div class="sec-label" style="margin-bottom:8px">+30 MIN</div>
+            <div class="mono" style="font-size:22px;font-weight:700" :style="healthColor(selected?.health_forecast?.in_30min)" x-text="Math.round(selected?.health_forecast?.in_30min||0)"></div>
+          </div>
+        </div>
+        <div x-show="selected?.health_forecast?.critical_eta_minutes>0" class="card-sm" style="padding:10px 14px;display:flex;align-items:center;gap:10px;border-color:rgba(255,51,102,.3)">
+          <span style="color:var(--red);font-size:18px;line-height:1">⚠</span>
+          <div>
+            <div style="font-weight:600;font-size:12px;color:var(--red)">Critical in <span class="mono" x-text="selected?.health_forecast?.critical_eta_minutes"></span> min</div>
+            <div style="font-size:10px;color:var(--muted)">OLS projection — health will drop below 40 if trend continues</div>
+          </div>
+        </div>
+        <div x-show="!selected?.health_forecast?.critical_eta_minutes" class="card-sm" style="padding:10px 14px;border-color:rgba(0,229,160,.2)">
+          <span style="color:var(--green)">✓ Stable — no critical degradation projected within 30 minutes</span>
+        </div>
+        <div style="height:160px;margin-top:12px;position:relative">
+          <canvas id="forecast-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BUSINESS TAB ── -->
+    <div x-show="tab==='business'" class="fade-in">
+      <div x-show="!selected?.business" style="text-align:center;padding:24px;color:var(--muted);font-size:11px">No business signals available for this workload.</div>
+      <div x-show="selected?.business" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+        <div class="card-sm" style="padding:14px">
+          <div class="sec-label" style="margin-bottom:8px">SLO BURN VELOCITY</div>
+          <div class="mono" style="font-size:22px;font-weight:700"
+               :style="selected?.business?.slo_burn_velocity>1?'color:var(--red)':selected?.business?.slo_burn_velocity>.5?'color:var(--yellow)':'color:var(--green)'"
+               x-text="(selected?.business?.slo_burn_velocity||0).toFixed(3)"></div>
+          <div class="sig-bar" style="margin-top:8px;height:4px">
+            <div class="sig-fill" :style="'width:'+Math.min(100,(selected?.business?.slo_burn_velocity||0)*50)+'%;background:'+(selected?.business?.slo_burn_velocity>1?'var(--red)':selected?.business?.slo_burn_velocity>.5?'var(--yellow)':'var(--green)')"></div>
+          </div>
+          <div style="font-size:9px;color:var(--muted);margin-top:6px">Current error rate / allowed error rate</div>
+          <span class="badge" style="margin-top:8px" :class="selected?.business?.slo_burn_velocity>1?'b-red':selected?.business?.slo_burn_velocity>.5?'b-yellow':'b-green'"
+                x-text="selected?.business?.slo_burn_velocity>1?'🔥 Burning budget':selected?.business?.slo_burn_velocity>.5?'Elevated':'Healthy'"></span>
+        </div>
+        <div class="card-sm" style="padding:14px">
+          <div class="sec-label" style="margin-bottom:8px">BLAST RADIUS</div>
+          <div class="mono" style="font-size:22px;font-weight:700"
+               :style="selected?.business?.blast_radius>10?'color:var(--red)':selected?.business?.blast_radius>5?'color:var(--yellow)':'color:var(--green)'"
+               x-text="selected?.business?.blast_radius||0"></div>
+          <div style="font-size:9px;color:var(--muted);margin-top:8px">Downstream workloads depending on this service</div>
+        </div>
+        <div class="card-sm" style="padding:14px">
+          <div class="sec-label" style="margin-bottom:8px">RECOVERY DEBT</div>
+          <div class="mono" style="font-size:22px;font-weight:700"
+               :style="selected?.business?.recovery_debt>=7?'color:var(--red)':selected?.business?.recovery_debt>=3?'color:var(--yellow)':'color:var(--green)'"
+               x-text="selected?.business?.recovery_debt||0"></div>
+          <div style="font-size:9px;color:var(--muted);margin-top:8px">Near-misses (FusedR 2–3) in last 7 days</div>
+          <span class="badge" style="margin-top:8px" :class="selected?.business?.recovery_debt>=7?'b-red':selected?.business?.recovery_debt>=3?'b-yellow':'b-green'"
+                x-text="selected?.business?.recovery_debt>=7?'Fragile':selected?.business?.recovery_debt>=3?'Elevated':'Healthy'"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PATTERN TAB ── -->
+    <div x-show="tab==='pattern'" class="fade-in">
+      <div x-show="!selected?.pattern_match" style="text-align:center;padding:24px;color:var(--muted);font-size:11px">
+        No pattern match — this rupture profile is novel.
+      </div>
+      <div x-show="selected?.pattern_match" class="card-sm" style="padding:16px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          <div class="mono" style="font-size:32px;font-weight:700;color:var(--cyan)" x-text="Math.round((selected?.pattern_match?.similarity||0)*100)+'%'"></div>
+          <div>
+            <div style="font-weight:600;font-size:12px">Cosine Similarity</div>
+            <div style="font-size:10px;color:var(--muted)">vs. 11-dimensional KPI fingerprint of a past rupture</div>
+          </div>
+        </div>
+        <div class="sig-bar" style="height:6px;margin-bottom:12px">
+          <div class="sig-fill" :style="'width:'+(selected?.pattern_match?.similarity||0)*100+'%;background:var(--cyan)'"></div>
+        </div>
+        <div x-show="selected?.pattern_match?.resolution" class="card-sm" style="padding:10px;background:rgba(0,0,0,.3)">
+          <div class="sec-label" style="margin-bottom:6px">Prior Resolution</div>
+          <div style="font-size:11px;line-height:1.6" x-text="selected?.pattern_match?.resolution"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── pending actions ── -->
+  <div x-show="actions.length>0" class="card" style="padding:14px" :class="actions.length>0?'warn-glow':''">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="color:var(--yellow);font-size:14px">⚡</span>
+        <span style="font-weight:600;font-size:12px">Pending Actions</span>
+        <span class="badge b-yellow" x-text="actions.length"></span>
+      </div>
+      <button class="btn btn-danger btn-sm" @click="emergencyStop()">■ Emergency Stop All</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <template x-for="a in actions" :key="a.id">
+        <div class="card-sm" style="padding:10px;display:flex;align-items:center;gap:10px">
+          <span class="badge" :class="a.tier===1?'b-red':a.tier===2?'b-yellow':'b-gray'" x-text="'Tier-'+a.tier"></span>
+          <div style="flex:1;min-width:0">
+            <div class="mono" style="font-size:10px;font-weight:600;color:var(--cyan)" x-text="a.id"></div>
+            <div style="font-size:10px;color:var(--muted)" x-text="(a.workload_id||'—')+' · '+a.type"></div>
+          </div>
+          <div class="mono" style="font-size:11px" :style="frColor(a.fused_rupture_index)" x-text="(a.fused_rupture_index||0).toFixed(2)"></div>
+          <button class="btn btn-primary btn-sm" @click="approve(a.id)">Approve</button>
+          <button class="btn btn-ghost btn-sm" @click="reject(a.id)">Reject</button>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ── heatmap ── -->
+  <div class="card" style="padding:14px" x-show="snapshots.length>1">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <span class="sec-label">Fleet Signal Heatmap</span>
+      <span style="font-size:10px;color:var(--muted)">all workloads × KPI signals</span>
+    </div>
+    <!-- signal labels -->
+    <div style="display:grid;margin-bottom:4px;gap:3px" :style="'grid-template-columns:140px repeat(9,1fr)'">
+      <div></div>
+      <template x-for="sig in sigNames" :key="sig">
+        <div style="font-size:8px;color:var(--muted);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="sig.slice(0,4).toUpperCase()"></div>
+      </template>
+    </div>
+    <template x-for="s in snapshots.slice(0,20)" :key="s.host">
+      <div style="display:grid;gap:3px;margin-bottom:3px" :style="'grid-template-columns:140px repeat(9,1fr)'">
+        <div class="mono" style="font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;align-self:center" x-text="workloadName(s)"></div>
+        <template x-for="sig in sigNames" :key="sig">
+          <div class="heatmap-cell" style="border-radius:3px" :style="heatCell(s,sig)" :title="sig+': '+(s[sig]?.value||0).toFixed(3)"></div>
+        </template>
+      </div>
+    </template>
+    <div style="display:flex;align-items:center;gap:6px;margin-top:8px">
+      <span style="font-size:9px;color:var(--muted)">Low</span>
+      <div style="flex:1;height:4px;border-radius:2px;background:linear-gradient(90deg,rgba(0,229,160,.8),rgba(255,217,61,.8),rgba(255,51,102,.9))"></div>
+      <span style="font-size:9px;color:var(--muted)">High</span>
+    </div>
+  </div>
+
+  <!-- placeholder if no workload selected -->
+  <div x-show="!selected" class="card" style="padding:40px;text-align:center">
+    <div style="font-size:32px;margin-bottom:8px;opacity:.3">⬡</div>
+    <div style="font-weight:600;margin-bottom:4px">Select a workload</div>
+    <div style="font-size:11px;color:var(--muted)">Click any workload in the left panel to see its KPI signals, timeseries, forecast, and business metrics.</div>
+  </div>
+
+</main>
+
+<!-- ─────────── RIGHT PANEL ─────────── -->
+<aside id="rightpanel">
+
+  <!-- data flow canvas -->
+  <div style="padding:12px 12px 0;border-bottom:1px solid var(--border)">
+    <div class="sec-label" style="margin-bottom:8px">Live Data Flow</div>
+    <canvas id="flow-canvas" width="256" height="290" style="width:100%;display:block"></canvas>
+  </div>
+
+  <!-- ingest bars -->
+  <div style="padding:12px;border-bottom:1px solid var(--border)">
+    <div class="sec-label" style="margin-bottom:8px">Ingestion</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+          <span style="color:var(--cyan)">Prometheus (metrics)</span>
+          <span class="mono" x-text="fmtNum(ingest.metrics)"></span>
+        </div>
+        <div class="sig-bar">
+          <div class="sig-fill" :style="'width:'+iPct(ingest.metrics)+'%;background:var(--cyan)'"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+          <span style="color:var(--violet)">OTLP (logs)</span>
+          <span class="mono" x-text="fmtNum(ingest.logs)"></span>
+        </div>
+        <div class="sig-bar">
+          <div class="sig-fill" :style="'width:'+iPct(ingest.logs)+'%;background:var(--violet)'"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px">
+          <span style="color:var(--green)">gRPC / OTLP (traces)</span>
+          <span class="mono" x-text="fmtNum(ingest.traces)"></span>
+        </div>
+        <div class="sig-bar">
+          <div class="sig-fill" :style="'width:'+iPct(ingest.traces)+'%;background:var(--green)'"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- event log -->
+  <div style="display:flex;flex-direction:column;flex:1">
+    <div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <span class="sec-label">Event Log</span>
+      <span class="badge b-gray" x-text="eventLog.length"></span>
+    </div>
+    <div style="flex:1;overflow-y:auto">
+      <div x-show="eventLog.length===0" style="padding:16px 12px;text-align:center;color:var(--muted);font-size:10px">No events yet.</div>
+      <template x-for="ev in eventLog" :key="ev.id">
+        <div class="ev-row">
+          <div class="ev-dot" :style="evDotColor(ev.severity)"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:10px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" x-text="ev.message"></div>
+            <div style="font-size:9px;color:var(--muted)" x-text="relTime(ev.ts)"></div>
           </div>
         </div>
       </template>
-      <div x-show="filteredSnaps.length === 0" class="px-4 py-8 text-center text-xs" style="color:var(--muted);">
-        No workloads found.<br>Send telemetry to start.
-      </div>
     </div>
+  </div>
 
-    <!-- footer stats -->
-    <div class="px-4 py-3 border-t grid grid-cols-3 gap-2 text-center" style="border-color:var(--border);">
-      <div>
-        <div class="text-lg font-bold" style="color:var(--accent);" x-text="snapshots.length"></div>
-        <div class="text-xs" style="color:var(--muted);">total</div>
-      </div>
-      <div>
-        <div class="text-lg font-bold" :style="calibratingCount > 0 ? 'color:var(--yellow)' : 'color:var(--muted)'" x-text="calibratingCount"></div>
-        <div class="text-xs" style="color:var(--muted);">calibrating</div>
-      </div>
-      <div>
-        <div class="text-lg font-bold" :style="criticalCount > 0 ? 'color:var(--red)' : 'color:var(--green)'" x-text="criticalCount"></div>
-        <div class="text-xs" style="color:var(--muted);">critical</div>
-      </div>
+  <!-- server status + controls -->
+  <div style="padding:10px 12px;border-top:1px solid var(--border)">
+    <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:6px">
+      <span style="color:var(--muted)">Last refresh</span>
+      <span class="mono" x-text="lastRefresh"></span>
     </div>
-  </aside>
-
-  <!-- Center: main content -->
-  <main class="flex-1 overflow-y-auto p-5 flex flex-col gap-5">
-
-    <!-- Top stat row -->
-    <div class="grid grid-cols-4 gap-4">
-      <div class="stat-card accent">
-        <div class="text-xs font-semibold mb-2" style="color:var(--muted);">INGESTION RATE</div>
-        <div class="text-2xl font-bold font-mono" style="color:var(--accent);" x-text="fmtNum(ingestTotal)"></div>
-        <div class="text-xs mt-1" style="color:var(--muted);">samples total</div>
-        <div class="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-          <div><div class="font-mono font-bold" style="color:var(--accent);" x-text="fmtNum(ingest.metrics)"></div><div style="color:var(--muted);">metrics</div></div>
-          <div><div class="font-mono font-bold" style="color:var(--indigo);" x-text="fmtNum(ingest.logs)"></div><div style="color:var(--muted);">logs</div></div>
-          <div><div class="font-mono font-bold" style="color:var(--green);" x-text="fmtNum(ingest.traces)"></div><div style="color:var(--muted);">traces</div></div>
-        </div>
-      </div>
-
-      <div class="stat-card green">
-        <div class="text-xs font-semibold mb-2" style="color:var(--muted);">AVG HEALTH SCORE</div>
-        <div class="text-2xl font-bold font-mono" :style="healthStyle(avgHealth)" x-text="Math.round(avgHealth)"></div>
-        <div class="signal-bar mt-2">
-          <div class="signal-fill" :style="barStyle(avgHealth, 100)"></div>
-        </div>
-        <div class="text-xs mt-2" style="color:var(--muted);" x-text="snapshots.length + ' workload' + (snapshots.length !== 1 ? 's' : '') + ' monitored'"></div>
-      </div>
-
-      <div class="stat-card yellow">
-        <div class="text-xs font-semibold mb-2" style="color:var(--muted);">PENDING ACTIONS</div>
-        <div class="text-2xl font-bold font-mono" :style="actions.length > 0 ? 'color:var(--yellow)' : 'color:var(--muted)'" x-text="actions.length"></div>
-        <div class="text-xs mt-1" style="color:var(--muted);">awaiting approval</div>
-        <div x-show="actions.length > 0" class="mt-2">
-          <span class="badge badge-yellow" x-text="actions.filter(a=>a.tier===2).length + ' Tier-2'"></span>
-        </div>
-      </div>
-
-      <div class="stat-card" :class="criticalCount > 0 ? 'red' : 'accent'">
-        <div class="text-xs font-semibold mb-2" style="color:var(--muted);">RUPTURE STATE</div>
-        <div class="text-2xl font-bold font-mono" :style="criticalCount > 0 ? 'color:var(--red)' : 'color:var(--green)'">
-          <span x-text="criticalCount > 0 ? criticalCount : '✓'"></span>
-        </div>
-        <div class="text-xs mt-1" style="color:var(--muted);" x-text="criticalCount > 0 ? 'active rupture(s)' : 'all clear'"></div>
-        <div class="mt-2 text-xs" style="color:var(--muted);">
-          <span x-text="snapshots.filter(s=>s.fused_rupture_index>=1.5 && s.fused_rupture_index<3).length"></span> warning ·
-          <span x-text="snapshots.filter(s=>s.fused_rupture_index>=5).length"></span> emergency
-        </div>
-      </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <input type="checkbox" x-model="autoRefresh" id="ar">
+      <label for="ar" style="font-size:10px;color:var(--muted)">Auto</label>
+      <select x-model="interval" @change="restartTimer()">
+        <option value="3000">3s</option>
+        <option value="5000" selected>5s</option>
+        <option value="10000">10s</option>
+        <option value="30000">30s</option>
+      </select>
+      <span style="flex:1"></span>
+      <span class="mono" style="font-size:9px;color:var(--dim)" x-text="'#'+polls"></span>
     </div>
+  </div>
+</aside>
 
-    <!-- Selected workload detail -->
-    <div x-show="selected" class="card p-5 fade-in">
-      <div class="flex items-start justify-between mb-4">
-        <div>
-          <div class="font-mono font-bold text-sm" style="color:var(--accent);" x-text="workloadRef(selected)"></div>
-          <div class="flex items-center gap-2 mt-1">
-            <span class="badge" :class="stateBadge(selected)" x-text="workloadState(selected)"></span>
-            <span class="text-xs" style="color:var(--muted);">
-              calibration: <span class="font-mono" x-text="(selected?.calibration_progress || 0) + '%'"></span>
-            </span>
-          </div>
-        </div>
-        <div class="text-right">
-          <div class="text-3xl font-bold font-mono" :style="fusedColor(selected?.fused_rupture_index)" x-text="(selected?.fused_rupture_index||0).toFixed(2)"></div>
-          <div class="text-xs" style="color:var(--muted);">Fused Rupture Index</div>
-        </div>
-      </div>
-
-      <!-- tabs -->
-      <div class="flex gap-1 mb-4">
-        <div class="tab" :class="tab==='signals' ? 'active' : ''" @click="tab='signals'">KPI Signals</div>
-        <div class="tab" :class="tab==='forecast' ? 'active' : ''" @click="tab='forecast'">Forecast</div>
-        <div class="tab" :class="tab==='business' ? 'active' : ''" @click="tab='business'">Business</div>
-        <div class="tab" :class="tab==='pattern' ? 'active' : ''" @click="tab='pattern'">Pattern Match</div>
-      </div>
-
-      <!-- KPI Signals tab -->
-      <div x-show="tab==='signals'" class="grid grid-cols-2 gap-3">
-        <template x-for="sig in kpiSignals()" :key="sig.name">
-          <div class="card-sm p-3">
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold" style="color:var(--muted);" x-text="sig.name.toUpperCase()"></span>
-              <span class="font-mono text-sm font-bold" :style="sig.color" x-text="sig.value.toFixed(3)"></span>
-            </div>
-            <div class="signal-bar">
-              <div class="signal-fill" :style="'width:'+Math.min(100,sig.value*100)+'%;background:'+sig.hex"></div>
-            </div>
-            <div class="text-xs mt-1" style="color:var(--dim);" x-text="sig.desc"></div>
-          </div>
-        </template>
-      </div>
-
-      <!-- Forecast tab -->
-      <div x-show="tab==='forecast'" class="fade-in">
-        <div x-show="!selected?.health_forecast" class="text-center py-8 text-xs" style="color:var(--muted);">
-          Forecast available after calibration completes (≥100%).
-        </div>
-        <div x-show="selected?.health_forecast">
-          <div class="grid grid-cols-3 gap-4 mb-5">
-            <div class="card-sm p-4 text-center">
-              <div class="text-xs mb-2" style="color:var(--muted);">NOW</div>
-              <div class="text-2xl font-bold font-mono" :style="healthStyle(selected?.health_score?.value)" x-text="Math.round(selected?.health_score?.value||0)"></div>
-            </div>
-            <div class="card-sm p-4 text-center">
-              <div class="text-xs mb-2" style="color:var(--muted);">IN 15 MIN</div>
-              <div class="text-2xl font-bold font-mono" :style="healthStyle(selected?.health_forecast?.in_15min)" x-text="Math.round(selected?.health_forecast?.in_15min||0)"></div>
-            </div>
-            <div class="card-sm p-4 text-center">
-              <div class="text-xs mb-2" style="color:var(--muted);">IN 30 MIN</div>
-              <div class="text-2xl font-bold font-mono" :style="healthStyle(selected?.health_forecast?.in_30min)" x-text="Math.round(selected?.health_forecast?.in_30min||0)"></div>
-            </div>
-          </div>
-          <div x-show="selected?.health_forecast?.critical_eta_minutes > 0"
-               class="card-sm p-4 flex items-center gap-3" style="border-color:var(--red);">
-            <span style="color:var(--red); font-size:20px;">⚠</span>
-            <div>
-              <div class="font-bold text-sm" style="color:var(--red);">Critical in <span x-text="selected?.health_forecast?.critical_eta_minutes"></span> minutes</div>
-              <div class="text-xs" style="color:var(--muted);">OLS projection — health will drop below 40 if current trend continues</div>
-            </div>
-          </div>
-          <div x-show="!selected?.health_forecast?.critical_eta_minutes"
-               class="card-sm p-4 flex items-center gap-3" style="border-color:var(--green);">
-            <span style="color:var(--green);">✓</span>
-            <div class="text-sm" style="color:var(--green);">Stable — no critical degradation projected</div>
-          </div>
-          <div class="mt-4" style="height:180px; position:relative;">
-            <canvas id="forecast-chart"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <!-- Business tab -->
-      <div x-show="tab==='business'" class="fade-in">
-        <div x-show="!selected?.business" class="text-center py-8 text-xs" style="color:var(--muted);">No business signals available.</div>
-        <div x-show="selected?.business" class="grid grid-cols-3 gap-4">
-          <div class="card-sm p-4">
-            <div class="text-xs font-semibold mb-1" style="color:var(--muted);">SLO BURN VELOCITY</div>
-            <div class="text-2xl font-bold font-mono mt-2"
-                 :style="selected?.business?.slo_burn_velocity > 1 ? 'color:var(--red)' : selected?.business?.slo_burn_velocity > 0.5 ? 'color:var(--yellow)' : 'color:var(--green)'"
-                 x-text="(selected?.business?.slo_burn_velocity||0).toFixed(3)"></div>
-            <div class="text-xs mt-2" style="color:var(--muted);">Ratio: current error rate / allowed</div>
-            <div class="mt-2 badge" :class="selected?.business?.slo_burn_velocity > 1 ? 'badge-red' : selected?.business?.slo_burn_velocity > 0.5 ? 'badge-yellow' : 'badge-green'"
-                 x-text="selected?.business?.slo_burn_velocity > 1 ? '🔥 Burning budget' : selected?.business?.slo_burn_velocity > 0.5 ? 'Elevated' : 'Healthy'"></div>
-          </div>
-          <div class="card-sm p-4">
-            <div class="text-xs font-semibold mb-1" style="color:var(--muted);">BLAST RADIUS</div>
-            <div class="text-2xl font-bold font-mono mt-2"
-                 :style="selected?.business?.blast_radius > 10 ? 'color:var(--red)' : selected?.business?.blast_radius > 5 ? 'color:var(--yellow)' : 'color:var(--green)'"
-                 x-text="selected?.business?.blast_radius || 0"></div>
-            <div class="text-xs mt-2" style="color:var(--muted);">Downstream workloads depending on this</div>
-          </div>
-          <div class="card-sm p-4">
-            <div class="text-xs font-semibold mb-1" style="color:var(--muted);">RECOVERY DEBT</div>
-            <div class="text-2xl font-bold font-mono mt-2"
-                 :style="selected?.business?.recovery_debt >= 7 ? 'color:var(--red)' : selected?.business?.recovery_debt >= 3 ? 'color:var(--yellow)' : 'color:var(--green)'"
-                 x-text="selected?.business?.recovery_debt || 0"></div>
-            <div class="text-xs mt-2" style="color:var(--muted);">Near-misses (FusedR 2–3) in last 7 days</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Pattern Match tab -->
-      <div x-show="tab==='pattern'" class="fade-in">
-        <div x-show="!selected?.pattern_match" class="text-center py-8 text-xs" style="color:var(--muted);">No pattern match — this rupture profile is novel.</div>
-        <div x-show="selected?.pattern_match" class="card-sm p-5">
-          <div class="flex items-center gap-3 mb-4">
-            <div class="text-3xl font-bold font-mono" style="color:var(--accent);" x-text="Math.round((selected?.pattern_match?.similarity||0)*100) + '%'"></div>
-            <div>
-              <div class="font-semibold text-sm">Similarity Match</div>
-              <div class="text-xs" style="color:var(--muted);">Cosine similarity against 11-dimensional KPI fingerprint of a past rupture</div>
-            </div>
-          </div>
-          <div class="signal-bar mb-4">
-            <div class="signal-fill" :style="'width:'+(selected?.pattern_match?.similarity||0)*100+'%;background:var(--accent)'"></div>
-          </div>
-          <div x-show="selected?.pattern_match?.prior_note" class="mt-3 p-3 rounded-lg" style="background:var(--bg); border:1px solid var(--border2);">
-            <div class="text-xs font-semibold mb-1" style="color:var(--muted);">PRIOR RESOLUTION</div>
-            <div class="text-sm" x-text="selected?.pattern_match?.prior_note"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Default state when nothing selected -->
-    <div x-show="!selected" class="card p-8 text-center">
-      <div class="text-3xl mb-3">←</div>
-      <div class="font-semibold mb-1">Select a workload</div>
-      <div class="text-xs" style="color:var(--muted);">Click any workload in the left panel to inspect its signals, forecast, and business metrics.</div>
-    </div>
-
-    <!-- Pending actions -->
-    <div x-show="actions.length > 0" class="card p-4">
-      <div class="flex items-center justify-between mb-3">
-        <div class="font-semibold text-sm flex items-center gap-2">
-          <span style="color:var(--yellow);">⚡</span> Pending Actions
-        </div>
-        <button class="btn btn-danger text-xs" @click="emergencyStop()">■ Emergency Stop</button>
-      </div>
-      <div class="space-y-2">
-        <template x-for="a in actions" :key="a.id">
-          <div class="card-sm p-3 flex items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
-              <span class="badge" :class="a.tier===1 ? 'badge-red' : a.tier===2 ? 'badge-yellow' : 'badge-gray'" x-text="'Tier-'+a.tier"></span>
-              <div>
-                <div class="font-mono text-xs font-bold" x-text="a.id"></div>
-                <div class="text-xs" style="color:var(--muted);" x-text="a.workload_id + ' · ' + a.type"></div>
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <span class="font-mono text-xs" :style="fusedColor(a.fused_rupture_index)" x-text="(a.fused_rupture_index||0).toFixed(2)"></span>
-              <button class="btn btn-primary text-xs" @click="approve(a.id)">Approve</button>
-              <button class="btn btn-ghost text-xs" @click="reject(a.id)">Reject</button>
-            </div>
-          </div>
-        </template>
-      </div>
-    </div>
-
-  </main>
-
-  <!-- Right panel: data flow + ingest -->
-  <aside class="flex flex-col" style="width:300px; border-left:1px solid var(--border); background:var(--surface); flex-shrink:0;">
-
-    <!-- Data flow visualization -->
-    <div class="p-4 border-b" style="border-color:var(--border);">
-      <div class="font-semibold text-xs mb-3" style="color:var(--muted);">LIVE DATA FLOW</div>
-      <div style="position:relative; height:280px;">
-        <svg id="flow-svg" width="100%" height="280" viewBox="0 0 260 280" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <!-- Source nodes -->
-          <g>
-            <rect x="4" y="10" width="72" height="28" rx="6" fill="#161e2e" stroke="#1e2d40"/>
-            <text x="40" y="29" font-size="9" fill="#64748b" text-anchor="middle" font-weight="600">Prometheus</text>
-          </g>
-          <g>
-            <rect x="4" y="50" width="72" height="28" rx="6" fill="#161e2e" stroke="#1e2d40"/>
-            <text x="40" y="69" font-size="9" fill="#64748b" text-anchor="middle" font-weight="600">OTLP Logs</text>
-          </g>
-          <g>
-            <rect x="4" y="90" width="72" height="28" rx="6" fill="#161e2e" stroke="#1e2d40"/>
-            <text x="40" y="109" font-size="9" fill="#64748b" text-anchor="middle" font-weight="600">OTLP Traces</text>
-          </g>
-          <g>
-            <rect x="4" y="130" width="72" height="28" rx="6" fill="#161e2e" stroke="#1e2d40"/>
-            <text x="40" y="149" font-size="9" fill="#64748b" text-anchor="middle" font-weight="600">gRPC :9090</text>
-          </g>
-
-          <!-- Arrows to ingest -->
-          <path d="M76 24 L106 54" stroke="#253448" stroke-width="1.5" :stroke="ingest.metrics>0 ? '#38bdf8' : '#253448'" stroke-dasharray="4 3"/>
-          <path d="M76 64 L106 64" stroke="#253448" stroke-width="1.5" :stroke="ingest.logs>0 ? '#6366f1' : '#253448'" stroke-dasharray="4 3"/>
-          <path d="M76 104 L106 74" stroke="#253448" stroke-width="1.5" :stroke="ingest.traces>0 ? '#10b981' : '#253448'" stroke-dasharray="4 3"/>
-          <path d="M76 144 L106 84" stroke="#253448" stroke-width="1.5" stroke-dasharray="4 3"/>
-
-          <!-- Ingest engine -->
-          <rect x="106" y="42" width="58" height="44" rx="7" fill="#161e2e" :stroke="connected ? '#38bdf8' : '#1e2d40'" stroke-width="1.5"/>
-          <text x="135" y="60" font-size="8" fill="#38bdf8" text-anchor="middle" font-weight="700">INGEST</text>
-          <text x="135" y="73" font-size="7" fill="#64748b" text-anchor="middle">engine</text>
-          <text x="135" y="83" font-size="7" fill="#64748b" text-anchor="middle" x-text="fmtNum(ingestTotal)"></text>
-
-          <!-- Arrow to analyzer -->
-          <path d="M164 64 L194 84" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4 3"/>
-
-          <!-- Analyzer / Composite signals -->
-          <rect x="194" y="68" width="60" height="52" rx="7" fill="#161e2e" stroke="#6366f1" stroke-width="1.5"/>
-          <text x="224" y="87" font-size="8" fill="#6366f1" text-anchor="middle" font-weight="700">ANALYZER</text>
-          <text x="224" y="99" font-size="7" fill="#64748b" text-anchor="middle">10 signals</text>
-          <text x="224" y="111" font-size="7" fill="#64748b" text-anchor="middle" x-text="snapshots.length + ' workloads'"></text>
-
-          <!-- Down arrow to fusion -->
-          <path d="M224 120 L224 148" stroke="#6366f1" stroke-width="1.5" stroke-dasharray="4 3"/>
-
-          <!-- Fusion -->
-          <rect x="178" y="148" width="92" height="40" rx="7" fill="#161e2e" :stroke="criticalCount > 0 ? '#ef4444' : '#f59e0b'" stroke-width="1.5"/>
-          <text x="224" y="164" font-size="8" fill="#f59e0b" text-anchor="middle" font-weight="700">FUSION ENGINE</text>
-          <text x="224" y="178" font-size="7" fill="#64748b" text-anchor="middle">FusedR · Ensemble</text>
-
-          <!-- Down arrow to action engine -->
-          <path d="M224 188 L224 210" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 3"/>
-
-          <!-- Action engine -->
-          <rect x="178" y="210" width="92" height="38" rx="7" fill="#161e2e" :stroke="actions.length > 0 ? '#ef4444' : '#1e2d40'" stroke-width="1.5"/>
-          <text x="224" y="226" font-size="8" :fill="actions.length > 0 ? '#ef4444' : '#64748b'" text-anchor="middle" font-weight="700">ACTION ENGINE</text>
-          <text x="224" y="239" font-size="7" fill="#64748b" text-anchor="middle" x-text="actions.length + ' pending'"></text>
-
-          <!-- Outputs -->
-          <path d="M224 248 L224 265" stroke="#253448" stroke-width="1.5"/>
-          <rect x="178" y="264" width="22" height="14" rx="3" fill="#161e2e" stroke="#253448"/>
-          <text x="189" y="275" font-size="7" fill="#64748b" text-anchor="middle">K8s</text>
-          <rect x="205" y="264" width="22" height="14" rx="3" fill="#161e2e" stroke="#253448"/>
-          <text x="216" y="275" font-size="7" fill="#64748b" text-anchor="middle">Hook</text>
-          <rect x="232" y="264" width="36" height="14" rx="3" fill="#161e2e" stroke="#253448"/>
-          <text x="250" y="275" font-size="7" fill="#64748b" text-anchor="middle">PagerDuty</text>
-
-          <!-- Explain branch -->
-          <path d="M178 168 L155 200" stroke="#253448" stroke-width="1" stroke-dasharray="3 3"/>
-          <rect x="90" y="194" width="64" height="24" rx="5" fill="#161e2e" stroke="#253448"/>
-          <text x="122" y="210" font-size="8" fill="#64748b" text-anchor="middle">Narrative</text>
-
-          <!-- Fingerprint branch -->
-          <path d="M178 158 L155 140" stroke="#253448" stroke-width="1" stroke-dasharray="3 3"/>
-          <rect x="90" y="130" width="64" height="24" rx="5" fill="#161e2e" stroke="#253448"/>
-          <text x="122" y="146" font-size="8" fill="#64748b" text-anchor="middle">Fingerprint</text>
-        </svg>
-      </div>
-    </div>
-
-    <!-- Ingestion stats -->
-    <div class="p-4 border-b" style="border-color:var(--border);">
-      <div class="font-semibold text-xs mb-3" style="color:var(--muted);">INGESTION STATS</div>
-      <div class="space-y-3">
-        <div>
-          <div class="flex justify-between text-xs mb-1">
-            <span style="color:var(--accent);">Metrics (Prometheus)</span>
-            <span class="font-mono" x-text="fmtNum(ingest.metrics)"></span>
-          </div>
-          <div class="signal-bar">
-            <div class="signal-fill" :style="'width:'+ingestPct(ingest.metrics)+'%;background:var(--accent)'"></div>
-          </div>
-        </div>
-        <div>
-          <div class="flex justify-between text-xs mb-1">
-            <span style="color:var(--indigo);">Logs (OTLP)</span>
-            <span class="font-mono" x-text="fmtNum(ingest.logs)"></span>
-          </div>
-          <div class="signal-bar">
-            <div class="signal-fill" :style="'width:'+ingestPct(ingest.logs)+'%;background:var(--indigo)'"></div>
-          </div>
-        </div>
-        <div>
-          <div class="flex justify-between text-xs mb-1">
-            <span style="color:var(--green);">Traces (gRPC/OTLP)</span>
-            <span class="font-mono" x-text="fmtNum(ingest.traces)"></span>
-          </div>
-          <div class="signal-bar">
-            <div class="signal-fill" :style="'width:'+ingestPct(ingest.traces)+'%;background:var(--green)'"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Server health -->
-    <div class="p-4 flex-1">
-      <div class="font-semibold text-xs mb-3" style="color:var(--muted);">SERVER HEALTH</div>
-      <div class="space-y-2 text-xs">
-        <div class="flex justify-between">
-          <span style="color:var(--muted);">Status</span>
-          <span class="font-semibold" :style="connected ? 'color:var(--green)' : 'color:var(--red)'" x-text="health.status || '—'"></span>
-        </div>
-        <div class="flex justify-between">
-          <span style="color:var(--muted);">Version</span>
-          <span class="font-mono" x-text="health.version || '—'"></span>
-        </div>
-        <div class="flex justify-between">
-          <span style="color:var(--muted);">Edition</span>
-          <span x-text="health.edition || 'community'"></span>
-        </div>
-        <div class="flex justify-between">
-          <span style="color:var(--muted);">Uptime</span>
-          <span class="font-mono" x-text="formatUptime(health.uptime_seconds || 0)"></span>
-        </div>
-        <div class="flex justify-between">
-          <span style="color:var(--muted);">Detection</span>
-          <span x-text="health.rupture_detection || '—'"></span>
-        </div>
-        <div class="flex justify-between">
-          <span style="color:var(--muted);">Last refresh</span>
-          <span class="font-mono" x-text="lastRefresh"></span>
-        </div>
-      </div>
-
-      <!-- Calibration summary -->
-      <div x-show="calibratingCount > 0" class="mt-4 card-sm p-3">
-        <div class="text-xs font-semibold mb-2" style="color:var(--yellow);">◐ Calibrating</div>
-        <template x-for="s in snapshots.filter(s=>s.calibration_progress < 100)" :key="s.host">
-          <div class="mb-2">
-            <div class="flex justify-between text-xs mb-1">
-              <span class="font-mono truncate" style="max-width:150px;" x-text="workloadRef(s)"></span>
-              <span style="color:var(--yellow);" x-text="s.calibration_progress + '%'"></span>
-            </div>
-            <div class="signal-bar">
-              <div class="signal-fill" :style="'width:'+s.calibration_progress+'%;background:var(--yellow)'"></div>
-            </div>
-          </div>
-        </template>
-      </div>
-    </div>
-
-    <!-- refresh control -->
-    <div class="px-4 py-3 border-t flex items-center justify-between" style="border-color:var(--border);">
-      <div class="flex items-center gap-2 text-xs" style="color:var(--muted);">
-        <input type="checkbox" x-model="autoRefresh" id="auto-refresh">
-        <label for="auto-refresh">Auto-refresh</label>
-        <select x-model="refreshInterval" class="text-xs" style="background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);padding:2px 4px;">
-          <option value="3000">3s</option>
-          <option value="5000">5s</option>
-          <option value="10000">10s</option>
-          <option value="30000">30s</option>
-        </select>
-      </div>
-      <div class="text-xs" style="color:var(--dim);" x-text="'#' + refreshCount + ' polls'"></div>
-    </div>
-
-  </aside>
-</div>
+</div><!-- /main -->
+</div><!-- /app -->
 
 <script>
+/* ═══════════════════════════ CHART.JS DEFAULTS ═══════════════════════════ */
+Chart.defaults.color = '#4b5672';
+Chart.defaults.borderColor = 'rgba(255,255,255,.06)';
+Chart.defaults.font.family = "'JetBrains Mono', monospace";
+Chart.defaults.font.size = 10;
+
+/* ═══════════════════════════ ALPINE APP ══════════════════════════════════ */
 function app() {
-  return {
-    apiUrl: 'http://localhost:8080',
-    apiKey: '',
-    connected: false,
-    loading: false,
-    health: {},
-    snapshots: [],
-    actions: [],
-    ingest: { metrics: 0, logs: 0, traces: 0 },
-    selected: null,
-    tab: 'signals',
-    nsFilter: '',
-    autoRefresh: true,
-    refreshInterval: 5000,
-    refreshCount: 0,
-    lastRefresh: '—',
-    _timer: null,
-    _forecastChart: null,
+return {
+  apiUrl:'http://localhost:8080', apiKey:'', connected:false, loading:false,
+  health:{}, snapshots:[], actions:[], eventLog:[], historyData:[],
+  ingest:{metrics:0,logs:0,traces:0},
+  selected:null, tab:'signals', search:'', autoRefresh:true, interval:'5000',
+  polls:0, lastRefresh:'—', _timer:null,
+  _tsChart:null, _frChart:null, _fcChart:null, _flowAnim:null,
+  sigNames:['stress','fatigue','mood','pressure','humidity','contagion','resilience','entropy','velocity'],
 
-    get filteredSnaps() {
-      if (!this.nsFilter) return this.snapshots;
-      return this.snapshots.filter(s => {
-        const ref = this.workloadRef(s);
-        return ref.toLowerCase().includes(this.nsFilter.toLowerCase());
-      });
-    },
-    get ingestTotal() { return this.ingest.metrics + this.ingest.logs + this.ingest.traces; },
-    get avgHealth() {
-      if (!this.snapshots.length) return 0;
-      return this.snapshots.reduce((a, s) => a + (s.health_score?.value || 0), 0) / this.snapshots.length;
-    },
-    get criticalCount() { return this.snapshots.filter(s => s.fused_rupture_index >= 3).length; },
-    get calibratingCount() { return this.snapshots.filter(s => s.calibration_progress < 100).length; },
+  get filteredSnaps(){ return this.snapshots.filter(s=>!this.search||this.workloadRef(s).toLowerCase().includes(this.search.toLowerCase())) },
+  get ingestTotal(){ return this.ingest.metrics+this.ingest.logs+this.ingest.traces },
+  get avgHealth(){ if(!this.snapshots.length)return 0; return this.snapshots.reduce((a,s)=>a+(s.health_score?.value||0),0)/this.snapshots.length },
+  get critCount(){ return this.snapshots.filter(s=>s.fused_rupture_index>=3).length },
+  get calibCount(){ return this.snapshots.filter(s=>s.calibration_progress<100).length },
+  get criticalSnaps(){ return this.snapshots.filter(s=>s.fused_rupture_index>=3) },
 
-    async init() {
-      await this.refresh();
-      this.$watch('autoRefresh', val => {
-        if (val) this.startTimer(); else clearInterval(this._timer);
-      });
-      this.$watch('refreshInterval', () => {
-        if (this.autoRefresh) this.startTimer();
-      });
-      this.$watch('selected', () => {
-        this.tab = 'signals';
-        this.$nextTick(() => this.renderForecastChart());
-      });
-      this.$watch('tab', (t) => {
-        if (t === 'forecast') this.$nextTick(() => this.renderForecastChart());
-      });
-      this.startTimer();
-    },
+  async boot(){
+    await this.doRefresh();
+    this.$watch('autoRefresh',v=>{ if(v)this.restartTimer(); else clearInterval(this._timer) });
+    this.$watch('selected',()=>{ this.tab='signals'; this.$nextTick(()=>this.drawMiniRings()) });
+    if(this.autoRefresh) this.restartTimer();
+    this.startFlowCanvas();
+  },
 
-    startTimer() {
-      clearInterval(this._timer);
-      this._timer = setInterval(() => this.refresh(), parseInt(this.refreshInterval));
-    },
+  restartTimer(){ clearInterval(this._timer); if(this.autoRefresh) this._timer=setInterval(()=>this.doRefresh(),+this.interval) },
 
-    async refresh() {
-      this.loading = true;
-      try {
-        const [h, snaps, acts, metrics] = await Promise.allSettled([
-          this.api('/api/v2/health'),
-          this.api('/api/v2/ruptures'),
-          this.api('/api/v2/actions'),
-          this.apiRaw('/api/v2/metrics'),
-        ]);
-        if (h.status === 'fulfilled') { this.health = h.value; this.connected = true; }
-        else { this.connected = false; }
-        if (snaps.status === 'fulfilled' && Array.isArray(snaps.value)) {
-          this.snapshots = snaps.value;
-          if (this.selected) {
-            const updated = this.snapshots.find(s => s.host === this.selected.host);
-            if (updated) this.selected = updated;
-          }
-        }
-        if (acts.status === 'fulfilled' && Array.isArray(acts.value)) this.actions = acts.value;
-        if (metrics.status === 'fulfilled') this.parseIngest(metrics.value);
-        this.refreshCount++;
-        this.lastRefresh = new Date().toLocaleTimeString();
-      } finally {
-        this.loading = false;
+  async doRefresh(){
+    this.loading=true;
+    try{
+      const [h,snaps,acts,met,evs]=await Promise.allSettled([
+        this.api('/api/v2/health'),
+        this.api('/api/v2/ruptures'),
+        this.api('/api/v2/actions'),
+        this.apiRaw('/api/v2/metrics'),
+        this.api('/api/v2/events?limit=80'),
+      ]);
+      if(h.status==='fulfilled'){this.health=h.value;this.connected=true}
+      else this.connected=false;
+      if(snaps.status==='fulfilled'&&Array.isArray(snaps.value)){
+        this.snapshots=snaps.value;
+        if(this.selected){ const u=this.snapshots.find(s=>s.host===this.selected.host); if(u) this.selected=u; }
       }
-    },
+      if(acts.status==='fulfilled'&&Array.isArray(acts.value)) this.actions=acts.value;
+      if(met.status==='fulfilled') this.parseIngest(met.value);
+      if(evs.status==='fulfilled'&&Array.isArray(evs.value)) this.eventLog=evs.value;
+      this.polls++; this.lastRefresh=new Date().toLocaleTimeString();
+      this.$nextTick(()=>this.drawMiniRings());
+      if(this.tab==='history'&&this.historyData.length) this.renderTSCharts();
+    }finally{ this.loading=false }
+  },
 
-    reconnect() { this.refresh(); },
+  reconnect(){ this.doRefresh() },
 
-    async api(path) {
-      const headers = {};
-      if (this.apiKey) headers['Authorization'] = 'Bearer ' + this.apiKey;
-      const r = await fetch(this.apiUrl + path, { headers });
-      if (!r.ok) throw new Error(r.status);
-      return r.json();
-    },
+  async api(path){
+    const h={}; if(this.apiKey) h['Authorization']='Bearer '+this.apiKey;
+    const r=await fetch(this.apiUrl+path,{headers:h});
+    if(!r.ok) throw new Error(r.status);
+    return r.json();
+  },
+  async apiRaw(path){
+    const h={}; if(this.apiKey) h['Authorization']='Bearer '+this.apiKey;
+    const r=await fetch(this.apiUrl+path,{headers:h});
+    return r.text();
+  },
+  async apiPost(path,body={}){
+    const h={'Content-Type':'application/json'}; if(this.apiKey) h['Authorization']='Bearer '+this.apiKey;
+    const r=await fetch(this.apiUrl+path,{method:'POST',headers:h,body:JSON.stringify(body)});
+    return r.ok;
+  },
 
-    async apiRaw(path) {
-      const headers = {};
-      if (this.apiKey) headers['Authorization'] = 'Bearer ' + this.apiKey;
-      const r = await fetch(this.apiUrl + path, { headers });
-      return r.text();
-    },
+  parseIngest(raw){
+    const m={metrics:0,logs:0,traces:0};
+    (raw||'').split('\n').forEach(l=>{
+      if(!l.startsWith('rpt_ingest_samples_total'))return;
+      const v=parseInt(l.split(' ').pop())||0;
+      if(l.includes('"prometheus"'))m.metrics+=v;
+      else if(l.includes('"otlp"'))m.logs+=v;
+      else if(l.includes('"grpc"'))m.traces+=v;
+    });
+    this.ingest=m;
+  },
 
-    async apiPost(path, body) {
-      const headers = { 'Content-Type': 'application/json' };
-      if (this.apiKey) headers['Authorization'] = 'Bearer ' + this.apiKey;
-      const r = await fetch(this.apiUrl + path, { method: 'POST', headers, body: JSON.stringify(body) });
-      return r.ok;
-    },
+  async loadHistory(){
+    if(!this.selected) return;
+    try{
+      const key=encodeURIComponent(this.workloadRef(this.selected));
+      const data=await this.api('/api/v2/history/'+key);
+      this.historyData=Array.isArray(data)?data:[];
+      this.$nextTick(()=>this.renderTSCharts());
+    }catch(e){ this.historyData=[] }
+  },
 
-    parseIngest(raw) {
-      const m = { metrics: 0, logs: 0, traces: 0 };
-      (raw || '').split('\n').forEach(line => {
-        if (!line.startsWith('rpt_ingest_samples_total')) return;
-        const val = parseInt(line.split(' ').pop()) || 0;
-        if (line.includes('"prometheus"')) m.metrics += val;
-        else if (line.includes('"otlp"')) m.logs += val;
-        else if (line.includes('"grpc"')) m.traces += val;
-      });
-      this.ingest = m;
-    },
-
-    workloadRef(s) {
-      if (!s) return '—';
-      if (s.workload?.namespace) return s.workload.namespace + '/' + s.workload.kind + '/' + s.workload.name;
-      return s.host || '—';
-    },
-
-    workloadState(s) {
-      if (!s) return 'unknown';
-      if (s.status) return s.status;
-      if (s.calibration_progress < 100) return 'calibrating';
-      if (s.fused_rupture_index >= 5) return 'emergency';
-      if (s.fused_rupture_index >= 3) return 'critical';
-      if (s.fused_rupture_index >= 1.5) return 'warning';
-      return 'active';
-    },
-
-    stateBadge(s) {
-      const st = this.workloadState(s);
-      if (st === 'emergency' || st === 'critical') return 'badge-red';
-      if (st === 'warning' || st === 'calibrating') return 'badge-yellow';
-      if (st === 'active') return 'badge-green';
-      return 'badge-gray';
-    },
-
-    healthStyle(v) {
-      if (v >= 80) return 'color:var(--green)';
-      if (v >= 40) return 'color:var(--yellow)';
-      return 'color:var(--red)';
-    },
-
-    fusedColor(v) {
-      if (v >= 5) return 'color:var(--red)';
-      if (v >= 3) return 'color:var(--orange)';
-      if (v >= 1.5) return 'color:var(--yellow)';
-      return 'color:var(--green)';
-    },
-
-    barStyle(val, max) {
-      const pct = Math.min(100, (val / max) * 100);
-      const color = val >= 80 ? 'var(--green)' : val >= 40 ? 'var(--yellow)' : 'var(--red)';
-      return `width:${pct}%;background:${color}`;
-    },
-
-    ingestPct(v) {
-      if (this.ingestTotal === 0) return 0;
-      return Math.round((v / this.ingestTotal) * 100);
-    },
-
-    kpiSignals() {
-      const s = this.selected;
-      if (!s) return [];
-      const signalDefs = [
-        { name: 'stress',     key: 'stress',     desc: 'Real-time load pressure',        hex: '#ef4444' },
-        { name: 'fatigue',    key: 'fatigue',     desc: 'Accumulated burden over time',   hex: '#f97316' },
-        { name: 'mood',       key: 'mood',        desc: 'System well-being composite',    hex: '#10b981' },
-        { name: 'pressure',   key: 'pressure',    desc: 'Rate of stress increase',        hex: '#f59e0b' },
-        { name: 'humidity',   key: 'humidity',    desc: 'Error / timeout density',        hex: '#6366f1' },
-        { name: 'contagion',  key: 'contagion',   desc: 'Cross-service error propagation',hex: '#ec4899' },
-        { name: 'resilience', key: 'resilience',  desc: 'Recovery speed',                 hex: '#38bdf8' },
-        { name: 'entropy',    key: 'entropy',     desc: 'Behavioral unpredictability',    hex: '#a78bfa' },
-        { name: 'velocity',   key: 'velocity',    desc: 'Rate of HealthScore change',     hex: '#fb7185' },
-      ];
-      return signalDefs.map(d => ({
-        ...d,
-        value: s[d.key]?.value || 0,
-        color: 'color:' + d.hex,
-      }));
-    },
-
-    renderForecastChart() {
-      const canvas = document.getElementById('forecast-chart');
-      if (!canvas || !this.selected?.health_forecast) return;
-      if (this._forecastChart) this._forecastChart.destroy();
-      const f = this.selected.health_forecast;
-      const now = Math.round(this.selected.health_score?.value || 0);
-      this._forecastChart = new Chart(canvas, {
-        type: 'line',
-        data: {
-          labels: ['Now', '+15 min', '+30 min'],
-          datasets: [{
-            label: 'HealthScore',
-            data: [now, Math.round(f.in_15min || 0), Math.round(f.in_30min || 0)],
-            borderColor: '#38bdf8',
-            backgroundColor: 'rgba(56,189,248,.08)',
-            tension: 0.4,
-            fill: true,
-            pointBackgroundColor: '#38bdf8',
-            pointRadius: 5,
-          }],
+  renderTSCharts(){
+    if(!this.historyData.length) return;
+    const labels=this.historyData.map(p=>{ const d=new Date(p.ts); return d.getHours()+':'+String(d.getMinutes()).padStart(2,'0') });
+    const mkChart=(id,datasets,opts={})=>{
+      const canvas=document.getElementById(id); if(!canvas)return null;
+      const existing=Chart.getChart(canvas); if(existing)existing.destroy();
+      return new Chart(canvas,{type:'line',data:{labels,datasets},options:{
+        responsive:true,maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        plugins:{legend:{display:datasets.length>1,labels:{boxWidth:10,padding:8}}},
+        scales:{
+          y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#4b5672'},...(opts.y||{})},
+          x:{grid:{display:false},ticks:{color:'#4b5672',maxTicksLimit:8}},
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            y: {
-              min: 0, max: 100,
-              grid: { color: '#1e2d40' },
-              ticks: { color: '#64748b', font: { size: 10 } },
-            },
-            x: {
-              grid: { color: '#1e2d40' },
-              ticks: { color: '#64748b', font: { size: 10 } },
-            },
-          },
-        },
+        elements:{point:{radius:0,hoverRadius:4}},
+        animation:{duration:400},
+        ...opts,
+      }});
+    };
+    const def=(color,data,label)=>({label,data,borderColor:color,backgroundColor:color.replace(')',', .08)').replace('rgb','rgba'),tension:.4,fill:true,borderWidth:1.5});
+    this._tsChart=mkChart('ts-chart',[
+      def('#00e5a0',this.historyData.map(p=>Math.round(p.health_score)),'HealthScore'),
+    ],{y:{min:0,max:100}});
+    this._frChart=mkChart('fusedr-chart',[
+      def('#ff3366',this.historyData.map(p=>+(p.fused_r||0).toFixed(3)),'FusedR'),
+      def('#ffd93d',this.historyData.map(p=>+(p.stress||0).toFixed(3)),'Stress'),
+    ],{y:{min:0}});
+  },
+
+  drawForecast(){
+    const f=this.selected?.health_forecast; if(!f)return;
+    const canvas=document.getElementById('forecast-chart'); if(!canvas)return;
+    const existing=Chart.getChart(canvas); if(existing)existing.destroy();
+    const now=Math.round(this.selected?.health_score?.value||0);
+    new Chart(canvas,{type:'line',data:{
+      labels:['Now','+ 15 min','+ 30 min'],
+      datasets:[{
+        label:'HealthScore',
+        data:[now,Math.round(f.in_15min||0),Math.round(f.in_30min||0)],
+        borderColor:'#00d4ff',backgroundColor:'rgba(0,212,255,.06)',
+        tension:.5,fill:true,borderWidth:2,
+        pointBackgroundColor:'#00d4ff',pointRadius:5,pointHoverRadius:7,
+      }],
+    },options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        y:{min:0,max:100,grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#4b5672'}},
+        x:{grid:{display:false},ticks:{color:'#4b5672'}},
+      },
+      animation:{duration:600},
+    }});
+  },
+
+  selectWorkload(s){ this.selected=s; this.historyData=[] },
+
+  drawMiniRings(){
+    this.snapshots.forEach(s=>{
+      const c=document.getElementById('ring-'+s.host); if(!c)return;
+      const ctx=c.getContext('2d'); if(!ctx)return;
+      const sz=32, cx=sz/2, cy=sz/2, r=13, lw=3;
+      ctx.clearRect(0,0,sz,sz);
+      ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.strokeStyle='rgba(255,255,255,.06)';ctx.lineWidth=lw;ctx.stroke();
+      const pct=Math.min(100,s.health_score?.value||0)/100;
+      const color=pct>=.8?'#00e5a0':pct>=.4?'#ffd93d':'#ff3366';
+      ctx.beginPath();ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+pct*Math.PI*2);
+      ctx.strokeStyle=color;ctx.lineWidth=lw;ctx.lineCap='round';ctx.stroke();
+    });
+  },
+
+  /* ── flow canvas ── */
+  startFlowCanvas(){
+    const canvas=document.getElementById('flow-canvas'); if(!canvas)return;
+    const ctx=canvas.getContext('2d');
+    const W=256, H=290;
+    // nodes: [x,y,label,color]
+    const nodes=[
+      [28,25,'Prometheus','#00d4ff'],
+      [28,65,'OTLP Logs','#7c3aed'],
+      [28,105,'Traces','#00e5a0'],
+      [28,145,'gRPC','#4b5672'],
+      [112,75,'Ingest','#00d4ff'],
+      [196,65,'Analyzer','#7c3aed'],
+      [196,130,'Fusion','#ffd93d'],
+      [196,195,'Actions','#ff3366'],
+      [112,215,'Explain','#4b5672'],
+      [112,170,'Fingerprint','#4b5672'],
+    ];
+    // edges: [from, to, color]
+    const edges=[
+      [0,4,'#00d4ff'],[1,4,'#7c3aed'],[2,4,'#00e5a0'],[3,4,'#4b5672'],
+      [4,5,'#00d4ff'],[5,6,'#7c3aed'],[6,7,'#ffd93d'],
+      [6,8,'#4b5672'],[6,9,'#4b5672'],
+    ];
+    const particles=[];
+    edges.forEach((e,i)=>{ for(let j=0;j<3;j++) particles.push({edge:i,t:j/3,speed:.004+Math.random()*.003}) });
+
+    const draw=()=>{
+      ctx.clearRect(0,0,W,H);
+      // edges
+      edges.forEach(([fi,ti,col])=>{
+        const [x1,y1]=nodes[fi];const [x2,y2]=nodes[ti];
+        ctx.beginPath();ctx.moveTo(x1+36,y1+11);ctx.lineTo(x2,y2+11);
+        ctx.strokeStyle=col.replace(')',', .15)').replace('#','rgba(').replace(/rgba\((.*?)\)/,(m,c)=>{ try{const r=parseInt(c.slice(1,3),16),g=parseInt(c.slice(3,5),16),b=parseInt(c.slice(5,7),16);return `rgba(${r},${g},${b},.15)`}catch{return 'rgba(255,255,255,.1)'} });
+        ctx.lineWidth=1;ctx.stroke();
       });
-    },
+      // particles
+      particles.forEach(p=>{
+        const [fi,ti,col]=edges[p.edge];
+        const [x1,y1]=nodes[fi];const [x2,y2]=nodes[ti];
+        const x=x1+36+(x2-(x1+36))*p.t;
+        const y=y1+11+(y2+11-(y1+11))*p.t;
+        ctx.beginPath();ctx.arc(x,y,2.5,0,Math.PI*2);
+        ctx.fillStyle=col;ctx.fill();
+        p.t+=p.speed; if(p.t>1)p.t=0;
+      });
+      // nodes
+      nodes.forEach(([x,y,label,col])=>{
+        const w=36,h=22;
+        ctx.fillStyle='rgba(6,12,20,.9)';
+        ctx.strokeStyle=col;ctx.lineWidth=1;
+        roundRect(ctx,x,y,w,h,5);ctx.fill();ctx.stroke();
+        ctx.fillStyle='rgba(255,255,255,.7)';ctx.font='7.5px Inter';ctx.textAlign='center';
+        ctx.fillText(label,x+w/2,y+h/2+3);
+      });
+      // live counts on ingest node
+      ctx.fillStyle='rgba(0,212,255,.9)';ctx.font='7px JetBrains Mono';ctx.textAlign='center';
+      const tot=this.ingestTotal;
+      ctx.fillText(tot>0?fmtNum(tot):'—',112+18,75+35);
+      // workload count on analyzer
+      ctx.fillStyle='rgba(124,58,237,.9)';
+      ctx.fillText(this.snapshots.length+' wl',196+18,65+35);
+      // pending on actions
+      if(this.actions.length>0){
+        ctx.fillStyle='rgba(255,51,102,.9)';
+        ctx.fillText(this.actions.length+' pending',196+18,195+35);
+      }
+      this._flowAnim=requestAnimationFrame(draw);
+    };
+    draw();
+  },
 
-    async approve(id) {
-      await this.apiPost('/api/v2/actions/' + id + '/approve', {});
-      await this.refresh();
-    },
+  /* ── helpers ── */
+  workloadRef(s){ if(!s)return'—'; if(s.workload?.namespace)return s.workload.namespace+'/'+s.workload.kind+'/'+s.workload.name; return s.host||'—' },
+  workloadName(s){ if(!s)return'—'; if(s.workload?.name)return s.workload.name; return s.host||'—' },
+  stateLabel(s){
+    if(!s)return'unknown';
+    if(s.workload_status)return s.workload_status;
+    if(s.calibration_progress<100)return'calibrating';
+    if(s.fused_rupture_index>=5)return'emergency';
+    if(s.fused_rupture_index>=3)return'critical';
+    if(s.fused_rupture_index>=1.5)return'warning';
+    return'active';
+  },
+  stateBadge(s){
+    const st=this.stateLabel(s);
+    if(st==='emergency'||st==='critical')return'b-red';
+    if(st==='warning')return'b-yellow';
+    if(st==='calibrating')return'b-violet';
+    if(st==='active')return'b-green';
+    return'b-gray';
+  },
+  healthColor(v){ if(v>=80)return'color:var(--green)'; if(v>=40)return'color:var(--yellow)'; return'color:var(--red)' },
+  frColor(v){ if(v>=5)return'color:var(--red)'; if(v>=3)return'color:var(--orange)'; if(v>=1.5)return'color:var(--yellow)'; return'color:var(--green)' },
+  hbar(val,max){ const pct=Math.min(100,(val/max)*100); const c=val>=80?'var(--green)':val>=40?'var(--yellow)':'var(--red)'; return`width:${pct}%;background:${c}` },
+  iPct(v){ if(!this.ingestTotal)return 0; return Math.round(v/this.ingestTotal*100) },
+  fmtNum(n){ if(!n&&n!==0)return'0'; return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g,',') },
+  formatUptime(s){ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?h+'h '+String(m).padStart(2,'0')+'m':m+'m' },
+  relTime(ts){
+    if(!ts)return'—';
+    const d=new Date(ts), now=Date.now(), diff=Math.floor((now-d.getTime())/1000);
+    if(diff<60)return diff+'s ago';
+    if(diff<3600)return Math.floor(diff/60)+'m ago';
+    return Math.floor(diff/3600)+'h ago';
+  },
+  evDotColor(sev){ const m={info:'var(--cyan)',warning:'var(--yellow)',critical:'var(--red)',emergency:'var(--pink)'}; return'background:'+(m[sev]||'var(--muted)') },
+  heatCell(s,sig){
+    const v=s[sig]?.value||0;
+    const r=Math.round(255*(sig==='mood'||sig==='resilience'?1-v:v));
+    const g=Math.round(255*(1-(sig==='mood'||sig==='resilience'?1-v:v)));
+    return`background:rgba(${Math.min(255,r*1.5)},${Math.min(255,g*1.2)},80,.7)`;
+  },
+  kpiSignals(){
+    const s=this.selected; if(!s)return[];
+    return[
+      {name:'stress',    val:s.stress?.value||0,    hex:'#ff3366',desc:'Real-time load pressure'},
+      {name:'fatigue',   val:s.fatigue?.value||0,   hex:'#ff9f43',desc:'Accumulated burden over time'},
+      {name:'mood',      val:s.mood?.value||0,      hex:'#00e5a0',desc:'System well-being'},
+      {name:'pressure',  val:s.pressure?.value||0,  hex:'#ffd93d',desc:'Rate of stress increase'},
+      {name:'humidity',  val:s.humidity?.value||0,  hex:'#6366f1',desc:'Error / timeout density'},
+      {name:'contagion', val:s.contagion?.value||0, hex:'#ec4899',desc:'Cross-service propagation'},
+      {name:'resilience',val:s.resilience?.value||0,hex:'#00d4ff',desc:'Recovery speed'},
+      {name:'entropy',   val:s.entropy?.value||0,   hex:'#a855f7',desc:'Behavioral unpredictability'},
+      {name:'velocity',  val:s.velocity?.value||0,  hex:'#fb7185',desc:'HealthScore rate of change'},
+    ];
+  },
 
-    async reject(id) {
-      await this.apiPost('/api/v2/actions/' + id + '/reject', {});
-      await this.refresh();
-    },
-
-    async emergencyStop() {
-      if (!confirm('Halt all Tier-1 auto-actions globally?')) return;
-      await this.apiPost('/api/v2/actions/emergency-stop', {});
-      await this.refresh();
-    },
-
-    fmtNum(n) {
-      if (!n) return '0';
-      return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    },
-
-    formatUptime(s) {
-      const h = Math.floor(s / 3600);
-      const m = Math.floor((s % 3600) / 60);
-      if (h > 0) return h + 'h ' + String(m).padStart(2,'0') + 'm';
-      return m + 'm';
-    },
-  };
+  async approve(id){ await this.apiPost('/api/v2/actions/'+id+'/approve'); await this.doRefresh() },
+  async reject(id){ await this.apiPost('/api/v2/actions/'+id+'/reject'); await this.doRefresh() },
+  async emergencyStop(){ if(!confirm('Halt ALL Tier-1 auto-actions globally?'))return; await this.apiPost('/api/v2/actions/emergency-stop'); await this.doRefresh() },
+};
 }
+
+/* canvas roundRect polyfill */
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);
+  ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath();
+}
+function fmtNum(n){ return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g,',') }
 </script>
 </body>
 </html>

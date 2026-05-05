@@ -20,8 +20,10 @@ import (
 	"github.com/benfradjselim/ruptura/internal/correlator"
 	"github.com/benfradjselim/ruptura/internal/actions/providers"
 	"github.com/benfradjselim/ruptura/internal/eventbus"
+	"github.com/benfradjselim/ruptura/internal/events"
 	"github.com/benfradjselim/ruptura/internal/explain"
 	"github.com/benfradjselim/ruptura/internal/fusion"
+	"github.com/benfradjselim/ruptura/internal/history"
 	"github.com/benfradjselim/ruptura/internal/ingest"
 	pipelinemetrics "github.com/benfradjselim/ruptura/internal/pipeline/metrics"
 	"github.com/benfradjselim/ruptura/internal/predictor"
@@ -283,6 +285,10 @@ func runWithContext(ctx context.Context, cfg Config) error {
 	handlers := api.New(store, actionEngine, explainer, al, predictorEngine, pipelineEngine, ctxStore, detector, metricsReg, healthCheck, cfg.APIKey)
 	handlers.SetAnalyzer(analyzerEngine)
 	handlers.SetEdition(cfg.Edition)
+	histMgr := history.New()
+	evBus := events.New()
+	handlers.SetHistoryMgr(histMgr)
+	handlers.SetEventBus(evBus)
 	handlers.SetReady(true)
 
 	router := handlers.NewRouter()

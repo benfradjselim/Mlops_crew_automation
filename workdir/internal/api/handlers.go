@@ -10,7 +10,9 @@ import (
     "github.com/benfradjselim/ruptura/internal/alerter"
     "github.com/benfradjselim/ruptura/internal/analyzer"
     apicontext "github.com/benfradjselim/ruptura/internal/context"
+    "github.com/benfradjselim/ruptura/internal/events"
     "github.com/benfradjselim/ruptura/internal/explain"
+    "github.com/benfradjselim/ruptura/internal/history"
     pipelinemetrics "github.com/benfradjselim/ruptura/internal/pipeline/metrics"
     "github.com/benfradjselim/ruptura/internal/predictor"
     "github.com/benfradjselim/ruptura/internal/storage"
@@ -32,12 +34,14 @@ type Handlers struct {
     ready      int32  // atomic: 1=ready
     apiKey     string // expected bearer token; "" disables auth
     edition    string // "community" (default) or "autopilot"
-    // v6.3: calibration + forecast enrichment
     analyzer   *analyzer.Analyzer
+    historyMgr *history.Manager
+    eventBus   *events.Bus
 }
 
-// SetAnalyzer wires the analyzer for calibration status and HealthScore forecasting.
 func (h *Handlers) SetAnalyzer(a *analyzer.Analyzer) { h.analyzer = a }
+func (h *Handlers) SetHistoryMgr(m *history.Manager) { h.historyMgr = m }
+func (h *Handlers) SetEventBus(b *events.Bus)        { h.eventBus = b }
 
 // SetEdition sets the product edition: "community" (default) or "autopilot".
 func (h *Handlers) SetEdition(e string) { h.edition = e }

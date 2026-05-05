@@ -66,6 +66,10 @@ func (h *Handlers) NewRouter() http.Handler {
 
 	api.HandleFunc("/config/weights", h.handleConfigWeights).Methods("GET", "POST")
 
+	api.HandleFunc("/history", h.handleHistory).Methods("GET")
+	api.HandleFunc("/history/{workload:.+}", h.handleHistory).Methods("GET")
+	api.HandleFunc("/events", h.handleEvents).Methods("GET")
+
 	api.HandleFunc("/explain/{rupture_id}", h.handleExplain).Methods("GET")
 	api.HandleFunc("/explain/{rupture_id}/formula", h.handleExplain).Methods("GET")
 	api.HandleFunc("/explain/{rupture_id}/pipeline", h.handleExplain).Methods("GET")
