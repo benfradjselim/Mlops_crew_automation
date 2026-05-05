@@ -97,6 +97,19 @@ func (r *Registry) RecordKPISnapshot(snap models.KPISnapshot) {
     if snap.FusedRuptureIndex > 0 {
         set("fused_rupture_index", snap.FusedRuptureIndex)
     }
+    // v6.3 — calibration + forecast
+    set("calibration_progress", float64(snap.CalibrationProgress))
+    if f := snap.HealthForecast; f != nil {
+        set("health_score_in_15min", f.In15Min)
+        set("health_score_in_30min", f.In30Min)
+        set("critical_eta_minutes", float64(f.CriticalETAMinutes))
+    }
+    // v6.4 — business signals
+    if b := snap.Business; b != nil {
+        set("slo_burn_velocity", b.SLOBurnVelocity)
+        set("blast_radius", float64(b.BlastRadius))
+        set("recovery_debt", float64(b.RecoveryDebt))
+    }
 }
 func (r *Registry) SetTrackerCount(trackerType, state string, v int64) {
     key := trackerType + ":" + state
