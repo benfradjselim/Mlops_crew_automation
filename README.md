@@ -14,13 +14,14 @@ Ruptura detects workload ruptures before they cause outages — using the Fused 
 
 | Version | Date | Status |
 |---------|------|--------|
+| v6.6.0 | 2026-05-05 | ✅ Released — per-workload signal weight tuning |
+| v6.5.0 | 2026-05-05 | ✅ Released — edition gate (community / autopilot) |
+| v6.4.0 | 2026-05-05 | ✅ Released — rupture fingerprinting + business signal layer |
+| v6.3.0 | 2026-05-04 | ✅ Released — calibration warm-up, HealthScore forecast, ruptura-sim |
 | v6.2.2 | 2026-04-30 | ✅ Released — anomaly REST endpoints, all v6.x gaps resolved |
-| v6.2.1 | 2026-04-30 | ✅ Released — FusedRuptureIndex in API, Grafana dashboard corrected |
-| v6.2.0 | 2026-04-30 | ✅ Released — WorkloadRef, adaptive baselines, narrative explain, topology contagion |
 | v6.1.0 | 2026-04-27 | ✅ Released — gRPC, eventbus, adaptive ensemble, K8s operator |
-| v6.0.0 | 2026-04-25 | ✅ Released — full Go rewrite |
 
-**Active branch:** `v6.1` · **Module:** `github.com/benfradjselim/ruptura`
+**Active branch:** `main` · **Module:** `github.com/benfradjselim/ruptura`
 
 ---
 
@@ -59,12 +60,16 @@ Every workload gets 10 auditable signals recomputed on every data point:
 
 All formulas are versioned release artifacts — no black boxes.
 
-### 3 — Adaptive per-workload baselines
+### 3 — Calibration warm-up & adaptive baselines
 
-After 24 hours of observation, every threshold becomes relative to that workload's own Welford baseline:
+For the first 24h, Ruptura is in `calibrating` state — signals are recorded but predictions and actions are suppressed until the baseline is ready. Every API response carries `calibration_progress` (0–100) and `calibration_eta_minutes`.
+
+After calibration, every threshold becomes relative to that workload's own Welford baseline:
 
 - A batch job at 90% CPU every night → z-score ≈ 0.1 → no alarm
 - An API server normally at 10% suddenly at 40% → z-score = 4.2 → stress alarm fires
+
+A **HealthScore trend forecast** is computed once active: OLS regression over the rolling health history projects `in_15min`, `in_30min`, and `critical_eta_minutes`. "Your score is 54" becomes "you have 28 minutes."
 
 ### 4 — Fused Rupture Index™
 
@@ -101,7 +106,13 @@ The rupture detector uses a 5-model ensemble with online MAE-based weighting:
 
 Every 60 seconds, models are re-weighted based on their actual prediction error over the past hour. No configuration needed — the ensemble adapts automatically to your traffic patterns.
 
-### 6 — Action engine with safety gates
+### 6 — Rupture fingerprinting & business signals
+
+At every confirmed rupture (FusedR ≥ 3.0), an 11-dimensional KPI vector is stored as a fingerprint. Future queries run cosine similarity against all past fingerprints — a match ≥ 0.85 surfaces as `pattern_match` with the prior resolution note.
+
+Three business signals are embedded in every snapshot: `slo_burn_velocity` (are you burning your error budget too fast?), `blast_radius` (how many downstream services depend on this workload?), and `recovery_debt` (how many near-misses in the last 7 days?).
+
+### 7 — Action engine with safety gates
 
 When FusedR crosses a threshold, the action engine fires:
 
@@ -118,7 +129,7 @@ execution_mode?
 K8s (scale · restart · cordon · drain) / Webhook / Alertmanager / PagerDuty
 ```
 
-### 7 — Narrative explain
+### 8 — Narrative explain
 
 Every rupture event gets a structured English explanation:
 
@@ -156,7 +167,7 @@ docker run -d \
   -p 8080:8080 -p 4317:4317 \
   -v ruptura-data:/var/lib/ruptura/data \
   -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
-  ghcr.io/benfradjselim/ruptura:6.2.2
+  ghcr.io/benfradjselim/ruptura:6.6.0
 ```
 
 ---

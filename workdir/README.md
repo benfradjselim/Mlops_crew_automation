@@ -62,6 +62,34 @@ Each maps multiple raw metrics to a single interpretable 0–1 index with publis
 
 After 24h of observation per workload, all thresholds become relative to that workload's own Welford baseline. A batch job that always runs at 90% CPU is never "stressed." An API that normally runs at 10% and spikes to 40% is flagged.
 
+### Calibration Warm-Up
+
+During the first 24h (`status: "calibrating"`), signals are computed and stored but rupture predictions and actions are suppressed — the baseline isn't ready yet. Every snapshot carries `calibration_progress` (0–100) and `calibration_eta_minutes` so you always know where you stand. Use `ruptura-sim` to demo immediately without waiting.
+
+### HealthScore Trend Forecast
+
+Once calibrated, every snapshot includes a linear projection of where HealthScore is heading:
+
+```json
+"health_forecast": { "trend": "degrading", "in_15min": 51.2, "in_30min": 38.7, "critical_eta_minutes": 28 }
+```
+
+Turns "your score is 54" into "you have 28 minutes."
+
+### Rupture Fingerprinting
+
+At every confirmed rupture (FusedR ≥ 3.0), Ruptura captures an 11-dimensional KPI vector. On subsequent queries, the current state is compared against all past fingerprints using cosine similarity. A match ≥ 0.85 surfaces as `pattern_match` in the response — with the matched rupture ID, similarity score, and resolution note from last time.
+
+### Business Signals
+
+Three business-layer signals are included in every snapshot:
+
+| Signal | Meaning |
+|--------|---------|
+| `slo_burn_velocity` | `current_error_rate / allowed_error_rate` — > 1.0 means burning error budget too fast |
+| `blast_radius` | Downstream services that depend on this workload (from trace topology) |
+| `recovery_debt` | Near-miss count (FusedR 2–3, recovered without rupturing) in the last 7 days |
+
 ### Narrative Explain
 
 ```
@@ -76,6 +104,14 @@ Returns a structured English narrative — not a JSON of numbers:
 
 When OTLP trace spans are ingested, Ruptura builds a real service dependency graph. Contagion is computed from actual edge error rates weighted by call volume — not a `cpu × errors` proxy.
 
+### Edition Gate
+
+`RUPTURA_EDITION=community` (default) — action recommendations are visible read-only; `POST .../approve` returns 402. Set `RUPTURA_EDITION=autopilot` to enable full Tier-1 auto-execution and manual approval.
+
+### Per-Workload Signal Weights
+
+Override HealthScore weights per namespace or workload via `POST /api/v2/config/weights` at runtime, or via `RUPTURA_WORKLOAD_WEIGHTS` (JSON) / `workloadWeights:` in Helm values. A latency-sensitive API and a batch job should not share the same `stress` weight.
+
 ---
 
 ## Architecture
@@ -89,12 +125,13 @@ When OTLP trace spans are ingested, Ruptura builds a real service dependency gra
 │  Prom rw        Analyzer                  FusedR             │
 │  OTLP HTTP      (10 KPI signals)              │              │
 │  DogStatsD      Adaptive baselines        ActionEngine       │
-│     │           Topology contagion       (K8s/Webhook/PD)    │
+│     │           Calibration warm-up      (K8s/Webhook/PD)    │
+│     │           Topology contagion        Edition gate       │
 │     │           Narrative explain             │              │
-│  Correlator                             NarrativeExplain     │
-│  (BurstDetector,                             │               │
-│   TopologyBuilder)                    REST API v2            │
-│                                       WorkloadRef routes     │
+│  Correlator     Fingerprinting           NarrativeExplain    │
+│  (BurstDetector,Business signals              │              │
+│   TopologyBuilder) HealthScore forecast  REST API v2         │
+│                                          WorkloadRef routes  │
 │              BadgerDB embedded storage (single binary)       │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -210,9 +247,9 @@ GET  /api/v2/forecast/{metric}/{namespace}/{workload}
 GET  /api/v2/anomalies
 GET  /api/v2/anomalies/{host}
 
-# Actions (auto-execute T1, approve/reject T2)
+# Actions (approve/reject T2; T1 auto in autopilot edition)
 GET  /api/v2/actions
-POST /api/v2/actions/{id}/approve
+POST /api/v2/actions/{id}/approve      ← 402 in community edition
 POST /api/v2/actions/{id}/reject
 POST /api/v2/actions/emergency-stop
 
@@ -220,6 +257,13 @@ POST /api/v2/actions/emergency-stop
 POST /api/v2/suppressions         { workload, start, end, [signals] }
 GET  /api/v2/suppressions
 DELETE /api/v2/suppressions/{id}
+
+# Simulation (demo without real incidents)
+POST /api/v2/sim/inject           { pattern, host, duration_minutes }
+
+# Signal weight configuration (per-workload HealthScore tuning)
+GET  /api/v2/config/weights
+POST /api/v2/config/weights       [{ selector, stress, fatigue, ... }]
 
 # Explainability
 GET  /api/v2/explain/{id}
@@ -237,6 +281,8 @@ Environment variables (no config file required for basic use):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `RUPTURA_API_KEY` | _(empty, auth disabled)_ | Bearer token for all API requests |
+| `RUPTURA_EDITION` | `community` | `community` (read-only actions) or `autopilot` (full execution) |
+| `RUPTURA_WORKLOAD_WEIGHTS` | _(empty)_ | JSON array of `SignalWeights` for per-workload HealthScore tuning |
 | `RUPTURA_INGEST_RPS` | `1000` | Token-bucket rate limit on ingest |
 | `RUPTURA_LOG_LEVEL` | `info` | Log verbosity (debug/info/warn/error) |
 
