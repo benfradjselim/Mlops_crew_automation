@@ -12,6 +12,9 @@ type TrackerStatus struct {
 
 type HealthResponse struct {
     Status           string                   `json:"status"` // "warming"|"ready"|"degraded"
+    Version          string                   `json:"version,omitempty"`
+    Edition          string                   `json:"edition,omitempty"`
+    UptimeSeconds    int64                    `json:"uptime_seconds,omitempty"`
     Trackers         map[string]TrackerStatus `json:"trackers"`
     RuptureDetection string                   `json:"rupture_detection"` // "suppressed"|"degraded"|"active"
     Message          string                   `json:"message"`
@@ -28,7 +31,10 @@ func NewHealthChecker() *HealthChecker {
 
 func (h *HealthChecker) Check(now time.Time) HealthResponse {
     uptime := now.Sub(h.startTime)
-    res := HealthResponse{Trackers: make(map[string]TrackerStatus)}
+    res := HealthResponse{
+        Trackers:      make(map[string]TrackerStatus),
+        UptimeSeconds: int64(uptime.Seconds()),
+    }
     if uptime < 5*time.Minute {
         res.Status = "warming"
         res.RuptureDetection = "suppressed"

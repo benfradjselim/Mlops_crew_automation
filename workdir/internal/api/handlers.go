@@ -34,6 +34,7 @@ type Handlers struct {
     ready      int32  // atomic: 1=ready
     apiKey     string // expected bearer token; "" disables auth
     edition    string // "community" (default) or "autopilot"
+    version    string
     analyzer   *analyzer.Analyzer
     historyMgr *history.Manager
     eventBus   *events.Bus
@@ -45,6 +46,9 @@ func (h *Handlers) SetEventBus(b *events.Bus)        { h.eventBus = b }
 
 // SetEdition sets the product edition: "community" (default) or "autopilot".
 func (h *Handlers) SetEdition(e string) { h.edition = e }
+
+// SetVersion sets the server version string returned in /api/v2/health.
+func (h *Handlers) SetVersion(v string) { h.version = v }
 
 func NewHandlers(
     store *storage.Store,

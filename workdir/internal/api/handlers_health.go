@@ -7,7 +7,13 @@ import (
 )
 
 func (h *Handlers) handleHealth(w http.ResponseWriter, r *http.Request) {
-    writeJSON(w, http.StatusOK, h.health.Check(time.Now()))
+    resp := h.health.Check(time.Now())
+    resp.Version = h.version
+    resp.Edition = h.edition
+    if resp.Edition == "" {
+        resp.Edition = "community"
+    }
+    writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *Handlers) handleReady(w http.ResponseWriter, r *http.Request) {
