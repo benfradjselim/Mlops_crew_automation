@@ -2,16 +2,16 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: ohe-agent
-  namespace: ohe-system
+  name: ruptura-agent
+  namespace: ruptura-system
   labels:
-    app.kubernetes.io/name: ohe
+    app.kubernetes.io/name: ruptura
     app.kubernetes.io/component: agent
     app.kubernetes.io/version: "4.0.0"
 spec:
   selector:
     matchLabels:
-      app: ohe-agent
+      app: ruptura-agent
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
@@ -19,11 +19,11 @@ spec:
   template:
     metadata:
       labels:
-        app: ohe-agent
-        app.kubernetes.io/name: ohe
+        app: ruptura-agent
+        app.kubernetes.io/name: ruptura
         app.kubernetes.io/component: agent
     spec:
-      serviceAccountName: ohe-agent
+      serviceAccountName: ruptura-agent
       hostPID: true          # needed to collect host process metrics
       hostNetwork: false
       dnsPolicy: ClusterFirstWithHostNet
@@ -34,12 +34,12 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: ohe-agent
+        - name: ruptura-agent
           image: docker.io/library/ohe:latest
           imagePullPolicy: Never
           command: ["/ohe", "agent"]   # override ENTRYPOINT which defaults to 'central'
           args:
-            - --central-url=http://ohe-central.ohe-system.svc.cluster.local
+            - --central-url=http://ruptura.ruptura-system.svc.cluster.local
             - --interval=15s
           env:
             - name: OHE_CENTRAL_URL
@@ -89,7 +89,7 @@ spec:
             - name: rootfs
               mountPath: /rootfs
               readOnly: true
-            - name: ohe-data
+            - name: ruptura-data
               mountPath: /var/lib/ohe
       volumes:
         - name: proc
@@ -101,5 +101,5 @@ spec:
         - name: rootfs
           hostPath:
             path: /
-        - name: ohe-data
+        - name: ruptura-data
           emptyDir: {}

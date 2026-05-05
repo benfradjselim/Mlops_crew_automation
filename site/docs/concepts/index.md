@@ -2,21 +2,55 @@
 
 Ruptura is built around three layered ideas: **predict**, **explain**, **act**.
 
+## The big picture
+
+Traditional observability reacts to symptoms — CPU crossed 80%, error rate spiked, latency breached an SLO. By then, users are already affected.
+
+Ruptura measures *divergence from normal* in real time across three independent signal sources (metrics, logs, traces), fuses them into a single rupture index per Kubernetes workload, and acts before the symptom manifests. Every decision is auditable — the formulas are published, the model weights are observable via API, and every rupture comes with a human-readable causal narrative.
+
 ## Core model
 
 ```mermaid
 graph TD
-    A[Raw metrics / logs / traces] --> B["Composite Signals\nstress · fatigue · pressure · contagion\nresilience · entropy · sentiment · healthscore"]
-    B --> C["Adaptive Ensemble\nCA-ILR x ARIMA x Holt-Winters x MAD x EWMA\nOnline MAE-based weights — v6.1"]
-    C --> D["Rupture Index™\nR = |α_burst| / |α_stable|\nR ≥ 3.0 Warning  /  R ≥ 5.0 Emergency"]
-    D --> E["Action Engine\nTier-1 auto · Tier-2 suggested · Tier-3 human\nK8s · Webhook · Alertmanager · PagerDuty"]
+    subgraph Ingest
+        A1[Prometheus remote_write]
+        A2[OTLP logs + traces :4317]
+        A3[gRPC :9090]
+    end
+
+    subgraph Signals["10 Composite KPI Signals"]
+        B["stress · fatigue · mood · pressure · humidity
+        contagion · resilience · entropy · velocity · health_score"]
+    end
+
+    subgraph Fusion["Fusion Engine"]
+        C1["Adaptive Ensemble\nCA-ILR · ARIMA · Holt-Winters · MAD · EWMA\nOnline MAE weights — 60s update"]
+        C2["Fused Rupture Index™\nFusedR = f(metricR, logR, traceR)\nrequires ≥ 2 sources to reach critical"]
+    end
+
+    subgraph Act["Action Engine"]
+        D["Tier-1 auto · Tier-2 suggested · Tier-3 alert\nK8s · Webhook · Alertmanager · PagerDuty"]
+    end
+
+    subgraph Explain
+        E["Narrative explain\nGET /api/v2/explain/{id}/narrative"]
+    end
+
+    Ingest --> Signals
+    Signals --> Fusion
+    Fusion --> Act
+    Fusion --> Explain
 ```
+
+## Signal pipeline in one sentence
+
+> Raw telemetry → 10 KPI signals (per-workload adaptive baselines) → 5-model ensemble fusion → Fused Rupture Index → tiered action with safety gates → causal narrative.
 
 ## Concept pages
 
 | Page | What it covers |
 |------|---------------|
-| [Rupture Index™](rupture-index.md) | The core prediction metric — dual-scale CA-ILR maths |
-| [Composite Signals](composite-signals.md) | The 8 interpretable signals and their formulas |
-| [Surge Profiles / Adaptive Ensemble](surge-profiles.md) | How model weights adapt online to your traffic patterns |
-| [Action Engine](action-engine.md) | Tier system, safety gates, supported integrations |
+| [Rupture Index™](rupture-index.md) | The core prediction metric — dual-scale CA-ILR maths, three-source fusion |
+| [Composite Signals](composite-signals.md) | All 10 KPI signals with published formulas and threshold tables |
+| [Surge Profiles / Adaptive Ensemble](surge-profiles.md) | How the 5-model ensemble adapts online to your traffic patterns |
+| [Action Engine](action-engine.md) | Tier system, safety gates, K8s and webhook integrations |

@@ -20,10 +20,10 @@ data:
         static_configs:
           - targets: ['localhost:9090']
 
-      - job_name: ohe-central
+      - job_name: ruptura
         static_configs:
-          - targets: ['ohe-central.ohe-system.svc.cluster.local:80']
-        metrics_path: /metrics
+          - targets: ['ruptura.ruptura-system.svc.cluster.local:80']
+        metrics_path: /api/v2/metrics
 
       - job_name: kubernetes-nodes
         scheme: https

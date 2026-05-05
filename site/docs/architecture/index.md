@@ -18,7 +18,7 @@ graph TD
     end
 
     subgraph Fusion["Fusion Engine"]
-        C1[8 Composite signals]
+        C1[10 Composite signals]
         C2[Adaptive Ensemble v6.1]
         C3[Rupture Detector CA-ILR]
     end
@@ -60,8 +60,7 @@ graph TD
 | `internal/explain` | XAI trace generation |
 | `pkg/rupture` | Rupture Index™ core maths |
 | `pkg/composites` | Composite signal formulas |
-| `sdk/go` | Official Go client (`ohe` package) |
-| `sdk/python` | Official Python client (`ruptura-client`) |
+| `pkg/client` | Embeddable Go client library |
 
 ## Detailed pages
 

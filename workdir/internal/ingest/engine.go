@@ -2,16 +2,18 @@ package ingest
 
 import (
 	"context"
-	"google.golang.org/grpc"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"google.golang.org/grpc"
 
 	"github.com/benfradjselim/ruptura/internal/pipeline/metrics"
 	"github.com/benfradjselim/ruptura/pkg/logger"
@@ -26,6 +28,15 @@ type SpanSink interface {
 	IngestSpan(span models.Span) error
 }
 
+// TraceRSink receives per-workload rupture indices derived from trace error rates.
+type TraceRSink interface {
+	SetTraceR(key string, r float64, ts time.Time)
+}
+
+type SentimentSink interface {
+	UpdateSentiment(service string, positive, negative int)
+}
+
 type Ingestor interface {
 	StartHTTP(addr string) error
 	StartGRPC(addr string) error
@@ -34,9 +45,11 @@ type Ingestor interface {
 }
 
 type Engine struct {
-	pipeline metrics.MetricPipeline
-	logs     LogSink
-	spans    SpanSink
+	pipeline  metrics.MetricPipeline
+	logs      LogSink
+	spans     SpanSink
+	sentiment SentimentSink
+	traceR    TraceRSink
 
 	activeSeries sync.Map
 	seriesCount  int32
@@ -47,19 +60,74 @@ type Engine struct {
 	grpcSamples chan *GRPCMetricPoint
 }
 
-func New(pipeline metrics.MetricPipeline, logs LogSink, spans SpanSink) *Engine {
+func New(pipeline metrics.MetricPipeline, logs LogSink, spans SpanSink, sentiment SentimentSink, traceR TraceRSink) *Engine {
 	return &Engine{
-		pipeline: pipeline,
-		logs:     logs,
-		spans:    spans,
+		pipeline:    pipeline,
+		logs:        logs,
+		spans:       spans,
+		sentiment:   sentiment,
+		traceR:      traceR,
 		grpcSamples: make(chan *GRPCMetricPoint, 1024),
 	}
+}
+
+// rateLimiter is a simple token-bucket middleware for the ingest HTTP server.
+// Capacity and refill rate are configurable via RUPTURA_INGEST_RPS env variable.
+type rateLimiter struct {
+	tokens   float64
+	capacity float64
+	refillPS float64 // tokens added per second
+	last     time.Time
+	mu       sync.Mutex
+}
+
+func newRateLimiter() *rateLimiter {
+	rps := 1000.0 // default: 1000 req/s
+	if v := os.Getenv("RUPTURA_INGEST_RPS"); v != "" {
+		if n, err := strconv.ParseFloat(v, 64); err == nil && n > 0 {
+			rps = n
+		}
+	}
+	return &rateLimiter{tokens: rps, capacity: rps, refillPS: rps, last: time.Now()}
+}
+
+func (rl *rateLimiter) allow() bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := time.Now()
+	elapsed := now.Sub(rl.last).Seconds()
+	rl.last = now
+	rl.tokens = min(rl.capacity, rl.tokens+rl.refillPS*elapsed)
+	if rl.tokens < 1 {
+		return false
+	}
+	rl.tokens--
+	return true
+}
+
+func min(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func rateLimitMiddleware(rl *rateLimiter, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !rl.allow() {
+			w.Header().Set("Retry-After", "1")
+			http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (e *Engine) StartHTTP(addr string) error {
 	mux := http.NewServeMux()
 	RegisterHandlers(mux, e)
-	e.httpServer = &http.Server{Addr: addr, Handler: mux}
+	rl := newRateLimiter()
+	e.httpServer = &http.Server{Addr: addr, Handler: rateLimitMiddleware(rl, mux)}
 	go func() {
 		if err := e.httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			logger.Default.Error("HTTP ingest failed", "error", err)
@@ -117,6 +185,42 @@ func RegisterHandlers(mux *http.ServeMux, e *Engine) {
 	mux.HandleFunc("/otlp/v1/traces", e.handleOTLPTraces)
 }
 
+// extractWorkloadRef extracts a WorkloadRef from an OTLPResource by inspecting
+// standard Kubernetes and OpenTelemetry semantic convention attributes.
+func extractWorkloadRef(r models.OTLPResource) models.WorkloadRef {
+	ns := r.GetAttr("k8s.namespace.name")
+	node := models.FirstNonEmpty(r.GetAttr("k8s.node.name"), r.GetAttr("host.name"))
+	name := models.FirstNonEmpty(
+		r.GetAttr("k8s.deployment.name"),
+		r.GetAttr("k8s.statefulset.name"),
+		r.GetAttr("k8s.daemonset.name"),
+		r.GetAttr("k8s.job.name"),
+		r.GetAttr("service.name"),
+		node, // final fallback: use node as identity (non-K8s)
+	)
+	kind := inferWorkloadKind(r)
+	if ns == "" {
+		ns = "default"
+	}
+	return models.WorkloadRef{Namespace: ns, Kind: kind, Name: name, Node: node}
+}
+
+// inferWorkloadKind returns the Kubernetes workload kind string from OTLP resource attributes.
+func inferWorkloadKind(r models.OTLPResource) string {
+	switch {
+	case r.GetAttr("k8s.deployment.name") != "":
+		return "Deployment"
+	case r.GetAttr("k8s.statefulset.name") != "":
+		return "StatefulSet"
+	case r.GetAttr("k8s.daemonset.name") != "":
+		return "DaemonSet"
+	case r.GetAttr("k8s.job.name") != "":
+		return "Job"
+	default:
+		return "host"
+	}
+}
+
 func (e *Engine) handleRemoteWrite(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -137,16 +241,27 @@ func (e *Engine) handleRemoteWrite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, ts := range req.Timeseries {
-		var name, host string = "", "unknown"
+		var name string
+		host := "unknown"
+		workload := models.WorkloadRef{}
 		for _, lbl := range ts.Labels {
-			if lbl.Name == "__name__" {
+			switch lbl.Name {
+			case "__name__":
 				name = lbl.Value
-			} else if lbl.Name == "host" {
+			case "host", "instance":
 				host = lbl.Value
+			case "namespace":
+				workload.Namespace = lbl.Value
+			case "deployment":
+				workload.Name = lbl.Value
+				workload.Kind = "Deployment"
 			}
 		}
 		if name == "" {
 			continue
+		}
+		if workload.IsEmpty() {
+			workload = models.WorkloadRefFromHost(host)
 		}
 
 		if e.checkCardinality(host, name) {
@@ -161,12 +276,13 @@ func (e *Engine) handleRemoteWrite(w http.ResponseWriter, r *http.Request) {
 func (e *Engine) handleOTLPMetrics(w http.ResponseWriter, r *http.Request) {
 	var req models.OTLPMetricsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		fmt.Println("otlp metrics decode failed", err)
+		logger.Default.Error("otlp metrics decode failed", "error", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	for _, rm := range req.ResourceMetrics {
-		host := rm.Resource.GetAttr("host.name")
+		ref := extractWorkloadRef(rm.Resource)
+		host := ref.Node
 		if host == "" {
 			host = "unknown"
 		}
@@ -202,6 +318,7 @@ func (e *Engine) handleOTLPMetrics(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 				}
+				_ = ref // WorkloadRef available for future enrichment
 			}
 		}
 	}
@@ -214,18 +331,32 @@ func (e *Engine) handleOTLPLogs(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if e.logs != nil {
-		for _, rl := range req.ResourceLogs {
-			service := rl.Resource.GetAttr("service.name")
-			if service == "" {
-				service = "unknown"
-			}
-			for _, sl := range rl.ScopeLogs {
-				for _, lr := range sl.LogRecords {
+	for _, rl := range req.ResourceLogs {
+		ref := extractWorkloadRef(rl.Resource)
+		service := rl.Resource.GetAttr("service.name")
+		if service == "" {
+			service = ref.Name
+		}
+		if service == "" {
+			service = "unknown"
+		}
+		var pos, neg int
+		for _, sl := range rl.ScopeLogs {
+			for _, lr := range sl.LogRecords {
+				if e.logs != nil {
 					nanos, _ := strconv.ParseInt(lr.TimeUnixNano, 10, 64)
 					e.logs.IngestLine(service, []byte(lr.Body.GetString()), time.Unix(0, nanos))
 				}
+				if strings.Contains(strings.ToLower(lr.Body.GetString()), "error") ||
+					strings.Contains(strings.ToLower(lr.Body.GetString()), "warn") {
+					neg++
+				} else {
+					pos++
+				}
 			}
+		}
+		if e.sentiment != nil && (pos > 0 || neg > 0) {
+			e.sentiment.UpdateSentiment(service, pos, neg)
 		}
 	}
 	w.WriteHeader(http.StatusOK)
@@ -237,25 +368,36 @@ func (e *Engine) handleOTLPTraces(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if e.spans != nil {
-		for _, rs := range req.ResourceSpans {
-			for _, ss := range rs.ScopeSpans {
-				for _, span := range ss.Spans {
-					s := models.Span{
-						TraceID:   span.TraceID,
-						SpanID:    span.SpanID,
-						Operation: span.Name,
-					}
-					if span.Status.Code == 2 {
-						s.Status = "error"
-					} else if span.Status.Code == 1 {
-						s.Status = "ok"
-					} else {
-						s.Status = "unset"
-					}
+	now := time.Now()
+	for _, rs := range req.ResourceSpans {
+		ref := extractWorkloadRef(rs.Resource)
+		var total, errors int
+		for _, ss := range rs.ScopeSpans {
+			for _, span := range ss.Spans {
+				total++
+				s := models.Span{
+					TraceID:   span.TraceID,
+					SpanID:    span.SpanID,
+					Operation: span.Name,
+				}
+				if span.Status.Code == 2 {
+					s.Status = "error"
+					errors++
+				} else if span.Status.Code == 1 {
+					s.Status = "ok"
+				} else {
+					s.Status = "unset"
+				}
+				if e.spans != nil {
 					e.spans.IngestSpan(s)
 				}
 			}
+		}
+		// Derive traceR from span error rate: 100% error rate → R≈5, 20% → R≈1.
+		if e.traceR != nil && total > 0 {
+			errRate := float64(errors) / float64(total)
+			traceR := errRate * 5.0
+			e.traceR.SetTraceR(ref.Key(), traceR, now)
 		}
 	}
 	w.WriteHeader(http.StatusOK)

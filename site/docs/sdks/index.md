@@ -1,33 +1,55 @@
-# SDKs
+# SDKs & Client Libraries
 
-Official Ruptura client libraries.
+## Go client library
 
-| SDK | Language | Package | Status |
-|-----|----------|---------|--------|
-| [Go SDK](go-sdk.md) | Go 1.18+ | `github.com/benfradjselim/ruptura/sdk/go` | Stable (v6.1) |
-| [Python SDK](python-sdk.md) | Python 3.9+ | `ruptura-client` (PyPI) | Stable (v6.0) |
+The official Go client is embedded in the main module under `pkg/client`:
 
-Both SDKs wrap the REST API v2 and handle auth, error decoding, and JSON unmarshalling automatically.
+```go
+import "github.com/benfradjselim/ruptura/pkg/client"
 
-## Quick comparison
+c := client.New("http://ruptura:8080", client.WithAPIKey("your-key"))
 
-=== "Go"
+// Fused Rupture Index for a workload
+rupture, err := c.RuptureIndex(ctx, "default", "payment-api")
 
-    ```go
-    import ohe "github.com/benfradjselim/ruptura/sdk/go"
+// All 10 KPI signals
+kpi, err := c.KPISignal(ctx, "fatigue", "default", "payment-api")
 
-    c := ohe.New("http://ruptura:8080", ohe.WithAPIKey("ohe_abc123"))
-    health, err := c.Health(ctx)
-    rupture, err := c.RuptureIndex(ctx, "web-01")
-    weights, err := c.EnsembleWeights(ctx, "web-01")  // v6.1
-    ```
+// Narrative explain
+narrative, err := c.Narrative(ctx, ruptureID)
+```
 
-=== "Python"
+See `pkg/client/` in the source tree for the full interface.
 
-    ```python
-    from ruptura import RupturaClient
+## REST API (language-agnostic)
 
-    c = RupturaClient("http://ruptura:8080", api_key="rpt_abc123")
-    health = c.health()
-    rupture = c.rupture_index("web-01")
-    ```
+All functionality is available via the REST API v2 — use it directly from any language with a standard HTTP client:
+
+```bash
+# Health check
+curl http://ruptura:8080/api/v2/health
+
+# Rupture index for a workload
+curl -H "Authorization: Bearer $API_KEY" \
+  http://ruptura:8080/api/v2/rupture/default/payment-api
+
+# KPI signal
+curl -H "Authorization: Bearer $API_KEY" \
+  http://ruptura:8080/api/v2/kpi/fatigue/default/payment-api
+
+# Narrative explain
+curl -H "Authorization: Bearer $API_KEY" \
+  http://ruptura:8080/api/v2/explain/{rupture_id}/narrative
+```
+
+All endpoints, request/response schemas, and error codes are documented in the [API Reference →](../api/reference.md).
+
+## Authentication
+
+All API requests require a Bearer token matching `RUPTURA_API_KEY`:
+
+```
+Authorization: Bearer <your-api-key>
+```
+
+If `RUPTURA_API_KEY` is empty (dev/test mode), authentication is disabled and all requests are allowed.

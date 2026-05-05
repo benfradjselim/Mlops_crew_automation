@@ -1,12 +1,12 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: ohe-central-policy
-  namespace: ohe-system
+  name: ruptura-central-policy
+  namespace: ruptura-system
 spec:
   podSelector:
     matchLabels:
-      app: ohe-central
+      app: ruptura-central
   policyTypes:
   - Ingress
   ingress:
@@ -14,7 +14,7 @@ spec:
   - from:
     - podSelector:
         matchLabels:
-          app: ohe-agent
+          app: ruptura-agent
     ports:
     - protocol: TCP
       port: 8080

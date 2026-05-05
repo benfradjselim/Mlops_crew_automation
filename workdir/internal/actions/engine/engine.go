@@ -3,10 +3,13 @@ package engine
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/benfradjselim/ruptura/internal/eventbus"
+	"github.com/benfradjselim/ruptura/pkg/models"
+	"github.com/benfradjselim/ruptura/pkg/utils"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,6 +24,8 @@ const (
 type RuptureEvent struct {
 	ID         string
 	Host       string
+	Namespace  string // K8s namespace, empty for non-K8s hosts
+	Kind       string // Deployment|StatefulSet|DaemonSet, empty for non-K8s hosts
 	Metric     string
 	R          float64
 	Confidence float64
@@ -32,9 +37,14 @@ type ActionRecommendation struct {
 	ID         string
 	EventID    string
 	Host       string
-	ActionType string // "scale"|"restart"|"cordon"|"alert"|"notify"|"page"|"custom"
+	Namespace  string     // K8s namespace for kubernetes provider
+	Kind       string     // Deployment|StatefulSet|DaemonSet
+	NodeName   string     // Node name for cordon actions
+	ActionType string     // "scale"|"restart"|"cordon"|"alert"|"notify"|"page"|"custom"
 	Tier       ActionTier
 	Confidence float64
+	R          float64 // rupture index at time of recommendation
+	ScaleDelta int     // replica delta for "scale" action; defaults to +1 when zero
 	Approved   bool
 	Timestamp  time.Time
 }
@@ -55,10 +65,16 @@ type Rule struct {
 	ActionType string  `yaml:"action_type"`
 }
 
+const maxQueueSize = 256
+
 type Engine struct {
-	rules           []Rule
+	rules            []Rule
 	emergencyStopped int32
-	bus             eventbus.Bus
+	bus              eventbus.Bus
+
+	queueMu  sync.RWMutex
+	queue    []ActionRecommendation
+	rejected map[string]bool
 }
 
 var defaultRules = []Rule{
@@ -68,7 +84,7 @@ var defaultRules = []Rule{
 }
 
 func New(rulesYAML []byte, bus eventbus.Bus) (*Engine, error) {
-	e := &Engine{bus: bus}
+	e := &Engine{bus: bus, rejected: make(map[string]bool)}
 	if len(rulesYAML) == 0 {
 		e.rules = defaultRules
 		return e, nil
@@ -100,15 +116,20 @@ func (e *Engine) Recommend(event RuptureEvent) ([]ActionRecommendation, error) {
 				ID:         fmt.Sprintf("%s-%s", event.ID, rule.ActionType),
 				EventID:    event.ID,
 				Host:       event.Host,
+				Namespace:  event.Namespace,
+				Kind:       event.Kind,
 				ActionType: rule.ActionType,
 				Tier:       tier,
 				Confidence: event.Confidence,
+				R:          event.R,
+				ScaleDelta: 1,
 				Approved:   false,
 				Timestamp:  time.Now(),
 			})
 		}
 	}
 
+	e.enqueue(recs)
 	return recs, nil
 }
 
@@ -118,4 +139,69 @@ func (e *Engine) EmergencyStop() {
 
 func (e *Engine) IsEmergencyStopped() bool {
 	return atomic.LoadInt32(&e.emergencyStopped) == 1
+}
+
+// enqueue adds recommendations to the bounded queue (oldest evicted when full).
+func (e *Engine) enqueue(recs []ActionRecommendation) {
+	e.queueMu.Lock()
+	e.queue = append(e.queue, recs...)
+	if len(e.queue) > maxQueueSize {
+		e.queue = e.queue[len(e.queue)-maxQueueSize:]
+	}
+	e.queueMu.Unlock()
+}
+
+// PendingActions returns all non-rejected actions in the queue.
+func (e *Engine) PendingActions() []ActionRecommendation {
+	e.queueMu.RLock()
+	defer e.queueMu.RUnlock()
+	out := make([]ActionRecommendation, 0, len(e.queue))
+	for _, rec := range e.queue {
+		if !e.rejected[rec.ID] {
+			out = append(out, rec)
+		}
+	}
+	return out
+}
+
+// Approve marks an action recommendation as approved.
+func (e *Engine) Approve(id string) bool {
+	e.queueMu.Lock()
+	defer e.queueMu.Unlock()
+	for i := range e.queue {
+		if e.queue[i].ID == id {
+			e.queue[i].Approved = true
+			return true
+		}
+	}
+	return false
+}
+
+// Reject removes an action recommendation from the pending queue.
+func (e *Engine) Reject(id string) {
+	e.queueMu.Lock()
+	e.rejected[id] = true
+	e.queueMu.Unlock()
+}
+
+// RecommendFromAnomaly translates a critical anomaly event into a RuptureEvent
+// and returns the recommended actions. Only processes SeverityCritical anomalies.
+func (e *Engine) RecommendFromAnomaly(ev models.AnomalyEvent) ([]ActionRecommendation, error) {
+	if ev.Severity != models.SeverityCritical {
+		return nil, nil // only act on consensus anomalies
+	}
+	profile := "spike"
+	if ev.Score <= 5.0 {
+		profile = "plateau"
+	}
+	rupture := RuptureEvent{
+		ID:         utils.GenerateID(8),
+		Host:       ev.Host,
+		Metric:     ev.Metric,
+		R:          ev.Score,
+		Confidence: 0.75, // anomaly consensus = moderate confidence
+		Profile:    profile,
+		Timestamp:  ev.Timestamp,
+	}
+	return e.Recommend(rupture)
 }

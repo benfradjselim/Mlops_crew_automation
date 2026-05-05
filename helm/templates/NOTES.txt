@@ -1,0 +1,40 @@
+Ruptura {{ .Chart.AppVersion }} is now installed.
+
+  Namespace:  {{ .Release.Namespace }}
+  Release:    {{ .Release.Name }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+REST API (HealthScore, rupture index, forecasts):
+  kubectl port-forward svc/{{ include "ruptura.fullname" . }} 8080:80 -n {{ .Release.Namespace }}
+  curl http://localhost:8080/api/v2/ruptures
+
+OTLP Ingest (send metrics/logs/traces from your workloads):
+  kubectl port-forward svc/{{ include "ruptura.fullname" . }}-otlp 4317:4317 -n {{ .Release.Namespace }}
+  # Configure your OTLP exporter endpoint: http://localhost:4317
+
+Prometheus metrics (scrape target):
+  http://{{ include "ruptura.fullname" . }}.{{ .Release.Namespace }}:80/api/v2/metrics
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Key endpoints:
+  GET  /api/v2/ruptures                         — all workload health scores
+  GET  /api/v2/rupture/{namespace}/{workload}   — workload rupture index
+  GET  /api/v2/kpi/{signal}/{namespace}/{workload} — individual signal value
+  POST /api/v2/forecast                         — predict future metric values
+  GET  /api/v2/explain/{id}/narrative           — human-readable rupture explanation
+  POST /api/v2/suppressions                     — add maintenance window
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{{- if .Values.apiKey }}
+
+Authentication: Bearer token configured.
+Set header: Authorization: Bearer <your-api-key>
+{{- else }}
+
+⚠  No API key configured — all endpoints are unauthenticated.
+   Set --set apiKey=<strong-random-token> for production use.
+{{- end }}
+
+Docs: https://ruptura.dev

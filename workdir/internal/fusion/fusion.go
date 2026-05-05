@@ -1,13 +1,17 @@
 package fusion
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sync"
 	"time"
 
 	"github.com/benfradjselim/ruptura/pkg/logger"
+	"github.com/benfradjselim/ruptura/pkg/models"
 )
+
+const staleThreshold = 5 * time.Minute
 
 type Engine struct {
 	mu    sync.RWMutex
@@ -92,12 +96,27 @@ func (e *Engine) FusedR(host string) (float64, time.Time, error) {
 		return 0, time.Time{}, fmt.Errorf("fusion: signal lag too large for host %s", host)
 	}
 
+	// Staleness check: ignore signals older than staleThreshold
+	now := time.Now()
+	if !data.metricTs.IsZero() && now.Sub(data.metricTs) > staleThreshold {
+		data.metricTs = time.Time{}
+		data.metricVal = 0
+	}
+	if !data.logTs.IsZero() && now.Sub(data.logTs) > staleThreshold {
+		data.logTs = time.Time{}
+		data.logVal = 0
+	}
+	if !data.traceTs.IsZero() && now.Sub(data.traceTs) > staleThreshold {
+		data.traceTs = time.Time{}
+		data.traceVal = 0
+	}
+
 	// Insufficient check
 	count := 0
 	if !data.metricTs.IsZero() { count++ }
 	if !data.logTs.IsZero() { count++ }
 	if !data.traceTs.IsZero() { count++ }
-	
+
 	if count < 2 {
 		return 0, time.Time{}, fmt.Errorf("fusion: insufficient signals for host %s", host)
 	}
@@ -132,4 +151,87 @@ func (e *Engine) FusedR(host string) (float64, time.Time, error) {
 	}
 	
 	return val, latest, nil
+}
+
+// fusedR computes the fused R for hostData without locking (caller must hold e.mu).
+func (e *Engine) fusedR(data *hostData) (float64, bool) {
+	d := *data
+
+	now := time.Now()
+	if !d.metricTs.IsZero() && now.Sub(d.metricTs) > staleThreshold {
+		d.metricTs = time.Time{}
+		d.metricVal = 0
+	}
+	if !d.logTs.IsZero() && now.Sub(d.logTs) > staleThreshold {
+		d.logTs = time.Time{}
+		d.logVal = 0
+	}
+	if !d.traceTs.IsZero() && now.Sub(d.traceTs) > staleThreshold {
+		d.traceTs = time.Time{}
+		d.traceVal = 0
+	}
+
+	count := 0
+	if !d.metricTs.IsZero() { count++ }
+	if !d.logTs.IsZero() { count++ }
+	if !d.traceTs.IsZero() { count++ }
+	if count < 2 {
+		return 0, false
+	}
+
+	var val float64
+	if count == 3 {
+		val = 0.6*d.metricVal + 0.2*d.logVal + 0.2*d.traceVal
+	} else {
+		if !d.metricTs.IsZero() {
+			if !d.logTs.IsZero() {
+				val = 0.75*d.metricVal + 0.25*d.logVal
+			} else {
+				val = 0.75*d.metricVal + 0.25*d.traceVal
+			}
+		} else {
+			val = 0.5*d.logVal + 0.5*d.traceVal
+		}
+	}
+	return val, true
+}
+
+// Snapshot returns a map of workload key → FusedR value for all known workloads.
+func (e *Engine) Snapshot() map[string]float64 {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make(map[string]float64, len(e.hosts))
+	for host, h := range e.hosts {
+		r, ok := e.fusedR(h)
+		if ok {
+			out[host] = r
+		}
+	}
+	return out
+}
+
+// StartLogWatcher consumes BurstEvents from the correlator and updates logR.
+// Call this once at startup in a goroutine.
+func (e *Engine) StartLogWatcher(ctx context.Context, events <-chan models.BurstEvent) {
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case ev, ok := <-events:
+				if !ok {
+					return
+				}
+				// Normalize: Count / BaselineRate - 1.0 gives σ-like distance above baseline
+				var logR float64
+				if ev.BaselineRate > 0 {
+					logR = float64(ev.Count)/ev.BaselineRate - 1.0
+				}
+				if logR < 0 {
+					logR = 0
+				}
+				e.SetLogR(ev.Service, logR, ev.StartTS)
+			}
+		}
+	}()
 }

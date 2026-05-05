@@ -2,6 +2,8 @@ package analyzer
 
 import (
 	"testing"
+
+	"github.com/benfradjselim/ruptura/pkg/models"
 )
 
 func TestStressStates(t *testing.T) {
@@ -51,7 +53,7 @@ func TestAnalyzerUpdate(t *testing.T) {
 		"uptime_seconds": 86400.0,
 	}
 
-	snap := a.Update("host1", metrics)
+	snap := a.UpdateHost("host1", metrics)
 
 	if snap.Host != "host1" {
 		t.Errorf("snapshot host = %q; want host1", snap.Host)
@@ -85,7 +87,7 @@ func TestStressFormula(t *testing.T) {
 		"error_rate":     0.0,
 		"timeout_rate":   0.0,
 	}
-	snap := a.Update("test", metrics)
+	snap := a.UpdateHost("test", metrics)
 	if snap.Stress.Value < 0.28 || snap.Stress.Value > 0.32 {
 		t.Errorf("expected stress ~0.30, got %v", snap.Stress.Value)
 	}
@@ -105,7 +107,7 @@ func TestFatigueAccumulation(t *testing.T) {
 
 	var prev float64
 	for i := 0; i < 10; i++ {
-		snap := a.Update("fatigue-host", highStress)
+		snap := a.UpdateHost("fatigue-host", highStress)
 		if i > 0 && snap.Fatigue.Value < prev {
 			t.Errorf("fatigue should increase under high stress, got %v < %v", snap.Fatigue.Value, prev)
 		}
@@ -192,7 +194,7 @@ func TestAnalyzerSnapshot(t *testing.T) {
 
 	// After an update the snapshot should be retrievable
 	metrics := map[string]float64{"cpu_percent": 0.5, "memory_percent": 0.3}
-	a.Update("snap-host", metrics)
+	a.UpdateHost("snap-host", metrics)
 
 	snap, ok := a.Snapshot("snap-host")
 	if !ok {
@@ -211,7 +213,7 @@ func TestAnalyzerRecordRestartAndResetFatigue(t *testing.T) {
 		"cpu_percent": 0.95, "memory_percent": 0.95, "load_avg_1": 0.95,
 	}
 	for i := 0; i < 5; i++ {
-		a.Update("rr-host", high)
+		a.UpdateHost("rr-host", high)
 	}
 
 	snap, _ := a.Snapshot("rr-host")
@@ -224,8 +226,74 @@ func TestAnalyzerRecordRestartAndResetFatigue(t *testing.T) {
 	a.ResetFatigue("rr-host")
 
 	// Next update should reflect near-zero fatigue
-	snap2 := a.Update("rr-host", map[string]float64{"cpu_percent": 0.0})
+	snap2 := a.UpdateHost("rr-host", map[string]float64{"cpu_percent": 0.0})
 	if snap2.Fatigue.Value >= fatigueBeforeReset {
 		t.Errorf("fatigue after reset (%v) should be < pre-reset (%v)", snap2.Fatigue.Value, fatigueBeforeReset)
+	}
+}
+
+func TestNormaliseWeights(t *testing.T) {
+	w := normaliseWeights(models.SignalWeights{
+		Selector:  "payments/*",
+		Stress:    0.35,
+		Fatigue:   0.15,
+		Mood:      0.20,
+		Pressure:  0.20,
+		Humidity:  0.05,
+		Contagion: 0.05,
+	})
+	total := w.Stress + w.Fatigue + w.Mood + w.Pressure + w.Humidity + w.Contagion
+	if total < 0.999 || total > 1.001 {
+		t.Errorf("normalised weights sum = %v; want 1.0", total)
+	}
+}
+
+func TestNormaliseWeights_AllZero(t *testing.T) {
+	w := normaliseWeights(models.SignalWeights{Selector: "*"})
+	// All-zero input should be returned as-is without dividing by zero.
+	total := w.Stress + w.Fatigue + w.Mood + w.Pressure + w.Humidity + w.Contagion
+	if total != 0 {
+		t.Errorf("all-zero weights should stay zero, got sum %v", total)
+	}
+}
+
+func TestResolveWeights_MatchesSelector(t *testing.T) {
+	a := NewAnalyzer()
+	a.SetWeightConfigs([]models.SignalWeights{
+		{Selector: "payments/*", Stress: 0.50, Fatigue: 0.10, Mood: 0.10, Pressure: 0.10, Humidity: 0.10, Contagion: 0.10},
+		{Selector: "*", Stress: 0.25, Fatigue: 0.20, Mood: 0.20, Pressure: 0.15, Humidity: 0.10, Contagion: 0.10},
+	})
+
+	// Should match "payments/*"
+	w := a.resolveWeights("payments/Deployment/checkout")
+	if w.Stress < 0.49 || w.Stress > 0.51 {
+		t.Errorf("expected payments selector stress ~0.50 (after normalise), got %v", w.Stress)
+	}
+
+	// Should fall through to "*"
+	wDefault := a.resolveWeights("orders/Deployment/api")
+	if wDefault.Stress < 0.24 || wDefault.Stress > 0.26 {
+		t.Errorf("expected default stress ~0.25, got %v", wDefault.Stress)
+	}
+}
+
+func TestResolveWeights_NoConfigs(t *testing.T) {
+	a := NewAnalyzer()
+	w := a.resolveWeights("any/workload")
+	def := models.DefaultSignalWeights()
+	if w.Stress != def.Stress || w.Fatigue != def.Fatigue {
+		t.Errorf("expected default weights when no configs set, got %+v", w)
+	}
+}
+
+func TestWeightConfigRoundtrip(t *testing.T) {
+	a := NewAnalyzer()
+	cfgs := []models.SignalWeights{
+		{Selector: "batch/*", Stress: 0.10, Fatigue: 0.30, Mood: 0.10, Pressure: 0.10, Humidity: 0.20, Contagion: 0.20},
+	}
+	a.SetWeightConfigs(cfgs)
+	got := a.WeightConfigs()
+	if len(got) != 1 || got[0].Selector != "batch/*" {
+		t.Errorf("roundtrip failed: %+v", got)
 	}
 }

@@ -30,6 +30,35 @@ components:
       description: OHE API key — starts with "ohe_"
 
   schemas:
+    SignalWeights:
+      type: object
+      description: Per-workload HealthScore signal weight override (v6.6.0+).
+      required: [selector]
+      properties:
+        selector:
+          type: string
+          description: Glob matched against workload key. Use "*" for default, "ns/*" for namespace, or an exact key.
+          example: "payments/*"
+        stress:
+          type: number
+          format: float
+          description: Weight for stress signal (0–1; auto-normalised to sum to 1.0).
+        fatigue:
+          type: number
+          format: float
+        mood:
+          type: number
+          format: float
+        pressure:
+          type: number
+          format: float
+        humidity:
+          type: number
+          format: float
+        contagion:
+          type: number
+          format: float
+
     Error:
       type: object
       properties:
@@ -1717,6 +1746,94 @@ paths:
       responses:
         "202":
           description: Accepted
+
+  /api/v2/actions/{id}/approve:
+    post:
+      tags: [kpis]
+      summary: Approve a pending action (Autopilot edition only)
+      description: |
+        Approves a Tier-2 pending action and queues it for execution.
+        Returns 402 Payment Required in `community` edition — set
+        `RUPTURA_EDITION=autopilot` to enable.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Action approved
+        "402":
+          description: Community edition — autopilot required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  upgrade:
+                    type: string
+        "404":
+          description: Action not found
+
+  /api/v2/config/weights:
+    get:
+      tags: [kpis]
+      summary: List current per-workload HealthScore signal weight overrides
+      responses:
+        "200":
+          description: Current weight override list (empty array when none set)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SignalWeights"
+    post:
+      tags: [kpis]
+      summary: Replace the full list of signal weight overrides
+      description: |
+        Replaces the complete list of per-workload weight configs atomically.
+        Weights are normalised to sum to 1.0 on load. Changes take effect
+        on the next 15-second analyzer tick — no restart required.
+        Selector syntax: exact key, `namespace/*` prefix, or `*` wildcard.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/SignalWeights"
+            example:
+              - selector: "payments/*"
+                stress: 0.35
+                fatigue: 0.15
+                mood: 0.20
+                pressure: 0.20
+                humidity: 0.05
+                contagion: 0.05
+              - selector: "batch/*"
+                stress: 0.10
+                fatigue: 0.30
+                mood: 0.10
+                pressure: 0.10
+                humidity: 0.20
+                contagion: 0.20
+      responses:
+        "200":
+          description: Weight configs applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  applied:
+                    type: integer
+        "400":
+          description: Invalid JSON body
 
 tags:
   - name: system

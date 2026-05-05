@@ -189,6 +189,69 @@ type pendingBurst struct {
 	correlated bool
 }
 
+// TopologyBuilder builds a live service dependency graph from trace spans.
+// It tracks which services call which by correlating parent-child span relationships.
+type TopologyBuilder struct {
+	mu    sync.RWMutex
+	edges map[string]*edgeStats // key: "from→to"
+}
+
+type edgeStats struct {
+	From           string
+	To             string
+	Calls          int64
+	Errors         int64
+	TotalLatencyNS int64
+}
+
+// NewTopologyBuilder creates a new TopologyBuilder.
+func NewTopologyBuilder() *TopologyBuilder {
+	return &TopologyBuilder{edges: make(map[string]*edgeStats)}
+}
+
+// ObserveSpan records a span. If it has a parent, it records the From→To edge.
+// service is the current span's service; parentService is the caller's service
+// (derived from the parent span if available, empty otherwise).
+func (t *TopologyBuilder) ObserveSpan(service, parentService string, durationNS int64, isError bool) {
+	if parentService == "" || parentService == service {
+		return
+	}
+	key := parentService + "→" + service
+	t.mu.Lock()
+	e, ok := t.edges[key]
+	if !ok {
+		e = &edgeStats{From: parentService, To: service}
+		t.edges[key] = e
+	}
+	e.Calls++
+	e.TotalLatencyNS += durationNS
+	if isError {
+		e.Errors++
+	}
+	t.mu.Unlock()
+}
+
+// Edges returns a snapshot of current service edges.
+func (t *TopologyBuilder) Edges() []models.ServiceEdge {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	out := make([]models.ServiceEdge, 0, len(t.edges))
+	for _, e := range t.edges {
+		avgLat := 0.0
+		if e.Calls > 0 {
+			avgLat = float64(e.TotalLatencyNS) / float64(e.Calls) / 1e6
+		}
+		out = append(out, models.ServiceEdge{
+			From:     e.From,
+			To:       e.To,
+			Calls:    e.Calls,
+			Errors:   e.Errors,
+			AvgLatMS: avgLat,
+		})
+	}
+	return out
+}
+
 // --- kpiRing: lightweight time-stamped ring buffer ---
 
 type kpiPoint struct {

@@ -17,6 +17,7 @@ type Metric struct {
 	Timestamp time.Time         `json:"timestamp"`
 	Labels    map[string]string `json:"labels,omitempty"`
 	Host      string            `json:"host"`
+	Workload  WorkloadRef       `json:"workload,omitempty"` // K8s workload identity
 }
 
 // MetricBatch is a collection of metrics sent by an agent
@@ -29,30 +30,118 @@ type MetricBatch struct {
 
 // KPI represents a computed composite KPI
 type KPI struct {
-	Name      string    `json:"name"`
-	Value     float64   `json:"value"`
-	State     string    `json:"state"`
-	Timestamp time.Time `json:"timestamp"`
-	Host      string    `json:"host"`
+	Name      string      `json:"name"`
+	Value     float64     `json:"value"`
+	State     string      `json:"state"`
+	Timestamp time.Time   `json:"timestamp"`
+	Host      string      `json:"host"`
+	Workload  WorkloadRef `json:"workload,omitempty"` // K8s workload identity
 }
 
 // KPISnapshot holds all current KPIs for a host
 type KPISnapshot struct {
-	Host        string    `json:"host"`
-	Timestamp   time.Time `json:"timestamp"`
-	Stress      KPI       `json:"stress"`
-	Fatigue     KPI       `json:"fatigue"`
-	Mood        KPI       `json:"mood"`
-	Pressure    KPI       `json:"pressure"`
-	Humidity    KPI       `json:"humidity"`
-	Contagion   KPI       `json:"contagion"`
+	Host        string      `json:"host"`
+	Workload    WorkloadRef `json:"workload,omitempty"` // K8s workload identity
+	Timestamp   time.Time   `json:"timestamp"`
+	Stress      KPI         `json:"stress"`
+	Fatigue     KPI         `json:"fatigue"`
+	Mood        KPI         `json:"mood"`
+	Pressure    KPI         `json:"pressure"`
+	Humidity    KPI         `json:"humidity"`
+	Contagion   KPI         `json:"contagion"`
 	// ETF-style composed KPIs
-	Resilience  KPI       `json:"resilience"`   // ability to absorb disruption
-	Entropy     KPI       `json:"entropy"`      // system disorder level
-	Velocity    KPI       `json:"velocity"`     // rate of change (momentum)
-	HealthScore KPI       `json:"health_score"` // single composite executive KPI [0-100]
+	Resilience  KPI `json:"resilience"`   // ability to absorb disruption
+	Entropy     KPI `json:"entropy"`      // system disorder level
+	Velocity    KPI `json:"velocity"`     // rate of change (momentum)
+	HealthScore KPI `json:"health_score"` // single composite executive KPI [0-100]
+	// v6.1: throughput collapse signal
+	Throughput KPI `json:"throughput"`
+	// v6.2: fused rupture index (metric R + log R + trace R combined)
+	FusedRuptureIndex float64 `json:"fused_rupture_index,omitempty"`
 	// v5.0: dual-scale CA-ILR rupture events (omitted when none detected)
 	RuptureEvents []RuptureEvent `json:"rupture_events,omitempty"`
+	// v6.3: calibration warm-up state
+	WorkloadStatus      string `json:"status"`                                 // "calibrating" | "active"
+	CalibrationProgress int    `json:"calibration_progress"`                    // 0–100
+	CalibrationETA      int    `json:"calibration_eta_minutes,omitempty"`        // minutes until active; 0 when active
+	// v6.3: HealthScore trend forecast (nil when calibrating or insufficient data)
+	HealthForecast *HealthForecast `json:"health_forecast,omitempty"`
+	// v6.4: rupture fingerprint pattern match (nil when no historical match found)
+	PatternMatch *PatternMatch `json:"pattern_match,omitempty"`
+	// v6.4: business-layer signals
+	Business *BusinessSignals `json:"business,omitempty"`
+}
+
+// RuptureFingerprint is the 11-dimensional KPI signal vector captured at a confirmed
+// rupture (FusedR > 3.0). Used by the fingerprint engine for cosine similarity matching.
+type RuptureFingerprint struct {
+	ID          string      `json:"id"`
+	WorkloadKey string      `json:"workload_key"`
+	CapturedAt  time.Time   `json:"captured_at"`
+	Vector      [11]float64 `json:"vector"` // [stress, fatigue, 1-mood, pressure, humidity, contagion, 1-resilience, entropy, velocity, throughput, fusedR/10]
+	FusedR      float64     `json:"fused_r"`
+	Resolution  string      `json:"resolution,omitempty"` // how the rupture was resolved
+}
+
+// PatternMatch indicates the current snapshot resembles a past rupture fingerprint.
+type PatternMatch struct {
+	Similarity       float64   `json:"similarity"`
+	MatchedRuptureID string    `json:"matched_rupture_id"`
+	MatchedAt        time.Time `json:"matched_at"`
+	Resolution       string    `json:"resolution,omitempty"`
+}
+
+// SignalWeights defines per-selector HealthScore signal weights (v6.6).
+// Selector is a glob pattern matched against workload keys (e.g. "payments/*", "batch/*", "*").
+// Weights are normalised to sum to 1.0 on load. Omitted fields default to 0.
+type SignalWeights struct {
+	Selector  string  `json:"selector" yaml:"selector"`
+	Stress    float64 `json:"stress"   yaml:"stress"`
+	Fatigue   float64 `json:"fatigue"  yaml:"fatigue"`
+	Mood      float64 `json:"mood"     yaml:"mood"`
+	Pressure  float64 `json:"pressure" yaml:"pressure"`
+	Humidity  float64 `json:"humidity" yaml:"humidity"`
+	Contagion float64 `json:"contagion" yaml:"contagion"`
+}
+
+// DefaultSignalWeights returns the canonical HealthScore weights used when no
+// per-workload override matches.
+func DefaultSignalWeights() SignalWeights {
+	return SignalWeights{
+		Selector:  "*",
+		Stress:    0.25,
+		Fatigue:   0.20,
+		Mood:      0.20,
+		Pressure:  0.15,
+		Humidity:  0.10,
+		Contagion: 0.10,
+	}
+}
+
+// SLOConfig defines the error budget contract for a workload.
+type SLOConfig struct {
+	TargetPercent      float64 `json:"target_percent"`       // e.g. 99.9
+	WindowDays         int     `json:"window_days"`          // e.g. 30
+	ErrorBudgetMinutes float64 `json:"error_budget_minutes"` // e.g. 43.2
+}
+
+// BusinessSignals holds P1 business-layer KPIs (v6.4).
+type BusinessSignals struct {
+	// SLOBurnVelocity is the ratio of current error rate to the allowed error rate.
+	// 1.0 = exactly on budget, > 1.0 = burning too fast. 0 = no SLO configured.
+	SLOBurnVelocity float64 `json:"slo_burn_velocity,omitempty"`
+	// BlastRadius is the count of unique downstream workloads that depend on this one.
+	BlastRadius int `json:"blast_radius"`
+	// RecoveryDebt is the count of near-misses (FusedR 2–3, recovered without rupture) in the last 7 days.
+	RecoveryDebt int `json:"recovery_debt"`
+}
+
+// HealthForecast is a lightweight linear projection of HealthScore trend.
+type HealthForecast struct {
+	Trend              string  `json:"trend"`                          // "stable" | "improving" | "degrading"
+	In15Min            float64 `json:"in_15min"`                       // projected HealthScore (0–100) in 15 minutes
+	In30Min            float64 `json:"in_30min"`                       // projected HealthScore (0–100) in 30 minutes
+	CriticalETAMinutes int     `json:"critical_eta_minutes,omitempty"` // minutes until HealthScore < 40; 0 if not degrading to critical
 }
 
 // NotificationChannel is a configured alert delivery target

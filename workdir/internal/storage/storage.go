@@ -6,8 +6,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/benfradjselim/ruptura/pkg/models"
 	"github.com/dgraph-io/badger/v3"
 )
 
@@ -22,7 +24,9 @@ const (
 
 // Store wraps Badger with typed key helpers
 type Store struct {
-	db *badger.DB
+	db            *badger.DB
+	snapshotsMu   sync.RWMutex
+	snapshots     map[string]models.KPISnapshot // host → latest snapshot (in-memory)
 }
 
 // Open opens (or creates) the Badger database at path
@@ -36,7 +40,66 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open badger: %w", err)
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, snapshots: make(map[string]models.KPISnapshot)}, nil
+}
+
+// StoreSnapshot saves the latest KPISnapshot indexed by host name AND WorkloadRef.Key().
+// Both keys are stored so both /rupture/{host} and /rupture/{ns}/{workload} resolve correctly.
+func (s *Store) StoreSnapshot(snap models.KPISnapshot) {
+	s.snapshotsMu.Lock()
+	if snap.Host != "" {
+		s.snapshots[snap.Host] = snap
+	}
+	if !snap.Workload.IsEmpty() {
+		if key := snap.Workload.Key(); key != snap.Host {
+			s.snapshots[key] = snap
+		}
+	}
+	s.snapshotsMu.Unlock()
+}
+
+// LatestSnapshot returns the most recent KPISnapshot for a host name or WorkloadRef.Key().
+func (s *Store) LatestSnapshot(key string) (models.KPISnapshot, bool) {
+	s.snapshotsMu.RLock()
+	snap, ok := s.snapshots[key]
+	s.snapshotsMu.RUnlock()
+	return snap, ok
+}
+
+// AllSnapshots returns copies of all stored KPISnapshots.
+func (s *Store) AllSnapshots() []models.KPISnapshot {
+	s.snapshotsMu.RLock()
+	result := make([]models.KPISnapshot, 0, len(s.snapshots))
+	for _, snap := range s.snapshots {
+		result = append(result, snap)
+	}
+	s.snapshotsMu.RUnlock()
+	return result
+}
+
+// FlushSnapshots persists all in-memory snapshots to BadgerDB for durability on shutdown.
+// This is the NFR-05 implementation: no data loss on graceful shutdown.
+func (s *Store) FlushSnapshots() error {
+	s.snapshotsMu.RLock()
+	snaps := make([]models.KPISnapshot, 0, len(s.snapshots))
+	for _, snap := range s.snapshots {
+		snaps = append(snaps, snap)
+	}
+	s.snapshotsMu.RUnlock()
+
+	for _, snap := range snaps {
+		key := "snapshot:" + snap.Host
+		if err := s.set(key, snap, KPIsTTL); err != nil {
+			return fmt.Errorf("flush snapshot %s: %w", snap.Host, err)
+		}
+		if !snap.Workload.IsEmpty() {
+			wKey := "snapshot:" + snap.Workload.Key()
+			if err := s.set(wKey, snap, KPIsTTL); err != nil {
+				return fmt.Errorf("flush snapshot workload %s: %w", snap.Workload.Key(), err)
+			}
+		}
+	}
+	return nil
 }
 
 // Close shuts the database
