@@ -31,7 +31,7 @@ import (
 	"github.com/benfradjselim/ruptura/pkg/utils"
 )
 
-const version = "6.4.0"
+const version = "6.5.0"
 
 // Config holds all runtime configuration parsed from CLI flags.
 type Config struct {
@@ -39,6 +39,7 @@ type Config struct {
 	OTLPPort    int
 	StoragePath string
 	APIKey      string
+	Edition     string // "community" (default) or "autopilot"
 	ShowVersion bool
 }
 
@@ -51,6 +52,13 @@ func parseFlags(args []string) (Config, error) {
 	fs.StringVar(&cfg.APIKey, "api-key", "", "API bearer token")
 	fs.BoolVar(&cfg.ShowVersion, "version", false, "print version and exit")
 	err := fs.Parse(args)
+	if cfg.Edition == "" {
+		if e := os.Getenv("RUPTURA_EDITION"); e != "" {
+			cfg.Edition = e
+		} else {
+			cfg.Edition = "community"
+		}
+	}
 	return cfg, err
 }
 
@@ -264,6 +272,7 @@ func runWithContext(ctx context.Context, cfg Config) error {
 
 	handlers := api.New(store, actionEngine, explainer, al, predictorEngine, pipelineEngine, ctxStore, detector, metricsReg, healthCheck, cfg.APIKey)
 	handlers.SetAnalyzer(analyzerEngine)
+	handlers.SetEdition(cfg.Edition)
 	handlers.SetReady(true)
 
 	router := handlers.NewRouter()

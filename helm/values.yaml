@@ -17,6 +17,11 @@ fullnameOverride: ""
 # If empty, authentication is disabled (dev/testing only).
 apiKey: ""
 
+# -- Product edition: "community" (default) or "autopilot".
+# community: action recommendations are visible (read-only); approve endpoint returns 402.
+# autopilot: full Tier-1 auto-execution and manual action approval enabled.
+edition: community
+
 # -- Auto-discovery: Ruptura discovers all Deployments/StatefulSets in the cluster
 # when workloads send OTLP metrics with k8s.* resource attributes.
 autodiscovery:

@@ -67,6 +67,8 @@ spec:
             {{- end }}
             - name: RUPTURA_INGEST_RPS
               value: {{ .Values.ingestRPS | quote }}
+            - name: RUPTURA_EDITION
+              value: {{ .Values.edition | default "community" | quote }}
           livenessProbe:
             httpGet:
               path: /api/v2/health

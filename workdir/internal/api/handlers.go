@@ -31,12 +31,16 @@ type Handlers struct {
     startTime  time.Time
     ready      int32  // atomic: 1=ready
     apiKey     string // expected bearer token; "" disables auth
+    edition    string // "community" (default) or "autopilot"
     // v6.3: calibration + forecast enrichment
     analyzer   *analyzer.Analyzer
 }
 
 // SetAnalyzer wires the analyzer for calibration status and HealthScore forecasting.
 func (h *Handlers) SetAnalyzer(a *analyzer.Analyzer) { h.analyzer = a }
+
+// SetEdition sets the product edition: "community" (default) or "autopilot".
+func (h *Handlers) SetEdition(e string) { h.edition = e }
 
 func NewHandlers(
     store *storage.Store,

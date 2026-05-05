@@ -970,7 +970,7 @@ slos:
 ### P2 — Commercial foundation
 
 #### IMPROVE-06 — Feature Gate: Action Engine Behind Edition Flag
-**Status**: [ ] Not started
+**Status**: [x] shipped v6.5.0
 
 **Problem**: Without a hard ceiling between free and paid, there is no commercial path. The action engine (autopilot) is the most valuable feature — it should be the thing you pay for.
 
@@ -1027,7 +1027,7 @@ workloadWeights:
 | IMPROVE-03 | Ruptura simulator (`ruptura-sim`) | P0 | ~4 days | [x] shipped v6.3.0 |
 | IMPROVE-04 | Rupture fingerprinting | P1 | ~1 week | [x] shipped v6.4.0 |
 | IMPROVE-05 | Business signal layer (3 signals) | P1 | ~1 week | [x] shipped v6.4.0 |
-| IMPROVE-06 | Feature gate / edition flag | P2 | ~2 days | [ ] |
+| IMPROVE-06 | Feature gate / edition flag | P2 | ~2 days | [x] shipped v6.5.0 |
 | IMPROVE-07 | Per-workload weight tuning | P2 | ~3 days | [ ] |
 
 ---
@@ -1056,3 +1056,15 @@ workloadWeights:
 **Remaining P1**: none.
 
 **Next: P2** — IMPROVE-06 (edition gate) and IMPROVE-07 (per-workload weight tuning).
+
+---
+
+### v6.5.0 (shipped — P2 commercial foundation, first gate)
+
+**What shipped**:
+- **IMPROVE-06 — Feature gate / edition flag**: `RUPTURA_EDITION` env var (`community` | `autopilot`; default `community`). In `community` mode, `POST /api/v2/actions/{id}/approve` returns `402 Payment Required` with an upgrade message — action recommendations remain visible read-only. In `autopilot` mode, no change to existing approval flow. Edition wired into `Config.Edition` in `main.go` (parsed from env at startup), passed to `Handlers.SetEdition()`. Edition check is evaluated before the nil-engine guard so it fires even in test configurations. Helm `values.yaml` gains `edition: community` with `RUPTURA_EDITION` env var injected into the Deployment template. Two new tests verify 402 in community and non-402 in autopilot.
+- **`go test -race ./...`**: all 38 packages pass clean.
+
+**Remaining P2**: IMPROVE-07 (per-workload signal weight tuning).
+
+**Next**: IMPROVE-07.
