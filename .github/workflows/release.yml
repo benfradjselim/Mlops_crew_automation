@@ -227,7 +227,7 @@ jobs:
         run: |
           helm upgrade --install ruptura \
             oci://${{ env.REGISTRY }}/${{ github.repository_owner }}/charts/ruptura \
-            --version 0.6.3 \
+            --version 0.6.6 \
             --namespace ruptura \
             --create-namespace \
             --set image.tag="${TAG}" \
