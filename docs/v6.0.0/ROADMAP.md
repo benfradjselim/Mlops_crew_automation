@@ -199,35 +199,71 @@ Phase 2b: BRAVO     Phase 2c: CHARLIE   (parallel after ALPHA green)
 
 ---
 
-## v6.2.0 — PLANNED (Q2 2026)
+## v6.2.x — ✅ RELEASED 2026-04-30
 
-Theme: **Operability + SaaS foundations**
+Theme: **Fused Rupture Index + workload-level signals**
 
-| Item | Spec | Agent | Priority |
-|------|------|-------|---------|
-| `kairoctl` CLI (Go binary, full v2 API) | §27 | PAPA | P0 |
-| Multi-tenant opt-in flag (`--multi-tenant`) | §28 | QUEBEC | P0 |
-| Web dashboard v2 (eventbus, adaptive weights, operator status) | §29 | ROMEO | P1 |
-| Helm chart v2 (operator CRD + eventbus config) | §30 | SIERRA | P1 |
-| Alerting templates (Alertmanager, PagerDuty pre-built rules) | §30 | SIERRA | P1 |
-| Python SDK v6.1 (eventbus, adaptive, operator methods) | — | LIMA | P0 |
-| Go SDK v6.1 (eventbus, adaptive, operator methods) | — | KILO | P0 |
+| Item | Detail |
+|------|--------|
+| Fused Rupture Index (metricR · logR · traceR) | Three-source fusion; requires ≥ 2 sources to reach critical |
+| Workload-level signals (WorkloadRef) | Pods merged per `namespace/kind/name`; adaptive per-workload baselines |
+| Narrative explain | `GET /api/v2/explain/{id}/narrative` — structured English causal chain |
+| Topology contagion | Real service edges from trace spans with proxy fallback |
+| Maintenance windows | `POST/GET/DELETE /api/v2/suppressions` |
+| Anomaly REST endpoints (v6.2.2) | `GET /api/v2/anomalies`, `GET /api/v2/anomalies/{host}` |
 
 ---
 
-## v6.3.0 — PLANNED (Q3 2026)
+## v6.3.0 — ✅ RELEASED 2026-05-04
 
-Theme: **Commercial SaaS + CNCF**
+Theme: **Calibration + forecasting + simulation**
 
-| Item | Priority |
-|------|---------|
-| Self-serve onboarding (sign-up → org → API key) | P0 |
-| Billing integration (Stripe, metering hooks already exist) | P0 |
-| Managed cloud deployment (Fly.io / Railway free tier) | P0 |
-| Marketing + documentation site | P1 |
-| GOVERNANCE.md, MAINTAINERS.md, CODE_OF_CONDUCT.md, SECURITY.md | P0 |
-| Multi-arch Docker builds (amd64 + arm64) | P1 |
-| CNCF Sandbox application | P1 |
+| Item | Detail |
+|------|--------|
+| Calibration warm-up | `calibrating` state for first 96 observations; `calibration_progress` + `calibration_eta_minutes` in every snapshot |
+| HealthScore trend forecast | OLS regression → `in_15min`, `in_30min`, `critical_eta_minutes` |
+| ruptura-sim | Companion binary; 4 patterns: `memory-leak`, `cascade-failure`, `traffic-surge`, `slow-burn` via `POST /api/v2/sim/inject` |
+
+---
+
+## v6.4.0 — ✅ RELEASED 2026-05-05
+
+Theme: **Rupture fingerprinting + business signals**
+
+| Item | Detail |
+|------|--------|
+| Rupture fingerprinting | 11-dimensional KPI vector per confirmed rupture; cosine similarity ≥ 0.85 → `pattern_match` in response |
+| Business signal layer | `slo_burn_velocity`, `blast_radius`, `recovery_debt` in every snapshot's `business` block |
+
+---
+
+## v6.5.0 — ✅ RELEASED 2026-05-05
+
+Theme: **Edition gate**
+
+| Item | Detail |
+|------|--------|
+| Edition gate | `RUPTURA_EDITION=community|autopilot`; community blocks `POST .../approve` with 402; autopilot enables full execution |
+
+---
+
+## v6.6.0 — ✅ RELEASED 2026-05-05
+
+Theme: **Per-workload signal weight tuning**
+
+| Item | Detail |
+|------|--------|
+| Per-workload signal weights | `POST/GET /api/v2/config/weights`; selector syntax: exact, `ns/*` prefix, `*` wildcard; `RUPTURA_WORKLOAD_WEIGHTS` env var for K8s bootstrap |
+
+---
+
+## v7.0.0 — PLANNED (Q3 2026)
+
+| Feature | Detail |
+|---------|--------|
+| `ruptura-ctl` CLI | `ruptura-ctl status`, `ruptura-ctl explain <id>`, `ruptura-ctl suppress <workload> 30m` |
+| Web dashboard v2 | Embedded Svelte UI: FusedR heatmap, signal timelines, action log, narrative explain panel |
+| Multi-tenant opt-in | X-Org-ID header → namespace filter on all queries; per-org storage namespacing |
 
 ---
 
@@ -267,4 +303,4 @@ ALPHA → (BRAVO || CHARLIE) → DELTA → ECHO → FOXTROT → tag v6.0.0
 ---
 
 Produced: 2026-04-24
-Last updated: 2026-04-27 — v6.1.0 released; v6.2 and v6.3 planned
+Last updated: 2026-05-05 — v6.6.0 released; v7.0.0 planned

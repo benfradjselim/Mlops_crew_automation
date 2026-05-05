@@ -175,12 +175,12 @@ docker run -d \
 ## What's Inside
 
 ```
-workdir/                  Ruptura Go source (v6.2.2)
+workdir/                  Ruptura Go source (v6.6.0)
   cmd/ruptura/            Main binary
   internal/               Engine, pipelines, API, storage, actions, fusion
   pkg/                    Public Go packages (rupture, composites, client)
   deploy/
-    helm/ruptura/         Helm chart (v0.2.0, appVersion 6.2.2)
+    helm/ruptura/         Helm chart (v0.6.6, appVersion 6.6.0)
     *.yaml                Kustomize manifests
     grafana/              Grafana dashboard JSON + provisioning
   ohe/operator/           Kubernetes operator (RupturaInstance CRD)
@@ -196,6 +196,10 @@ docs/
 ## Roadmap
 
 ```
+v6.6.0 ✅  Per-workload signal weight tuning (runtime + env bootstrap)
+v6.5.0 ✅  Edition gate — community (read-only) / autopilot (full execution)
+v6.4.0 ✅  Rupture fingerprinting · business signal layer (SLO burn, blast radius)
+v6.3.0 ✅  Calibration warm-up · HealthScore ETA forecast · ruptura-sim
 v6.2.x ✅  Fused Rupture Index · workload-level signals · adaptive baselines
             narrative explain · topology contagion · maintenance windows
 v6.1.0 ✅  gRPC ingest · NATS/Kafka eventbus · adaptive ensemble · K8s operator
