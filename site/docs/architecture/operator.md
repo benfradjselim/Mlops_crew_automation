@@ -1,6 +1,6 @@
 # Kubernetes Operator
 
-Ruptura v6.1 ships a Kubernetes operator that manages `RupturaInstance` custom resources. The operator reconciles a Deployment, Service, and PersistentVolumeClaim for each instance, keeping the cluster state aligned with the declared spec.
+Ruptura ships a Kubernetes operator that manages `RupturaInstance` custom resources. The operator reconciles a Deployment, Service, and PersistentVolumeClaim for each instance, keeping the cluster state aligned with the declared spec.
 
 ## CRD: RupturaInstance
 
@@ -11,7 +11,7 @@ metadata:
   name: production
   namespace: ruptura-system
 spec:
-  image: ruptura:6.1.0        # container image to run
+  image: ghcr.io/benfradjselim/ruptura:6.6.0        # container image to run
   port: 8080                      # HTTP port (REST API)
   storageSize: 20Gi               # PVC size for BadgerDB
   apiKey:
@@ -46,7 +46,7 @@ metadata:
   name: production
   namespace: ruptura-system
 spec:
-  image: ruptura:6.1.0
+  image: ghcr.io/benfradjselim/ruptura:6.6.0
   port: 8080
   storageSize: 20Gi
   apiKey:
