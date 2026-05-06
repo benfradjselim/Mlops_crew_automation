@@ -36,6 +36,7 @@ func (h *Handlers) NewRouter() http.Handler {
 
 	api.HandleFunc("/ruptures", h.handleRuptures).Methods("GET")
 
+	api.HandleFunc("/rupture/{namespace}/{kind}/{workload}", h.handleRuptureByWorkload3).Methods("GET")
 	api.HandleFunc("/rupture/{namespace}/{workload}", h.handleRuptureByWorkload).Methods("GET")
 	api.HandleFunc("/kpi/{name}/{namespace}/{workload}", h.handleKPIByWorkload).Methods("GET")
 
@@ -70,10 +71,10 @@ func (h *Handlers) NewRouter() http.Handler {
 	api.HandleFunc("/history/{workload:.+}", h.handleHistory).Methods("GET")
 	api.HandleFunc("/events", h.handleEvents).Methods("GET")
 
-	api.HandleFunc("/explain/{rupture_id}", h.handleExplain).Methods("GET")
-	api.HandleFunc("/explain/{rupture_id}/formula", h.handleExplain).Methods("GET")
-	api.HandleFunc("/explain/{rupture_id}/pipeline", h.handleExplain).Methods("GET")
-	api.HandleFunc("/explain/{rupture_id}/narrative", h.handleExplain).Methods("GET")
+	api.HandleFunc("/explain/{rupture_id:.+}/narrative", h.handleExplain).Methods("GET")
+	api.HandleFunc("/explain/{rupture_id:.+}/formula", h.handleExplain).Methods("GET")
+	api.HandleFunc("/explain/{rupture_id:.+}/pipeline", h.handleExplain).Methods("GET")
+	api.HandleFunc("/explain/{rupture_id:.+}", h.handleExplain).Methods("GET")
 
 	api.HandleFunc("/v1/{signal:metrics|logs|traces}", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMisdirectedRequest, map[string]string{

@@ -121,6 +121,26 @@ func (h *Handlers) handleRuptures(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, snapshots)
 }
 
+// handleRuptureByWorkload3 returns the latest KPISnapshot for a namespace/kind/workload key.
+func (h *Handlers) handleRuptureByWorkload3(w http.ResponseWriter, r *http.Request) {
+	if h.store == nil {
+		writeError(w, http.StatusNotFound, "store not available")
+		return
+	}
+	vars := mux.Vars(r)
+	namespace := vars["namespace"]
+	kind := vars["kind"]
+	workload := vars["workload"]
+
+	snap, ok := h.store.LatestSnapshot(namespace + "/" + kind + "/" + workload)
+	if !ok {
+		writeError(w, http.StatusNotFound, "no data for workload: "+namespace+"/"+kind+"/"+workload)
+		return
+	}
+	h.enrichSnapshot(&snap)
+	writeJSON(w, http.StatusOK, snap)
+}
+
 // handleRuptureByWorkload returns the latest KPISnapshot for a namespace/workload key.
 func (h *Handlers) handleRuptureByWorkload(w http.ResponseWriter, r *http.Request) {
 	if h.store == nil {
@@ -372,49 +392,67 @@ func (h *Handlers) handleActions(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// suppressionResp is the wire format for suppression objects returned to clients.
+type suppressionResp struct {
+	ID       string    `json:"id"`
+	Workload string    `json:"workload"`
+	Start    time.Time `json:"start"`
+	End      time.Time `json:"end"`
+	Reason   string    `json:"reason,omitempty"`
+}
+
+func windowToResp(w alerter.MaintenanceWindow) suppressionResp {
+	return suppressionResp{
+		ID:       w.ID,
+		Workload: w.WorkloadKey,
+		Start:    w.From,
+		End:      w.Until,
+		Reason:   w.Reason,
+	}
+}
+
 // handleSuppressions handles POST (create window) and GET (list windows).
 func (h *Handlers) handleSuppressions(w http.ResponseWriter, r *http.Request) {
 	if h.alerter == nil {
-		writeJSON(w, http.StatusOK, []alerter.MaintenanceWindow{})
+		writeJSON(w, http.StatusOK, []suppressionResp{})
 		return
 	}
 	switch r.Method {
 	case http.MethodPost:
 		var req struct {
-			WorkloadKey string `json:"workload_key"`
-			From        string `json:"from"`  // RFC3339 or empty = now
-			Until       string `json:"until"` // RFC3339, required
-			Reason      string `json:"reason"`
+			Workload string    `json:"workload"`
+			Start    time.Time `json:"start"`
+			End      time.Time `json:"end"`
+			Reason   string    `json:"reason"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid body: "+err.Error())
 			return
 		}
-		until, err := time.Parse(time.RFC3339, req.Until)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid until: "+err.Error())
+		if req.End.IsZero() {
+			writeError(w, http.StatusBadRequest, "end time is required")
 			return
 		}
-		from := time.Now()
-		if req.From != "" {
-			if f, err := time.Parse(time.RFC3339, req.From); err == nil {
-				from = f
-			}
+		if req.Start.IsZero() {
+			req.Start = time.Now()
 		}
-		id := h.alerter.AddMaintenanceWindow(alerter.MaintenanceWindow{
-			WorkloadKey: req.WorkloadKey,
-			From:        from,
-			Until:       until,
+		win := alerter.MaintenanceWindow{
+			WorkloadKey: req.Workload,
+			From:        req.Start,
+			Until:       req.End,
 			Reason:      req.Reason,
-		})
-		writeJSON(w, http.StatusCreated, map[string]string{"id": id})
+		}
+		id := h.alerter.AddMaintenanceWindow(win)
+		win.ID = id
+		writeJSON(w, http.StatusCreated, windowToResp(win))
 
 	case http.MethodGet:
 		windows := h.alerter.ListMaintenanceWindows()
-		if windows == nil {
-			windows = []alerter.MaintenanceWindow{}
+		resp := make([]suppressionResp, 0, len(windows))
+		for _, win := range windows {
+			resp = append(resp, windowToResp(win))
 		}
-		writeJSON(w, http.StatusOK, windows)
+		writeJSON(w, http.StatusOK, resp)
 
 	case http.MethodDelete:
 		vars := mux.Vars(r)

@@ -2,8 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
-	"github.com/benfradjselim/ruptura/pkg/client"
+	"github.com/benfradjselim/ruptura/internal/sim"
 	"github.com/spf13/cobra"
 )
 
@@ -43,25 +44,34 @@ Available patterns:
 			return fmt.Errorf("unknown pattern %q — valid: memory-leak, cascade-failure, traffic-surge, slow-burn", pattern)
 		}
 
-		c := newClient()
-		req := client.SimInjectReq{
-			Pattern:         pattern,
-			Workload:        simWorkload,
-			DurationSeconds: simDuration,
+		workload := simWorkload
+		if workload == "" {
+			workload = "demo/Deployment/api"
 		}
-		resp, err := c.SimInject(ctx(), req)
-		if err != nil {
+
+		dur := time.Duration(simDuration) * time.Second
+		if dur == 0 {
+			dur = 60 * time.Second
+		}
+
+		fmt.Println()
+		fmt.Printf("  Injecting %s into %s for %s\n", cyan(pattern), cyan(workload), dim(dur.String()))
+		fmt.Printf("  %s\n\n", dim("Ticking every 5s — Ctrl+C to stop early"))
+
+		cfg := sim.Config{
+			Target:   cfgURL,
+			APIKey:   cfgAPIKey,
+			Workload: workload,
+			Pattern:  pattern,
+			Duration: dur,
+			Verbose:  true,
+		}
+		if err := sim.Run(cfg); err != nil {
 			return fmt.Errorf("sim inject: %w", err)
 		}
 
-		successLine(fmt.Sprintf("Pattern %s injected", cyan(resp.Pattern)))
-		if resp.Workload != "" {
-			fmt.Printf("  %-16s %s\n", dim("workload"), resp.Workload)
-		}
-		if resp.Message != "" {
-			fmt.Printf("  %-16s %s\n", dim("message"), dim(resp.Message))
-		}
 		fmt.Println()
+		successLine(fmt.Sprintf("Pattern %s complete", cyan(pattern)))
 		infoLine("Watch the effect: " + cyan("ruptura-ctl status"))
 		fmt.Println()
 		return nil

@@ -36,6 +36,7 @@ type Config struct {
 	Duration time.Duration // how long to run the pattern
 	Interval time.Duration // tick interval (default 5s)
 	Pattern  string        // one of AllPatterns
+	APIKey   string        // Bearer token for auth-enabled servers
 	Verbose  bool
 }
 
@@ -59,7 +60,7 @@ func Run(cfg Config) error {
 	tick := 0
 	for time.Now().Before(deadline) {
 		metrics := gen(tick, cfg)
-		if err := send(cfg.Target, cfg.Workload, metrics); err != nil {
+		if err := send(cfg.Target, cfg.APIKey, cfg.Workload, metrics); err != nil {
 			fmt.Printf("warn: send failed at tick %d: %v\n", tick, err)
 		}
 		if cfg.Verbose {
@@ -165,13 +166,21 @@ func slowBurnGen(tick int, _ Config) map[string]float64 {
 	}
 }
 
-func send(target, workload string, metrics map[string]float64) error {
+func send(target, apiKey, workload string, metrics map[string]float64) error {
 	payload := metricPayload{Workload: workload, Metrics: metrics}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	resp, err := http.Post(target+"/api/v2/sim/inject", "application/json", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, target+"/api/v2/sim/inject", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
