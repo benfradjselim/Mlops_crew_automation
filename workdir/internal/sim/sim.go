@@ -45,11 +45,14 @@ type metricPayload struct {
 	Metrics  map[string]float64 `json:"metrics"`
 }
 
+var simClient = &http.Client{Timeout: 10 * time.Second}
+
 // Run executes the simulation until duration elapses or ctx is cancelled.
 func Run(cfg Config) error {
 	if cfg.Interval == 0 {
 		cfg.Interval = 5 * time.Second
 	}
+	rand.Seed(time.Now().UnixNano()) //nolint:staticcheck // Go <1.20 compat
 
 	gen, err := patternGenerator(cfg.Pattern)
 	if err != nil {
@@ -180,7 +183,7 @@ func send(target, apiKey, workload string, metrics map[string]float64) error {
 	if apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := simClient.Do(req)
 	if err != nil {
 		return err
 	}

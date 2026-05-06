@@ -285,6 +285,9 @@ func (h *Handlers) handleForecast(w http.ResponseWriter, r *http.Request) {
 	horizon := 60 // default 60 minutes
 	if hStr := r.URL.Query().Get("horizon"); hStr != "" {
 		if v, err := strconv.Atoi(hStr); err == nil && v > 0 {
+			if v > 10080 {
+				v = 10080 // cap at 1 week
+			}
 			horizon = v
 		}
 	}
@@ -317,10 +320,11 @@ func (h *Handlers) handleForecast(w http.ResponseWriter, r *http.Request) {
 	result, ok := h.predictor.Forecast(host, metric, horizon)
 	if !ok {
 		// Predictor is warming up — return current stub with warming_up flag
-		snap, _ := h.store.LatestSnapshot(host)
 		var current float64
-		if m, exists := snap.Stress, snap.Stress.Name == metric; exists || m.Value > 0 {
-			current = snap.HealthScore.Value
+		if h.store != nil {
+			if snap, found := h.store.LatestSnapshot(host); found {
+				current = signalValue(snap, metric)
+			}
 		}
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"host":       host,
@@ -372,6 +376,7 @@ func (h *Handlers) handleActions(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		writeError(w, http.StatusNotFound, "action not found: "+id)
+		return
 
 	case http.MethodPost:
 		switch {
@@ -382,6 +387,17 @@ func (h *Handlers) handleActions(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusNotFound, "action not found: "+id)
 			}
 		case strings.HasSuffix(r.URL.Path, "/reject"):
+			found := false
+			for _, a := range h.engine.PendingActions() {
+				if a.ID == id {
+					found = true
+					break
+				}
+			}
+			if !found {
+				writeError(w, http.StatusNotFound, "action not found: "+id)
+				return
+			}
 			h.engine.Reject(id)
 			writeJSON(w, http.StatusOK, map[string]string{"status": "rejected", "id": id})
 		case strings.HasSuffix(r.URL.Path, "/rollback"):
@@ -464,7 +480,38 @@ func (h *Handlers) handleSuppressions(w http.ResponseWriter, r *http.Request) {
 
 // handleEmergencyStop triggers an emergency stop on the action engine.
 func (h *Handlers) handleEmergencyStop(w http.ResponseWriter, r *http.Request) {
+	if h.engine != nil {
+		h.engine.EmergencyStop()
+	}
 	writeJSON(w, http.StatusOK, map[string]bool{"emergency_stop": true})
+}
+
+// signalValue extracts the named KPI signal value from a snapshot.
+func signalValue(snap models.KPISnapshot, metric string) float64 {
+	switch metric {
+	case "stress":
+		return snap.Stress.Value
+	case "fatigue":
+		return snap.Fatigue.Value
+	case "mood":
+		return snap.Mood.Value
+	case "pressure":
+		return snap.Pressure.Value
+	case "humidity":
+		return snap.Humidity.Value
+	case "contagion":
+		return snap.Contagion.Value
+	case "resilience":
+		return snap.Resilience.Value
+	case "entropy":
+		return snap.Entropy.Value
+	case "velocity":
+		return snap.Velocity.Value
+	case "throughput":
+		return snap.Throughput.Value
+	default:
+		return snap.HealthScore.Value
+	}
 }
 
 // handleContext manages manual context entries.

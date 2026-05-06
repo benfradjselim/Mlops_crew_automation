@@ -30,6 +30,9 @@ func (h *Handlers) handleEvents(w http.ResponseWriter, r *http.Request) {
 	n := 50
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			if parsed > 1000 {
+				parsed = 1000
+			}
 			n = parsed
 		}
 	}

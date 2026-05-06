@@ -25,7 +25,10 @@ var statusCmd = &cobra.Command{
 			return fmt.Errorf("fetch snapshots: %w", err)
 		}
 
-		actions, _ := c.Actions(ctx())
+		actions, actErr := c.Actions(ctx())
+		if actErr != nil {
+			fmt.Printf("  %s\n", dim("(pending actions unavailable: "+actErr.Error()+")"))
+		}
 
 		// header box
 		edition := health.Edition

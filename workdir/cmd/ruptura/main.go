@@ -55,6 +55,9 @@ func parseFlags(args []string) (Config, error) {
 	fs.StringVar(&cfg.APIKey, "api-key", "", "API bearer token")
 	fs.BoolVar(&cfg.ShowVersion, "version", false, "print version and exit")
 	err := fs.Parse(args)
+	if cfg.APIKey == "" {
+		cfg.APIKey = os.Getenv("RUPTURA_API_KEY")
+	}
 	if cfg.Edition == "" {
 		if e := os.Getenv("RUPTURA_EDITION"); e != "" {
 			cfg.Edition = e
@@ -295,11 +298,12 @@ func runWithContext(ctx context.Context, cfg Config) error {
 	router := handlers.NewRouter()
 
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Port),
-		Handler:      router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              fmt.Sprintf(":%d", cfg.Port),
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	errCh := make(chan error, 1)
