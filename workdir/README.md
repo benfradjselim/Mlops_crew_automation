@@ -1,7 +1,7 @@
 # Ruptura
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-6.6.1-0069ff?style=for-the-badge" alt="v6.6.1">
+  <img src="https://img.shields.io/badge/version-6.6.2-0069ff?style=for-the-badge" alt="v6.6.2">
   <img src="https://img.shields.io/badge/go-1.21+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.21+">
   <img src="https://img.shields.io/badge/license-Apache%202.0-green?style=for-the-badge" alt="Apache 2.0">
   <img src="https://img.shields.io/badge/kubernetes-native-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes Native">
@@ -170,7 +170,7 @@ docker run -d \
   -p 4317:4317 \
   -v ruptura-data:/var/lib/ruptura/data \
   -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
-  ghcr.io/benfradjselim/ruptura:6.6.1
+  ghcr.io/benfradjselim/ruptura:6.6.2
 ```
 
 | Port | Purpose |
@@ -333,7 +333,7 @@ metadata:
   name: production
   namespace: ruptura-system
 spec:
-  image: ghcr.io/benfradjselim/ruptura:6.6.1
+  image: ghcr.io/benfradjselim/ruptura:6.6.2
   port: 8080
   storageSize: 20Gi
   apiKey:
@@ -356,6 +356,18 @@ helm lint helm/
 ---
 
 ## Changelog
+
+### v6.6.2 — 2026-05-06
+- **Timing-safe auth**: Bearer token comparison now uses `crypto/subtle.ConstantTimeCompare` — eliminates timing-oracle attack on the API key.
+- **Auth warning**: server logs `WARNING` at startup when `RUPTURA_API_KEY` is unset instead of silently accepting all requests.
+- **Emergency stop wired**: `POST /api/v2/actions/emergency-stop` now calls `engine.EmergencyStop()` (was a no-op).
+- **Forecast signal fix**: warm-up stub returns the requested signal's current value instead of always returning `health_score`; nil-guard on `h.store`.
+- **`RUPTURA_API_KEY` env var**: server reads the API key from the environment when `--api-key` is not set.
+- **Slowloris protection**: `http.Server` now sets `ReadHeaderTimeout: 5s`.
+- **Horizon + limit caps**: forecast `?horizon=` capped at 10 080 min; events `?limit=` capped at 1 000.
+- **Sim robustness**: injector uses `http.Client{Timeout: 10s}`; `math/rand` seeded at `Run()` start.
+- **`reject` 404**: `POST /api/v2/actions/{id}/reject` returns 404 for unknown IDs (was always 200).
+- **`ruptura-ctl status`**: `Actions()` error surfaced as a dim warning instead of silently discarded.
 
 ### v6.6.1 — 2026-05-06
 - **`sim inject` fixed**: CLI was sending `{pattern}` payload; server expects `{workload, metrics}`. Rewired to call `sim.Run()` directly — real metric ticks per pattern, correct format.

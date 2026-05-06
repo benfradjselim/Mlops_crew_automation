@@ -143,7 +143,7 @@ gRPC ingest ──────────────┘
       -p 4317:4317 \
       -v ruptura-data:/var/lib/ruptura/data \
       -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
-      ghcr.io/benfradjselim/ruptura:6.6.0
+      ghcr.io/benfradjselim/ruptura:6.6.2
 
     curl http://localhost:8080/api/v2/health
     ```
@@ -204,15 +204,13 @@ gRPC ingest ──────────────┘
 
 ## Current Release
 
-**v6.6.0** — all IMPROVE items shipped. Production-ready for Kubernetes evaluation.
+**v6.6.2** — pre-v7 security & correctness hardening. Production-ready for Kubernetes evaluation.
 
-- WorkloadRef-native pipeline (`namespace/kind/workload`, not host)
-- Adaptive per-workload baselines — no false alarms from batch jobs
-- Narrative explain at `/api/v2/explain/{id}/narrative`
-- Topology-based contagion from real trace service edges (OTLP)
-- Maintenance windows via `/api/v2/suppressions`
-- Anomaly REST endpoints at `/api/v2/anomalies`
-- Fused Rupture Index (metricR + logR + traceR) in every rupture response
-- 37 packages pass `go test -race ./...`
+- Timing-safe Bearer token auth (`crypto/subtle.ConstantTimeCompare`)
+- Emergency stop now wired to the action engine
+- Forecast warm-up returns correct per-signal values
+- Slowloris protection (`ReadHeaderTimeout: 5s`), horizon + limit caps
+- `RUPTURA_API_KEY` env var supported in addition to `--api-key` flag
+- All 37 packages pass `go test -race ./...`
 
 [Full changelog →](community/roadmap.md) · [Getting Started →](getting-started/installation.md) · [API Reference →](api/reference.md)

@@ -11,7 +11,7 @@ metadata:
   name: production
   namespace: ruptura-system
 spec:
-  image: ghcr.io/benfradjselim/ruptura:6.6.0        # container image to run
+  image: ghcr.io/benfradjselim/ruptura:6.6.2        # container image to run
   port: 8080                      # HTTP port (REST API)
   storageSize: 20Gi               # PVC size for BadgerDB
   apiKey:
@@ -46,7 +46,7 @@ metadata:
   name: production
   namespace: ruptura-system
 spec:
-  image: ghcr.io/benfradjselim/ruptura:6.6.0
+  image: ghcr.io/benfradjselim/ruptura:6.6.2
   port: 8080
   storageSize: 20Gi
   apiKey:

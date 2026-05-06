@@ -57,7 +57,7 @@ metadata:
   name: production
   namespace: ruptura-system
 spec:
-  image: ghcr.io/benfradjselim/ruptura:6.6.0
+  image: ghcr.io/benfradjselim/ruptura:6.6.2
   port: 8080
   storageSize: 20Gi
   apiKey:
@@ -98,7 +98,7 @@ curl http://localhost:8080/api/v2/health
 # docker-compose.yml
 services:
   ruptura:
-    image: ghcr.io/benfradjselim/ruptura:6.6.0
+    image: ghcr.io/benfradjselim/ruptura:6.6.2
     ports:
       - "8080:8080"
       - "4317:4317"

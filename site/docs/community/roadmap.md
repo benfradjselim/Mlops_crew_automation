@@ -2,6 +2,31 @@
 
 ## Released
 
+### v6.6.2 — 2026-05-06 ✅
+
+| Item | Detail |
+|------|--------|
+| Security: timing-safe auth | Bearer token comparison uses `crypto/subtle.ConstantTimeCompare` — eliminates timing-oracle on the API key. |
+| Security: auth warning | Server logs `WARNING` at startup when `RUPTURA_API_KEY` is unset. |
+| Emergency stop wired | `POST /api/v2/actions/emergency-stop` now calls `engine.EmergencyStop()` (was a no-op). |
+| Forecast signal fix | Warm-up stub returns the requested signal's current value via `signalValue()`; nil-guard on `h.store`. |
+| `RUPTURA_API_KEY` env var | Server reads the API key from the environment when `--api-key` flag is absent. |
+| Slowloris protection | `http.Server` sets `ReadHeaderTimeout: 5s`. |
+| Horizon + limit caps | `?horizon=` capped at 10 080 min (1 week); `?limit=` capped at 1 000. |
+| Sim robustness | Injector uses `http.Client{Timeout: 10s}`; `math/rand` seeded at `Run()` start. |
+| `reject` 404 | `POST /api/v2/actions/{id}/reject` returns 404 for unknown IDs. |
+| `ruptura-ctl status` | `Actions()` error surfaced as a dim warning. |
+
+### v6.6.1 — 2026-05-06 ✅
+
+| Item | Detail |
+|------|--------|
+| `sim inject` fixed | CLI was sending `{pattern}` payload; server expects `{workload, metrics}`. Rewired to `sim.Run()` — real metric ticks per pattern. |
+| `sim.send()` auth | `APIKey` added to `sim.Config`; every tick sends `Authorization: Bearer` header. |
+| 3-segment workload refs | `describe workload ns/Kind/name` was 404 — added `/rupture/{namespace}/{kind}/{workload}` route. |
+| Suppressions field mismatch | Handler now matches `workload`/`start`/`end` fields sent by the CLI. |
+| Health port label | `ruptura-ctl health` now shows `traces (OTLP :4317)`. |
+
 ### v6.6.0 — 2026-05-05 ✅
 
 | Item | Detail |
@@ -94,7 +119,6 @@ Clean-room rewrite from OHE v5.1 as `github.com/benfradjselim/ruptura`:
 
 | Feature | Detail |
 |---------|--------|
-| `ruptura-ctl` CLI | `ruptura-ctl status`, `ruptura-ctl explain <id>`, `ruptura-ctl suppress <workload> 30m` |
 | Web dashboard v2 | Embedded Svelte UI: Fused Rupture Index heatmap, signal timelines, action log, narrative explain panel |
 | Multi-tenant opt-in (FR-10) | X-Org-ID header → namespace filter on all queries; per-org storage namespacing |
 | Python SDK v2 | async support (`httpx`), type stubs, full v2 parity with Go SDK |
