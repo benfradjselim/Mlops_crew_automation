@@ -1,40 +1,62 @@
-// OHE Operator — minimal K8s controller for OHECluster CRDs.
+// ruptura-operator — lightweight Kubernetes operator for RupturaInstance CRDs.
 //
-// Build:
-//   go build -o ohe-operator ./
+// Build:  go build -o ruptura-operator ./
+// Deploy: kubectl apply -f ../deploy/crd/rupturainstances.ruptura.io.yaml
+//         kubectl apply -f ../deploy/operator.yaml
 //
-// Deploy:
-//   kubectl apply -f ../deploy/crd/oheclusters.yaml
-//   kubectl apply -f operator-deployment.yaml
-//
-// The operator runs a poll loop (default every 30s) that lists all OHECluster
-// resources and reconciles each one to the desired Deployment state.
+// The operator polls the API server every --interval seconds, lists all
+// RupturaInstance resources cluster-wide, and reconciles each to the desired
+// Deployment + Service + (on OpenShift) Route state.
 package main
 
 import (
 	"context"
 	"flag"
+	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-	"github.com/benfradjselim/ruptura/pkg/logger"
 )
+
+const operatorVersion = "0.6.7"
+
+var logger = log.New(os.Stdout, "", 0)
+
+func logInfo(msg string, kvs ...interface{}) {
+	logger.Print(fmtKVs("INFO", msg, kvs...))
+}
+
+func logError(msg string, kvs ...interface{}) {
+	logger.Print(fmtKVs("ERROR", msg, kvs...))
+}
+
+func fmtKVs(level, msg string, kvs ...interface{}) string {
+	s := fmt.Sprintf(`level=%s msg=%q`, level, msg)
+	for i := 0; i+1 < len(kvs); i += 2 {
+		s += fmt.Sprintf(" %v=%q", kvs[i], fmt.Sprintf("%v", kvs[i+1]))
+	}
+	return s
+}
 
 func main() {
 	interval := flag.Duration("interval", 30*time.Second, "reconcile poll interval")
 	flag.Parse()
 
-	log.SetFlags(log.Ldate | log.Ltime | log.Lmsgprefix)
-	log.SetPrefix("[ohe-operator] ")
-	logger.Default.Info("operator starting", "interval", *interval)
+	logInfo("ruptura-operator starting", "version", operatorVersion, "interval", interval.String())
 
 	c, err := newK8sClient()
 	if err != nil {
-		logger.Default.Error("init K8s client failed", "err", err)
-	os.Exit(1)
+		logError("failed to init K8s client", "err", err)
+		os.Exit(1)
 	}
-	logger.Default.Info("in-cluster client ready", "namespace", c.ns)
+	logInfo("in-cluster client ready", "namespace", c.ns)
+
+	isOCP := c.routeAPIAvailable()
+	if isOCP {
+		logInfo("OpenShift detected — Route reconciliation enabled")
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -42,29 +64,31 @@ func main() {
 	ticker := time.NewTicker(*interval)
 	defer ticker.Stop()
 
-	// Run once immediately, then on each tick.
-	runReconcileLoop(c)
+	runLoop(ctx, c, isOCP)
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Default.Info("shutting down")
+			logInfo("shutting down")
 			return
 		case <-ticker.C:
-			runReconcileLoop(c)
+			runLoop(ctx, c, isOCP)
 		}
 	}
 }
 
-// runReconcileLoop lists all OHECluster resources and reconciles each.
-func runReconcileLoop(c *k8sClient) {
-	var list OHEClusterList
-	// List across all namespaces
-	if err := c.get("/apis/ohe.io/v1alpha1/oheclusters", &list); err != nil {
-		logger.Default.Error("list OHEClusters error", "err", err)
+func runLoop(ctx context.Context, c *k8sClient, isOCP bool) {
+	var list RupturaInstanceList
+	if err := c.get("/apis/ruptura.io/v1alpha1/rupturainstances", &list); err != nil {
+		logError("list RupturaInstances failed", "err", err)
 		return
 	}
-	logger.Default.Info("OHEClusters found", "count", len(list.Items))
-	for _, cluster := range list.Items {
-		reconcile(c, cluster)
+	logInfo("reconcile loop", "count", len(list.Items))
+	for _, inst := range list.Items {
+		if err := reconcile(ctx, c, inst, isOCP); err != nil {
+			logError("reconcile failed",
+				"name", inst.Metadata.Name,
+				"namespace", inst.Metadata.Namespace,
+				"err", err)
+		}
 	}
 }

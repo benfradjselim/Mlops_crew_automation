@@ -62,3 +62,4 @@ build/
 dist/
 site/site/
 workdir/ruptura
+workdir/operator/ruptura-operator

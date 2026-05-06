@@ -1,39 +1,103 @@
 ---
-# OHE Operator — watches OHECluster CRDs and reconciles Deployments.
-# Apply after: crd/oheclusters.yaml and rbac.yaml
+# ServiceAccount for the operator pod itself.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: ruptura-operator
   namespace: ruptura-system
+  labels:
+    app.kubernetes.io/name: ruptura
+    app.kubernetes.io/component: operator
+---
+# ServiceAccount for the Ruptura instance pods created by the operator.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ruptura-instance
+  namespace: ruptura-system
+  labels:
+    app.kubernetes.io/name: ruptura
+    app.kubernetes.io/component: instance
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: ruptura-operator
+  labels:
+    app.kubernetes.io/name: ruptura
+    app.kubernetes.io/component: operator
 rules:
-- apiGroups: ["ohe.io"]
-  resources: ["oheclusters", "oheclusters/status"]
-  verbs: ["get", "list", "watch", "update", "patch"]
-- apiGroups: ["apps"]
-  resources: ["deployments"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-- apiGroups: [""]
-  resources: ["services", "configmaps", "persistentvolumeclaims"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Manage RupturaInstance CRDs
+  - apiGroups: ["ruptura.io"]
+    resources: ["rupturainstances", "rupturainstances/status"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  # Manage Deployments
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Manage Services and PVCs; read Secrets for apiKeyRef
+  - apiGroups: [""]
+    resources: ["services", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+  # OpenShift Routes (no-op on vanilla K8s — API simply won't be present)
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # OpenShift SCC probe (read-only)
+  - apiGroups: ["security.openshift.io"]
+    resources: ["securitycontextconstraints"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: ruptura-operator
+  labels:
+    app.kubernetes.io/name: ruptura
+    app.kubernetes.io/component: operator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: ruptura-operator
 subjects:
-- kind: ServiceAccount
-  name: ruptura-operator
-  namespace: ruptura-system
+  - kind: ServiceAccount
+    name: ruptura-operator
+    namespace: ruptura-system
+---
+# Allow operator + instance pods to use restricted-v2 SCC on OpenShift.
+# Ignored on vanilla Kubernetes.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ruptura-scc
+  labels:
+    app.kubernetes.io/name: ruptura
+rules:
+  - apiGroups: ["security.openshift.io"]
+    resources: ["securitycontextconstraints"]
+    resourceNames: ["restricted-v2"]
+    verbs: ["use"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ruptura-scc
+  labels:
+    app.kubernetes.io/name: ruptura
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ruptura-scc
+subjects:
+  - kind: ServiceAccount
+    name: ruptura-operator
+    namespace: ruptura-system
+  - kind: ServiceAccount
+    name: ruptura-instance
+    namespace: ruptura-system
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -41,32 +105,40 @@ metadata:
   name: ruptura-operator
   namespace: ruptura-system
   labels:
-    app: ruptura-operator
     app.kubernetes.io/name: ruptura
     app.kubernetes.io/component: operator
-    app.kubernetes.io/version: "4.0.0"
+    app.kubernetes.io/version: "0.6.7"
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ruptura-operator
+      app.kubernetes.io/name: ruptura
+      app.kubernetes.io/component: operator
   template:
     metadata:
       labels:
-        app: ruptura-operator
         app.kubernetes.io/name: ruptura
         app.kubernetes.io/component: operator
+        app.kubernetes.io/version: "0.6.7"
     spec:
-      serviceAccountName: ohe-operator
+      serviceAccountName: ruptura-operator
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
       containers:
-      - name: ruptura-operator
-        image: ghcr.io/benfradjselim/ohe-operator:4.0.0
-        imagePullPolicy: IfNotPresent
-        args: ["--interval=30s"]
-        resources:
-          requests:
-            cpu: "50m"
-            memory: "32Mi"
-          limits:
-            cpu: "200m"
-            memory: "128Mi"
+        - name: ruptura-operator
+          image: ghcr.io/benfradjselim/ruptura-operator:v0.6.7
+          imagePullPolicy: IfNotPresent
+          args: ["--interval=30s"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"

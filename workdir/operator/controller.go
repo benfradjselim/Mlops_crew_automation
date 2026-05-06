@@ -1,96 +1,121 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
-	"github.com/benfradjselim/ruptura/pkg/logger"
 )
 
 const (
-	defaultImage       = "ghcr.io/benfradjselim/ohe:4.0.0"
+	defaultImage       = "ghcr.io/benfradjselim/ruptura:v6.6.3"
 	defaultStorageSize = "10Gi"
+	defaultEdition     = "community"
+	appLabel           = "app.kubernetes.io/name"
+	managedByLabel     = "app.kubernetes.io/managed-by"
+	instanceLabel      = "app.kubernetes.io/instance"
 )
 
-// reconcile is the core control loop for a single OHECluster resource.
-// It ensures the desired Deployment (or DaemonSet for agent mode) exists
-// and has the correct spec, then updates the status subresource.
-func reconcile(c *k8sClient, cluster OHECluster) {
-	ns := cluster.Metadata.Namespace
-	name := cluster.Metadata.Name
-	spec := cluster.Spec
+// reconcile drives a single RupturaInstance toward its desired state.
+// It is idempotent: server-side apply handles create-or-update for all resources.
+func reconcile(ctx context.Context, c *k8sClient, inst RupturaInstance, isOCP bool) error {
+	ns := inst.Metadata.Namespace
+	name := inst.Metadata.Name
 
-	logger.Default.Info("reconcile", "ns", ns, "name", name, "mode", spec.Mode, "replicas", replicas(spec))
-
-	image := spec.Image
+	image := inst.Spec.Image
 	if image == "" {
 		image = defaultImage
 	}
-
-	var err error
-	switch spec.Mode {
-	case "central":
-		err = reconcileCentral(c, cluster, image)
-	case "agent":
-		err = reconcileAgent(c, cluster, image)
-	default:
-		err = fmt.Errorf("unknown mode %q", spec.Mode)
+	storageSize := inst.Spec.StorageSize
+	if storageSize == "" {
+		storageSize = defaultStorageSize
+	}
+	edition := inst.Spec.Edition
+	if edition == "" {
+		edition = defaultEdition
+	}
+	replicas := inst.Spec.Replicas
+	if replicas < 1 {
+		replicas = 1
 	}
 
-	phase, msg := "Running", ""
-	if err != nil {
-		phase, msg = "Failed", err.Error()
-		logger.Default.Error("reconcile error", "ns", ns, "name", name, "err", err)
+	labels := map[string]string{
+		appLabel:       "ruptura",
+		managedByLabel: "ruptura-operator",
+		instanceLabel:  name,
 	}
 
-	// Read ready replica count from the managed Deployment
-	ready, available := readDeploymentStatus(c, ns, name)
-
-	status := OHEClusterStatus{
-		Phase:              phase,
-		Message:            msg,
-		ReadyReplicas:      ready,
-		AvailableReplicas:  available,
-		LastReconcileTime:  time.Now().UTC().Format(time.RFC3339),
-		ObservedGeneration: cluster.Metadata.Generation,
+	if err := reconcilePVC(c, ns, name, storageSize, labels); err != nil {
+		return fmt.Errorf("PVC: %w", err)
+	}
+	if err := reconcileDeployment(c, ns, name, image, edition, replicas, inst.Spec, labels); err != nil {
+		return fmt.Errorf("Deployment: %w", err)
+	}
+	if err := reconcileService(c, ns, name, labels); err != nil {
+		return fmt.Errorf("Service: %w", err)
+	}
+	if isOCP {
+		if err := reconcileRoute(c, ns, name, labels); err != nil {
+			return fmt.Errorf("Route: %w", err)
+		}
 	}
 
-	path := fmt.Sprintf("/apis/ohe.io/v1alpha1/namespaces/%s/oheclusters/%s", ns, name)
-	if err := c.patchStatus(path, status); err != nil {
-		logger.Default.Error("status update error", "ns", ns, "name", name, "err", err)
-	}
+	return updateStatus(c, inst)
 }
 
-func reconcileCentral(c *k8sClient, cluster OHECluster, image string) error {
-	ns := cluster.Metadata.Namespace
-	name := cluster.Metadata.Name
-	spec := cluster.Spec
-
-	rep := replicas(spec)
-
-	// Ensure PVC exists before creating the Deployment that references it.
+func reconcilePVC(c *k8sClient, ns, name, size string, labels map[string]string) error {
 	pvc := PVC{
 		APIVersion: "v1",
 		Kind:       "PersistentVolumeClaim",
 		Metadata: ObjectMeta{
 			Name:      name + "-data",
 			Namespace: ns,
-			Labels: map[string]string{
-				"app.kubernetes.io/name":       "ohe",
-				"app.kubernetes.io/component":  "central",
-				"app.kubernetes.io/managed-by": "ohe-operator",
-			},
+			Labels:    labels,
 		},
 		Spec: PVCSpec{
 			AccessModes: []string{"ReadWriteOnce"},
-			Resources: map[string]interface{}{
-				"requests": map[string]string{"storage": "10Gi"},
+			Resources: PVCResourceRequirements{
+				Requests: map[string]string{"storage": size},
 			},
 		},
 	}
-	pvcPath := fmt.Sprintf("/api/v1/namespaces/%s/persistentvolumeclaims/%s", ns, name+"-data")
-	if err := c.apply(pvcPath, pvc); err != nil {
-		return fmt.Errorf("reconcile PVC: %w", err)
+	path := fmt.Sprintf("/api/v1/namespaces/%s/persistentvolumeclaims/%s-data", ns, name)
+	return c.apply(path, pvc)
+}
+
+func reconcileDeployment(c *k8sClient, ns, name, image, edition string, replicas int32, spec RupturaInstanceSpec, labels map[string]string) error {
+	env := []EnvVar{
+		{Name: "RUPTURA_EDITION", Value: edition},
 	}
+	if spec.APIKeyRef != "" {
+		env = append(env, EnvVar{
+			Name: "RUPTURA_API_KEY",
+			ValueFrom: &EnvVarSource{
+				SecretKeyRef: &SecretKeySelector{
+					Name:     spec.APIKeyRef,
+					Key:      "api-key",
+					Optional: true,
+				},
+			},
+		})
+	}
+	if spec.IngestRPS > 0 {
+		env = append(env, EnvVar{
+			Name:  "RUPTURA_INGEST_RPS",
+			Value: fmt.Sprintf("%d", spec.IngestRPS),
+		})
+	}
+
+	resources := spec.Resources
+	if len(resources.Requests) == 0 && len(resources.Limits) == 0 {
+		resources = ResourceRequirements{
+			Requests: map[string]string{"cpu": "100m", "memory": "128Mi"},
+			Limits:   map[string]string{"cpu": "1000m", "memory": "512Mi"},
+		}
+	}
+
+	falseVal := false
+	trueVal := true
+	_ = falseVal
 
 	dep := Deployment{
 		APIVersion: "apps/v1",
@@ -98,71 +123,69 @@ func reconcileCentral(c *k8sClient, cluster OHECluster, image string) error {
 		Metadata: ObjectMeta{
 			Name:      name,
 			Namespace: ns,
-			Labels: map[string]string{
-				"app.kubernetes.io/name":      "ohe",
-				"app.kubernetes.io/component": "central",
-				"app.kubernetes.io/managed-by": "ohe-operator",
-			},
+			Labels:    labels,
 		},
 		Spec: DeploymentSpec{
-			Replicas: rep,
+			Replicas: replicas,
 			Selector: map[string]interface{}{
-				"matchLabels": map[string]string{"app": name},
+				"matchLabels": map[string]string{instanceLabel: name},
 			},
 			Strategy: map[string]interface{}{
-				"type": "Recreate", // Badger is single-writer
+				"type": "Recreate",
 			},
 			Template: PodTemplateSpec{
 				Metadata: ObjectMeta{
-					Labels: map[string]string{"app": name},
+					Labels: map[string]string{
+						appLabel:      "ruptura",
+						instanceLabel: name,
+					},
 				},
 				Spec: PodSpec{
-					ServiceAccountName: "ohe-central",
+					ServiceAccountName: "ruptura-instance",
+					SecurityContext: &PodSecurityContext{
+						RunAsNonRoot: true,
+						RunAsUser:    65532,
+						FSGroup:      65532,
+					},
 					Containers: []Container{
 						{
-							Name:  "ohe",
+							Name:  "ruptura",
 							Image: image,
 							Args: []string{
-								"central",
-								"--config=/etc/ohe/config.yaml",
-								"--storage=/var/lib/ohe/data",
+								"--port=8080",
+								"--storage=/var/lib/ruptura/data",
 							},
 							Ports: []ContainerPort{
 								{Name: "http", ContainerPort: 8080, Protocol: "TCP"},
+								{Name: "otlp", ContainerPort: 4317, Protocol: "TCP"},
 							},
-							Env: []EnvVar{
-								{
-									Name: "OHE_JWT_SECRET",
-									ValueFrom: &EnvVarSource{
-										SecretKeyRef: &SecretKeySelector{
-											Name: "ohe-secrets",
-											Key:  "jwt-secret",
-										},
-									},
-								},
-							},
+							Env: env,
 							VolumeMounts: []VolumeMount{
-								{Name: "data", MountPath: "/var/lib/ohe/data"},
-								{Name: "config", MountPath: "/etc/ohe", ReadOnly: true},
+								{Name: "data", MountPath: "/var/lib/ruptura/data"},
+							},
+							Resources: resources,
+							SecurityContext: &ContainerSecurityContext{
+								AllowPrivilegeEscalation: false,
+								RunAsNonRoot:             trueVal,
 							},
 							LivenessProbe: &Probe{
-								HTTPGet:             HTTPGetAction{Path: "/api/v1/health/live", Port: "http"},
+								HTTPGet:             HTTPGetAction{Path: "/api/v2/health", Port: 8080},
+								InitialDelaySeconds: 10,
+								PeriodSeconds:       15,
+								FailureThreshold:    3,
+								TimeoutSeconds:      5,
+							},
+							ReadinessProbe: &Probe{
+								HTTPGet:             HTTPGetAction{Path: "/api/v2/health", Port: 8080},
 								InitialDelaySeconds: 5,
 								PeriodSeconds:       10,
 								FailureThreshold:    3,
+								TimeoutSeconds:      3,
 							},
-							ReadinessProbe: &Probe{
-								HTTPGet:             HTTPGetAction{Path: "/api/v1/health/ready", Port: "http"},
-								InitialDelaySeconds: 3,
-								PeriodSeconds:       5,
-								FailureThreshold:    2,
-							},
-							Resources: resourcesOrDefault(spec.Resources, "100m", "128Mi", "500m", "512Mi"),
 						},
 					},
 					Volumes: []Volume{
 						{Name: "data", PersistentVolumeClaim: &PVCVolumeSource{ClaimName: name + "-data"}},
-						{Name: "config", ConfigMap: &ConfigMapVolumeSource{Name: "ohe-config"}},
 					},
 				},
 			},
@@ -173,94 +196,76 @@ func reconcileCentral(c *k8sClient, cluster OHECluster, image string) error {
 	return c.apply(path, dep)
 }
 
-func reconcileAgent(c *k8sClient, cluster OHECluster, image string) error {
-	// Agent mode uses a DaemonSet; for simplicity the operator creates/updates
-	// a Deployment here (a real production operator would use a DaemonSet).
-	ns := cluster.Metadata.Namespace
-	name := cluster.Metadata.Name
-	spec := cluster.Spec
-
-	central := spec.CentralURL
-	if central == "" {
-		central = "http://ohe-central." + ns + ".svc.cluster.local"
-	}
-
-	dep := Deployment{
-		APIVersion: "apps/v1",
-		Kind:       "Deployment",
+func reconcileService(c *k8sClient, ns, name string, labels map[string]string) error {
+	svc := Service{
+		APIVersion: "v1",
+		Kind:       "Service",
 		Metadata: ObjectMeta{
 			Name:      name,
 			Namespace: ns,
-			Labels: map[string]string{
-				"app.kubernetes.io/name":       "ohe",
-				"app.kubernetes.io/component":  "agent",
-				"app.kubernetes.io/managed-by": "ohe-operator",
-			},
+			Labels:    labels,
 		},
-		Spec: DeploymentSpec{
-			Replicas: replicas(spec),
-			Selector: map[string]interface{}{
-				"matchLabels": map[string]string{"app": name},
-			},
-			Template: PodTemplateSpec{
-				Metadata: ObjectMeta{
-					Labels: map[string]string{"app": name},
-				},
-				Spec: PodSpec{
-					ServiceAccountName: "ohe-agent",
-					Containers: []Container{
-						{
-							Name:    "ohe-agent",
-							Image:   image,
-							Command: []string{"/ohe", "agent"}, // override ENTRYPOINT (defaults to 'central')
-							Args: []string{
-								"--central-url=" + central,
-								"--interval=15s",
-							},
-							Ports: []ContainerPort{
-								{Name: "http", ContainerPort: 8080, Protocol: "TCP"}, // OHE listens on 8080
-							},
-							LivenessProbe: &Probe{
-								HTTPGet:             HTTPGetAction{Path: "/api/v1/health/live", Port: "http"},
-								InitialDelaySeconds: 5,
-								PeriodSeconds:       15,
-								FailureThreshold:    3,
-							},
-							Resources: resourcesOrDefault(spec.Resources, "50m", "64Mi", "200m", "128Mi"),
-						},
-					},
-				},
+		Spec: ServiceSpec{
+			Selector: map[string]string{instanceLabel: name},
+			Ports: []ServicePort{
+				{Name: "http", Port: 8080, TargetPort: 8080, Protocol: "TCP"},
+				{Name: "otlp", Port: 4317, TargetPort: 4317, Protocol: "TCP"},
 			},
 		},
 	}
-
-	path := fmt.Sprintf("/apis/apps/v1/namespaces/%s/deployments/%s", ns, name)
-	return c.apply(path, dep)
+	path := fmt.Sprintf("/api/v1/namespaces/%s/services/%s", ns, name)
+	return c.apply(path, svc)
 }
 
-func readDeploymentStatus(c *k8sClient, ns, name string) (ready, available int32) {
+// reconcileRoute creates an OpenShift Route that exposes the Ruptura HTTP API
+// with edge TLS termination. Only called when running on OpenShift.
+func reconcileRoute(c *k8sClient, ns, name string, labels map[string]string) error {
+	route := Route{
+		APIVersion: "route.openshift.io/v1",
+		Kind:       "Route",
+		Metadata: ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+			Labels:    labels,
+		},
+		Spec: RouteSpec{
+			To: RouteTargetReference{
+				Kind: "Service",
+				Name: name,
+			},
+			Port: RoutePort{
+				TargetPort: "http",
+			},
+			TLS: &RouteTLS{
+				Termination: "edge",
+			},
+		},
+	}
+	path := fmt.Sprintf("/apis/route.openshift.io/v1/namespaces/%s/routes/%s", ns, name)
+	return c.apply(path, route)
+}
+
+func updateStatus(c *k8sClient, inst RupturaInstance) error {
+	ns := inst.Metadata.Namespace
+	name := inst.Metadata.Name
+
 	var dep DeploymentWithStatus
-	path := fmt.Sprintf("/apis/apps/v1/namespaces/%s/deployments/%s", ns, name)
-	if err := c.get(path, &dep); err != nil {
-		return 0, 0
-	}
-	return dep.Status.ReadyReplicas, dep.Status.AvailableReplicas
-}
+	depPath := fmt.Sprintf("/apis/apps/v1/namespaces/%s/deployments/%s", ns, name)
+	_ = c.get(depPath, &dep)
 
-func replicas(spec OHEClusterSpec) int32 {
-	if spec.Replicas <= 0 {
-		return 1
+	phase := "Running"
+	if dep.Status.ReadyReplicas == 0 {
+		phase = "Pending"
 	}
-	return spec.Replicas
-}
 
-// resourcesOrDefault returns spec.Resources if non-empty, else sensible defaults.
-func resourcesOrDefault(r ResourceRequirements, reqCPU, reqMem, limCPU, limMem string) ResourceRequirements {
-	if len(r.Requests) > 0 || len(r.Limits) > 0 {
-		return r
+	status := RupturaInstanceStatus{
+		Phase:              phase,
+		ReadyReplicas:      dep.Status.ReadyReplicas,
+		AvailableReplicas:  dep.Status.AvailableReplicas,
+		LastReconcileTime:  time.Now().UTC().Format(time.RFC3339),
+		ObservedGeneration: inst.Metadata.Generation,
 	}
-	return ResourceRequirements{
-		Requests: map[string]string{"cpu": reqCPU, "memory": reqMem},
-		Limits:   map[string]string{"cpu": limCPU, "memory": limMem},
-	}
+
+	path := fmt.Sprintf("/apis/ruptura.io/v1alpha1/namespaces/%s/rupturainstances/%s", ns, name)
+	return c.patchStatus(path, status)
 }

@@ -1,0 +1,248 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  name: ruptura-operator.v0.6.7
+  namespace: placeholder
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "ruptura.io/v1alpha1",
+          "kind": "RupturaInstance",
+          "metadata": {
+            "name": "ruptura",
+            "namespace": "ruptura-system"
+          },
+          "spec": {
+            "storageSize": "10Gi",
+            "edition": "community",
+            "resources": {
+              "requests": {"cpu": "100m", "memory": "128Mi"},
+              "limits":   {"cpu": "1000m", "memory": "512Mi"}
+            }
+          }
+        }
+      ]
+    capabilities: Basic Install
+    categories: Monitoring,Logging & Tracing
+    containerImage: ghcr.io/benfradjselim/ruptura-operator:v0.6.7
+    createdAt: "2026-05-06T00:00:00Z"
+    description: >-
+      Predictive workload health platform for Kubernetes — detect ruptures before they happen.
+    operatorframework.io/suggested-namespace: ruptura-system
+    operators.operatorframework.io/builder: operator-sdk-v1.34.0
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
+    repository: https://github.com/benfradjselim/ruptura
+    support: https://github.com/benfradjselim/ruptura/issues
+    com.redhat.openshift.versions: "v4.12-v4.16"
+spec:
+  displayName: Ruptura Operator
+  description: |
+    ## Overview
+
+    **Ruptura** is a predictive workload health platform for Kubernetes.
+    It detects ruptures before they happen by modeling 10 composite health signals
+    (stress, fatigue, mood, pressure, humidity, contagion, resilience, entropy,
+    velocity, health_score) per workload and computing a Fused Rupture Index from
+    OTLP metrics, logs, and traces.
+
+    ## Features
+
+    - **Predictive**: Linear regression over HealthScore history gives you an ETA
+      before critical threshold is crossed.
+    - **Calibrating**: A 24h warm-up window suppresses false positives on fresh installs.
+    - **Narrative Explain**: Human-readable rupture explanation — not just numbers.
+    - **Action Engine**: T1 auto-restart, T2 suggested actions, T3 human-only.
+    - **Edition Gate**: `community` (read-only actions) / `autopilot` (full execution).
+    - **OpenShift-native**: Automatic Route creation, restricted-v2 SCC, non-root pods.
+
+    ## Prerequisites
+
+    - Kubernetes ≥ 1.25 or OpenShift ≥ 4.12
+    - `ruptura-system` namespace (created automatically by OLM)
+    - Optionally: a `Secret` with key `api-key` for authenticated API access
+
+    ## Quick Start
+
+    ```yaml
+    apiVersion: ruptura.io/v1alpha1
+    kind: RupturaInstance
+    metadata:
+      name: ruptura
+      namespace: ruptura-system
+    spec:
+      edition: community
+      storageSize: 10Gi
+      apiKeyRef: ruptura-secret    # optional
+    ```
+
+    Send OTLP metrics to port 4317, query the REST API on port 8080.
+
+  maturity: alpha
+  version: 0.6.7
+  replaces: ""
+
+  icon:
+    - base64data: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0NSIgZmlsbD0iIzAyMDQwOCIvPjxjaXJjbGUgY3g9IjUwIiBjeT0iNTAiIHI9IjMwIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMGQ0ZmYiIHN0cm9rZS13aWR0aD0iNCIvPjxsaW5lIHgxPSI1MCIgeTE9IjIwIiB4Mj0iNTAiIHkyPSI1MCIgc3Ryb2tlPSIjMDBkNGZmIiBzdHJva2Utd2lkdGg9IjMiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1IiBmaWxsPSIjMDBkNGZmIi8+PC9zdmc+
+      mediatype: image/svg+xml
+
+  keywords:
+    - monitoring
+    - observability
+    - kubernetes
+    - sre
+    - anomaly-detection
+    - predictive
+    - rupture
+
+  maintainers:
+    - name: Ruptura Maintainers
+      email: benfradjselim@gmail.com
+
+  provider:
+    name: Ruptura
+    url: https://ruptura.dev
+
+  links:
+    - name: Documentation
+      url: https://ruptura.dev/docs
+    - name: GitHub
+      url: https://github.com/benfradjselim/ruptura
+    - name: Issues
+      url: https://github.com/benfradjselim/ruptura/issues
+
+  minKubeVersion: "1.25.0"
+
+  labels:
+    operatorframework.io/arch.amd64: supported
+    operatorframework.io/arch.arm64: supported
+    operatorframework.io/os.linux: supported
+
+  customresourcedefinitions:
+    owned:
+      - name: rupturainstances.ruptura.io
+        version: v1alpha1
+        kind: RupturaInstance
+        displayName: Ruptura Instance
+        description: >-
+          Manages the full lifecycle of a Ruptura deployment: PVC, Deployment,
+          Service, and (on OpenShift) Route.
+        specDescriptors:
+          - path: image
+            displayName: Image
+            description: Container image override. Default uses the version bundled with this CSV.
+            x-descriptors:
+              - urn:alm:descriptor:com.tectonic.ui:text
+          - path: replicas
+            displayName: Replicas
+            description: Must be 1 — BadgerDB is single-writer.
+            x-descriptors:
+              - urn:alm:descriptor:com.tectonic.ui:podCount
+          - path: storageSize
+            displayName: Storage Size
+            description: PVC size for BadgerDB persistence (e.g. 10Gi).
+            x-descriptors:
+              - urn:alm:descriptor:com.tectonic.ui:text
+          - path: apiKeyRef
+            displayName: API Key Secret
+            description: Name of a Secret containing an 'api-key' key for REST API authentication.
+            x-descriptors:
+              - urn:alm:descriptor:io.kubernetes:Secret
+          - path: edition
+            displayName: Edition
+            description: "'community' (read-only actions) or 'autopilot' (full T1 auto-execution)."
+            x-descriptors:
+              - urn:alm:descriptor:com.tectonic.ui:select:community
+              - urn:alm:descriptor:com.tectonic.ui:select:autopilot
+          - path: resources
+            displayName: Resources
+            x-descriptors:
+              - urn:alm:descriptor:com.tectonic.ui:resourceRequirements
+        statusDescriptors:
+          - path: phase
+            displayName: Phase
+            x-descriptors:
+              - urn:alm:descriptor:io.kubernetes.phase
+          - path: readyReplicas
+            displayName: Ready Replicas
+            x-descriptors:
+              - urn:alm:descriptor:com.tectonic.ui:podCount
+          - path: lastReconcileTime
+            displayName: Last Reconcile Time
+            x-descriptors:
+              - urn:alm:descriptor:text
+
+  install:
+    strategy: deployment
+    spec:
+      clusterPermissions:
+        - serviceAccountName: ruptura-operator
+          rules:
+            - apiGroups: ["ruptura.io"]
+              resources: ["rupturainstances", "rupturainstances/status"]
+              verbs: ["get", "list", "watch", "update", "patch"]
+            - apiGroups: ["apps"]
+              resources: ["deployments"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+            - apiGroups: [""]
+              resources: ["services", "persistentvolumeclaims"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+            - apiGroups: [""]
+              resources: ["secrets"]
+              verbs: ["get", "list", "watch"]
+            - apiGroups: ["route.openshift.io"]
+              resources: ["routes"]
+              verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+            - apiGroups: ["security.openshift.io"]
+              resources: ["securitycontextconstraints"]
+              verbs: ["get", "list"]
+            - apiGroups: ["security.openshift.io"]
+              resources: ["securitycontextconstraints"]
+              resourceNames: ["restricted-v2"]
+              verbs: ["use"]
+      deployments:
+        - name: ruptura-operator
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app.kubernetes.io/name: ruptura
+                app.kubernetes.io/component: operator
+            template:
+              metadata:
+                labels:
+                  app.kubernetes.io/name: ruptura
+                  app.kubernetes.io/component: operator
+                  app.kubernetes.io/version: "0.6.7"
+              spec:
+                serviceAccountName: ruptura-operator
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 65532
+                  fsGroup: 65532
+                containers:
+                  - name: ruptura-operator
+                    image: ghcr.io/benfradjselim/ruptura-operator:v0.6.7
+                    imagePullPolicy: IfNotPresent
+                    args: ["--interval=30s"]
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      runAsNonRoot: true
+                    resources:
+                      requests:
+                        cpu: "50m"
+                        memory: "32Mi"
+                      limits:
+                        cpu: "200m"
+                        memory: "128Mi"
+
+  installModes:
+    - type: OwnNamespace
+      supported: true
+    - type: SingleNamespace
+      supported: true
+    - type: MultiNamespace
+      supported: false
+    - type: AllNamespaces
+      supported: true

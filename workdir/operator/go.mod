@@ -1,3 +1,3 @@
-module github.com/benfradjselim/ohe-operator
+module github.com/benfradjselim/ruptura-operator
 
-go 1.21
+go 1.18
