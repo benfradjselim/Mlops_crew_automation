@@ -30,7 +30,7 @@ Common Helm options:
 ```bash
 --set apiKey=<your-key>          # API bearer token (required for prod)
 --set persistence.size=20Gi               # PVC size (default: 10Gi)
---set image.tag=6.6.2                 # Pin to a specific version
+--set image.tag=6.6.3                 # Pin to a specific version
 --set serviceMonitor.enabled=true     # Prometheus Operator scrape
 --set grafana.dashboards.enabled=true # Grafana dashboard ConfigMap
 ```
@@ -75,7 +75,7 @@ metadata:
   name: production
   namespace: ruptura-system
 spec:
-  image: ghcr.io/benfradjselim/ruptura:6.6.2
+  image: ghcr.io/benfradjselim/ruptura:6.6.3
   port: 8080
   storageSize: 20Gi
   apiKey:
@@ -100,7 +100,7 @@ docker run -d \
   -p 4317:4317 \
   -v ruptura-data:/var/lib/ruptura/data \
   -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
-  ghcr.io/benfradjselim/ruptura:6.6.2
+  ghcr.io/benfradjselim/ruptura:6.6.3
 ```
 
 | Port | Protocol | Purpose |

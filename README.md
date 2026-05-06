@@ -14,7 +14,7 @@ Ruptura detects workload ruptures before they cause outages — using the Fused 
 
 | Version | Date | Status |
 |---------|------|--------|
-| v6.6.2 | 2026-05-06 | ✅ Released — pre-v7 security & correctness hardening |
+| v6.6.3 | 2026-05-06 | ✅ Released — pre-v7 security & correctness hardening |
 | v6.6.1 | 2026-05-06 | ✅ Released — CLI + dashboard simulation bugfixes |
 | v6.6.0 | 2026-05-05 | ✅ Released — per-workload signal weight tuning |
 | v6.5.0 | 2026-05-05 | ✅ Released — edition gate (community / autopilot) |
@@ -169,7 +169,7 @@ docker run -d \
   -p 8080:8080 -p 4317:4317 \
   -v ruptura-data:/var/lib/ruptura/data \
   -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
-  ghcr.io/benfradjselim/ruptura:6.6.2
+  ghcr.io/benfradjselim/ruptura:6.6.3
 ```
 
 ---
@@ -198,7 +198,7 @@ docs/
 ## Roadmap
 
 ```
-v6.6.2 ✅  Pre-v7 security & correctness hardening (timing-safe auth, emergency stop, forecast fix)
+v6.6.3 ✅  Pre-v7 security & correctness hardening (timing-safe auth, emergency stop, forecast fix)
 v6.6.0 ✅  Per-workload signal weight tuning (runtime + env bootstrap)
 v6.5.0 ✅  Edition gate — community (read-only) / autopilot (full execution)
 v6.4.0 ✅  Rupture fingerprinting · business signal layer (SLO burn, blast radius)

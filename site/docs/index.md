@@ -143,7 +143,7 @@ gRPC ingest ──────────────┘
       -p 4317:4317 \
       -v ruptura-data:/var/lib/ruptura/data \
       -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
-      ghcr.io/benfradjselim/ruptura:6.6.2
+      ghcr.io/benfradjselim/ruptura:6.6.3
 
     curl http://localhost:8080/api/v2/health
     ```
@@ -204,7 +204,7 @@ gRPC ingest ──────────────┘
 
 ## Current Release
 
-**v6.6.2** — pre-v7 security & correctness hardening. Production-ready for Kubernetes evaluation.
+**v6.6.3** — pre-v7 security & correctness hardening. Production-ready for Kubernetes evaluation.
 
 - Timing-safe Bearer token auth (`crypto/subtle.ConstantTimeCompare`)
 - Emergency stop now wired to the action engine
