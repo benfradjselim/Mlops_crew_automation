@@ -41,10 +41,14 @@ func fmtKVs(level, msg string, kvs ...interface{}) string {
 }
 
 func main() {
-	interval := flag.Duration("interval", 30*time.Second, "reconcile poll interval")
+	interval    := flag.Duration("interval", 30*time.Second, "reconcile poll interval")
+	metricsAddr := flag.String("metrics-addr", ":9090", "address for the Prometheus metrics server")
 	flag.Parse()
 
 	logInfo("ruptura-operator starting", "version", operatorVersion, "interval", interval.String())
+
+	metricsSrv := startMetricsServer(*metricsAddr)
+	logInfo("metrics server listening", "addr", *metricsAddr)
 
 	c, err := newK8sClient()
 	if err != nil {
@@ -60,6 +64,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	defer metricsSrv.Close()
 
 	ticker := time.NewTicker(*interval)
 	defer ticker.Stop()
@@ -82,13 +87,17 @@ func runLoop(ctx context.Context, c *k8sClient, isOCP bool) {
 		logError("list RupturaInstances failed", "err", err)
 		return
 	}
+	setInstanceCount(len(list.Items))
 	logInfo("reconcile loop", "count", len(list.Items))
 	for _, inst := range list.Items {
 		if err := reconcile(ctx, c, inst, isOCP); err != nil {
+			recordReconcileError()
 			logError("reconcile failed",
 				"name", inst.Metadata.Name,
 				"namespace", inst.Metadata.Namespace,
 				"err", err)
+		} else {
+			recordReconcileSuccess()
 		}
 	}
 }
