@@ -1,5 +1,9 @@
 # Ruptura
 
+<p align="center">
+  <img src="assets/logo/ruptura-icon-256.png" alt="Ruptura" width="120" />
+</p>
+
 **The Predictive Action Layer for Cloud-Native Infrastructure.**
 
 Ruptura detects workload ruptures before they cause outages — using the Fused Rupture Index™, 10 composite KPI signals with adaptive per-workload baselines, and an action engine that responds automatically with safety gates.

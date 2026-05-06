@@ -6,6 +6,8 @@ copyright: "© 2026 Selim Benfradj — Apache 2.0"
 
 theme:
   name: material
+  logo: ruptura-icon.png
+  favicon: ruptura-icon.png
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
