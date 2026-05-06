@@ -45,12 +45,14 @@ type RupturaInstanceStatus struct {
 
 // ObjectMeta is a minimal subset of k8s ObjectMeta.
 type ObjectMeta struct {
-	Name            string            `json:"name"`
-	Namespace       string            `json:"namespace"`
-	Generation      int64             `json:"generation,omitempty"`
-	ResourceVersion string            `json:"resourceVersion,omitempty"`
-	Labels          map[string]string `json:"labels,omitempty"`
-	Annotations     map[string]string `json:"annotations,omitempty"`
+	Name                string            `json:"name"`
+	Namespace           string            `json:"namespace"`
+	Generation          int64             `json:"generation,omitempty"`
+	ResourceVersion     string            `json:"resourceVersion,omitempty"`
+	DeletionTimestamp   *string           `json:"deletionTimestamp,omitempty"`
+	Finalizers          []string          `json:"finalizers,omitempty"`
+	Labels              map[string]string `json:"labels,omitempty"`
+	Annotations         map[string]string `json:"annotations,omitempty"`
 }
 
 type ListMeta struct {

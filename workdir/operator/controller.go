@@ -13,11 +13,72 @@ const (
 	appLabel           = "app.kubernetes.io/name"
 	managedByLabel     = "app.kubernetes.io/managed-by"
 	instanceLabel      = "app.kubernetes.io/instance"
+	finalizer          = "ruptura.io/cleanup"
 )
+
+// hasFinalizer reports whether inst already carries our finalizer.
+func hasFinalizer(inst RupturaInstance) bool {
+	for _, f := range inst.Metadata.Finalizers {
+		if f == finalizer {
+			return true
+		}
+	}
+	return false
+}
+
+// removeFinalizer returns a new slice with our finalizer removed.
+func removeFinalizer(inst RupturaInstance) []string {
+	out := make([]string, 0, len(inst.Metadata.Finalizers))
+	for _, f := range inst.Metadata.Finalizers {
+		if f != finalizer {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// cleanup deletes all resources owned by a RupturaInstance then removes the
+// finalizer so the API server can complete the deletion.
+func cleanup(c *k8sClient, inst RupturaInstance, isOCP bool) error {
+	ns := inst.Metadata.Namespace
+	name := inst.Metadata.Name
+
+	if isOCP {
+		if err := c.delete(fmt.Sprintf("/apis/route.openshift.io/v1/namespaces/%s/routes/%s", ns, name)); err != nil {
+			return fmt.Errorf("delete Route: %w", err)
+		}
+	}
+	if err := c.delete(fmt.Sprintf("/apis/apps/v1/namespaces/%s/deployments/%s", ns, name)); err != nil {
+		return fmt.Errorf("delete Deployment: %w", err)
+	}
+	if err := c.delete(fmt.Sprintf("/api/v1/namespaces/%s/services/%s", ns, name)); err != nil {
+		return fmt.Errorf("delete Service: %w", err)
+	}
+	if err := c.delete(fmt.Sprintf("/api/v1/namespaces/%s/persistentvolumeclaims/%s-data", ns, name)); err != nil {
+		return fmt.Errorf("delete PVC: %w", err)
+	}
+	return c.patchFinalizers(inst, removeFinalizer(inst))
+}
 
 // reconcile drives a single RupturaInstance toward its desired state.
 // It is idempotent: server-side apply handles create-or-update for all resources.
 func reconcile(ctx context.Context, c *k8sClient, inst RupturaInstance, isOCP bool) error {
+	// Handle deletion: run cleanup then remove our finalizer.
+	if inst.Metadata.DeletionTimestamp != nil {
+		if hasFinalizer(inst) {
+			return cleanup(c, inst, isOCP)
+		}
+		return nil
+	}
+
+	// Ensure our finalizer is registered before touching any resources.
+	if !hasFinalizer(inst) {
+		updated := append(inst.Metadata.Finalizers, finalizer)
+		if err := c.patchFinalizers(inst, updated); err != nil {
+			return fmt.Errorf("add finalizer: %w", err)
+		}
+	}
+
 	ns := inst.Metadata.Namespace
 	name := inst.Metadata.Name
 

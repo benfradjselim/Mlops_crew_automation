@@ -152,4 +152,53 @@ func (c *k8sClient) routeAPIAvailable() bool {
 	return resp.StatusCode == http.StatusOK
 }
 
+// delete removes a resource by path. A 404 is treated as success (already gone).
+func (c *k8sClient) delete(path string) error {
+	req, _ := http.NewRequest(http.MethodDelete, c.host+path, nil)
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("delete %s → %d", path, resp.StatusCode)
+	}
+	return nil
+}
+
+// patchFinalizers updates the finalizers list on a RupturaInstance via merge-patch.
+func (c *k8sClient) patchFinalizers(inst RupturaInstance, finalizers []string) error {
+	body, err := json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{"finalizers": finalizers},
+	})
+	if err != nil {
+		return err
+	}
+	path := fmt.Sprintf("/apis/ruptura.io/v1alpha1/namespaces/%s/rupturainstances/%s",
+		inst.Metadata.Namespace, inst.Metadata.Name)
+	req, _ := http.NewRequest(http.MethodPatch, c.host+path, bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("patchFinalizers %s/%s → %d",
+			inst.Metadata.Namespace, inst.Metadata.Name, resp.StatusCode)
+	}
+	return nil
+}
+
 func isNotFound(err error) bool { return err == errNotFound }
