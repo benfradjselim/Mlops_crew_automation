@@ -1,6 +1,7 @@
 # Ruptura
 
 <p align="center">
+  <img src="https://raw.githubusercontent.com/benfradjselim/ruptura/main/assets/logo/ruptura-icon-256.png" alt="Ruptura" width="120" /><br><br>
   <img src="https://img.shields.io/badge/version-6.6.2-0069ff?style=for-the-badge" alt="v6.6.2">
   <img src="https://img.shields.io/badge/go-1.21+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.21+">
   <img src="https://img.shields.io/badge/license-Apache%202.0-green?style=for-the-badge" alt="Apache 2.0">
