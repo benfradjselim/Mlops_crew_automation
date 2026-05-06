@@ -1,5 +1,9 @@
 # Ruptura
 
+<p align="center">
+  <img src="ruptura-icon.png" alt="Ruptura" width="100" />
+</p>
+
 **The Predictive Action Layer for Cloud-Native Infrastructure.**
 
 Ruptura detects workload ruptures before they cause outages — and acts on them automatically via Kubernetes, webhooks, and alerting integrations. A single Go binary, no external database required.
