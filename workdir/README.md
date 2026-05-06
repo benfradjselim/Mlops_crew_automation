@@ -1,7 +1,7 @@
 # Ruptura
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-6.6.0-0069ff?style=for-the-badge" alt="v6.6.0">
+  <img src="https://img.shields.io/badge/version-6.6.1-0069ff?style=for-the-badge" alt="v6.6.1">
   <img src="https://img.shields.io/badge/go-1.21+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.21+">
   <img src="https://img.shields.io/badge/license-Apache%202.0-green?style=for-the-badge" alt="Apache 2.0">
   <img src="https://img.shields.io/badge/kubernetes-native-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes Native">
@@ -170,7 +170,7 @@ docker run -d \
   -p 4317:4317 \
   -v ruptura-data:/var/lib/ruptura/data \
   -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
-  ghcr.io/benfradjselim/ruptura:6.6.0
+  ghcr.io/benfradjselim/ruptura:6.6.1
 ```
 
 | Port | Purpose |
@@ -333,7 +333,7 @@ metadata:
   name: production
   namespace: ruptura-system
 spec:
-  image: ghcr.io/benfradjselim/ruptura:6.6.0
+  image: ghcr.io/benfradjselim/ruptura:6.6.1
   port: 8080
   storageSize: 20Gi
   apiKey:
@@ -356,6 +356,13 @@ helm lint helm/
 ---
 
 ## Changelog
+
+### v6.6.1 — 2026-05-06
+- **`sim inject` fixed**: CLI was sending `{pattern}` payload; server expects `{workload, metrics}`. Rewired to call `sim.Run()` directly — real metric ticks per pattern, correct format.
+- **`sim.send()` auth**: added `APIKey` to `sim.Config`; every tick now sends `Authorization: Bearer` header so auth-enabled servers accept it.
+- **3-segment workload refs**: `describe workload production/Deployment/payment-api` was 404 — added `/rupture/{namespace}/{kind}/{workload}` route and handler. Explain routes updated to `{rupture_id:.+}` for slash-containing refs.
+- **Suppressions field mismatch**: handler expected `workload_key`/`from`/`until`; client sends `workload`/`start`/`end`. POST now returns the full suppression object instead of only `{"id"}`.
+- **Health port label**: `ruptura-ctl health` showed `traces (gRPC :9090 / OTLP)` — corrected to `traces (OTLP :4317)`.
 
 ### v6.6.0 — 2026-05-05
 - **Per-workload signal weight tuning**: `POST/GET /api/v2/config/weights` for runtime override. `RUPTURA_WORKLOAD_WEIGHTS` JSON env var for Helm bootstrap. Selector syntax: exact, `ns/*`, or `*`. Weights auto-normalised to 1.0.

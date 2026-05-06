@@ -14,6 +14,7 @@ Ruptura detects workload ruptures before they cause outages — using the Fused 
 
 | Version | Date | Status |
 |---------|------|--------|
+| v6.6.1 | 2026-05-06 | ✅ Released — CLI + dashboard simulation bugfixes |
 | v6.6.0 | 2026-05-05 | ✅ Released — per-workload signal weight tuning |
 | v6.5.0 | 2026-05-05 | ✅ Released — edition gate (community / autopilot) |
 | v6.4.0 | 2026-05-05 | ✅ Released — rupture fingerprinting + business signal layer |
