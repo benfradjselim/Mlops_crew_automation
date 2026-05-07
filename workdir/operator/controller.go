@@ -57,6 +57,9 @@ func cleanup(c *k8sClient, inst RupturaInstance, isOCP bool) error {
 	if err := c.delete(fmt.Sprintf("/api/v1/namespaces/%s/persistentvolumeclaims/%s-data", ns, name)); err != nil {
 		return fmt.Errorf("delete PVC: %w", err)
 	}
+	if err := c.delete(fmt.Sprintf("/api/v1/namespaces/%s/serviceaccounts/ruptura-instance", ns)); err != nil {
+		return fmt.Errorf("delete ServiceAccount: %w", err)
+	}
 	return c.patchFinalizers(inst, removeFinalizer(inst))
 }
 
@@ -105,6 +108,9 @@ func reconcile(ctx context.Context, c *k8sClient, inst RupturaInstance, isOCP bo
 		instanceLabel:  name,
 	}
 
+	if err := reconcileServiceAccount(c, ns, labels); err != nil {
+		return fmt.Errorf("ServiceAccount: %w", err)
+	}
 	if err := reconcilePVC(c, ns, name, storageSize, labels); err != nil {
 		return fmt.Errorf("PVC: %w", err)
 	}
@@ -121,6 +127,20 @@ func reconcile(ctx context.Context, c *k8sClient, inst RupturaInstance, isOCP bo
 	}
 
 	return updateStatus(c, inst)
+}
+
+func reconcileServiceAccount(c *k8sClient, ns string, labels map[string]string) error {
+	sa := map[string]interface{}{
+		"apiVersion": "v1",
+		"kind":       "ServiceAccount",
+		"metadata": map[string]interface{}{
+			"name":      "ruptura-instance",
+			"namespace": ns,
+			"labels":    labels,
+		},
+	}
+	path := fmt.Sprintf("/api/v1/namespaces/%s/serviceaccounts/ruptura-instance", ns)
+	return c.apply(path, sa)
 }
 
 func reconcilePVC(c *k8sClient, ns, name, size string, labels map[string]string) error {

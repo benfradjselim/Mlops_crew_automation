@@ -215,7 +215,7 @@ spec:
               resources: ["deployments"]
               verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
             - apiGroups: [""]
-              resources: ["services", "persistentvolumeclaims"]
+              resources: ["services", "persistentvolumeclaims", "serviceaccounts"]
               verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
             - apiGroups: [""]
               resources: ["secrets"]
