@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const operatorVersion = "0.6.7"
+const operatorVersion = "0.6.8"
 
 var logger = log.New(os.Stdout, "", 0)
 
