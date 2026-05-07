@@ -1,9 +1,11 @@
 annotations:
-  # Bundle identity
-  operators.operatorframework.io/bundle-metadata-package: ruptura-operator
-  operators.operatorframework.io/bundle-channel-default: stable
-  operators.operatorframework.io/bundle-channels: stable,alpha
-  operators.operatorframework.io/bundle-mediatype: registry+v1
+  # Bundle identity — required OLM keys
+  operators.operatorframework.io.bundle.mediatype.v1: registry+v1
+  operators.operatorframework.io.bundle.manifests.v1: manifests/
+  operators.operatorframework.io.bundle.metadata.v1: metadata/
+  operators.operatorframework.io.bundle.package.v1: ruptura-operator
+  operators.operatorframework.io.bundle.channels.v1: stable,alpha
+  operators.operatorframework.io.bundle.channel.default.v1: stable
 
   # OperatorHub display metadata
   operators.coreos.com/capabilities: Basic Install
