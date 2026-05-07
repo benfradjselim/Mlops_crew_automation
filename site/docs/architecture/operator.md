@@ -14,7 +14,7 @@ metadata:
   namespace: ruptura-system
 spec:
   # All fields are optional — sensible defaults are provided.
-  image: ghcr.io/benfradjselim/ruptura:6.6.3  # container image (default: bundled version)
+  image: ghcr.io/benfradjselim/ruptura:6.7.0  # container image (default: bundled version)
   edition: community                            # community (read-only actions) | autopilot (full execution)
   storageSize: 10Gi                             # PVC size for BadgerDB (default: 10Gi)
   replicas: 1                                  # must be 1 — BadgerDB is single-writer (default: 1)
@@ -33,7 +33,7 @@ spec:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `image` | string | `ghcr.io/benfradjselim/ruptura:v6.6.3` | Container image to run |
+| `image` | string | `ghcr.io/benfradjselim/ruptura:v6.7.0` | Container image to run |
 | `edition` | string | `community` | `community` (read-only actions) or `autopilot` (full T1 execution) |
 | `storageSize` | string | `10Gi` | PVC size for BadgerDB persistent storage |
 | `replicas` | integer | `1` | Number of replicas — must be 1 (BadgerDB is single-writer) |
