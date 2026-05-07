@@ -172,9 +172,10 @@ jobs:
         run: |
           OS=$(uname | tr '[:upper:]' '[:lower:]')
           ARCH=$(uname -m | sed 's/x86_64/amd64/')
-          curl -sLo /usr/local/bin/operator-sdk \
-            "https://github.com/operator-framework/operator-sdk/releases/download/v1.34.0/operator-sdk_${OS}_${ARCH}"
+          curl -fsSLo /usr/local/bin/operator-sdk \
+            "https://github.com/operator-framework/operator-sdk/releases/download/v1.42.2/operator-sdk_${OS}_${ARCH}"
           chmod +x /usr/local/bin/operator-sdk
+          operator-sdk version
 
       - name: Validate bundle — operatorframework suite
         run: |
