@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/benfradjselim/ruptura/main/assets/logo/ruptura-icon-256.png" alt="Ruptura" width="120" /><br><br>
-  <img src="https://img.shields.io/badge/version-6.6.3-0069ff?style=for-the-badge" alt="v6.6.3">
+  <img src="https://img.shields.io/badge/version-6.7.0-0069ff?style=for-the-badge" alt="v6.7.0">
   <img src="https://img.shields.io/badge/go-1.21+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.21+">
   <img src="https://img.shields.io/badge/license-Apache%202.0-green?style=for-the-badge" alt="Apache 2.0">
   <img src="https://img.shields.io/badge/kubernetes-native-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes Native">
@@ -171,7 +171,7 @@ docker run -d \
   -p 4317:4317 \
   -v ruptura-data:/var/lib/ruptura/data \
   -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
-  ghcr.io/benfradjselim/ruptura:6.6.3
+  ghcr.io/benfradjselim/ruptura:6.7.0
 ```
 
 | Port | Purpose |
@@ -306,7 +306,7 @@ Scrape at `GET /api/v2/metrics`.
 | `rpt_memory_bytes` | gauge | — | Memory usage |
 | `rpt_uptime_seconds` | gauge | — | Uptime |
 
-For Grafana: import `deploy/grafana/dashboards/ruptura_overview.json` or use the provisioning config in `deploy/grafana/provisioning.yaml`.
+For the built-in dashboard: open `http://localhost:8080` — no Grafana required. For Grafana: import `deploy/grafana/dashboards/ruptura_overview.json` or use the provisioning config in `deploy/grafana/provisioning.yaml`.
 
 ---
 
@@ -334,7 +334,7 @@ metadata:
   name: production
   namespace: ruptura-system
 spec:
-  image: ghcr.io/benfradjselim/ruptura:6.6.3   # optional — defaults to bundled version
+  image: ghcr.io/benfradjselim/ruptura:6.7.0   # optional — defaults to bundled version
   edition: community                             # community (read-only) | autopilot (full execution)
   storageSize: 20Gi                              # PVC size for BadgerDB (default: 10Gi)
   replicas: 1                                   # must be 1 — BadgerDB is single-writer
@@ -383,6 +383,12 @@ helm lint helm/
 ---
 
 ## Changelog
+
+### v6.7.0 — 2026-05-06
+- **Embedded web dashboard**: self-contained Svelte UI served by the Go binary via `go:embed` — open `http://localhost:8080` in any browser, no external tools required.
+- **Air-gap safe**: Chart.js and Alpine.js bundled in `static/vendor/`; no CDN calls at runtime. Fonts load non-blocking with a `noscript` fallback — fully functional with no internet access.
+- **Dashboard panels**: Fused Rupture Index heatmap, per-workload signal timelines, action log with approve/reject/emergency-stop (toast notifications), narrative explain panel, SLO widget, health forecast.
+- **Ruptura logo** embedded as PNG served from the binary.
 
 ### ruptura-operator v0.6.8 — 2026-05-07
 - **Fix: ServiceAccount never created** — operator used `serviceAccountName: ruptura-instance` in the Deployment but never created the SA. Every Pod would fail to schedule with "serviceaccount not found". Fixed by adding `reconcileServiceAccount()` to the reconcile loop and SA deletion to `cleanup()`.
@@ -465,6 +471,7 @@ helm lint helm/
 
 ```
 ruptura (application)
+v6.7.0 ✅  Embedded web dashboard — air-gap safe, vendor-local assets
 v6.6.3 ✅  Pre-v7 security & correctness hardening
 v6.6.0 ✅  Per-workload signal weight tuning
 v6.5.0 ✅  Edition gate (community / autopilot)
@@ -472,11 +479,11 @@ v6.4.0 ✅  Rupture fingerprinting · business signal layer
 v6.3.0 ✅  Calibration warm-up · HealthScore ETA forecast · ruptura-sim
 v6.2.x ✅  Fused Rupture Index · workload-level signals · adaptive baselines · narrative explain
 v6.1.0 ✅  gRPC ingest · NATS/Kafka eventbus · adaptive ensemble · K8s operator
-v7.0.0 ⏳  ruptura-ctl CLI · web dashboard v2 · multi-tenant (X-Org-ID)
+v7.0.0 ⏳  multi-tenant (X-Org-ID) · Python SDK v2
 
 ruptura-operator (Kubernetes Operator — OperatorHub)
 v0.6.7 ✅  First OperatorHub release — merged into community-operators
-v0.6.8 🔄  ServiceAccount fix · RBAC fix · upgrade graph — OperatorHub PR open
+v0.6.8 ✅  ServiceAccount fix · RBAC fix · upgrade graph — merged into community-operators
 ```
 
 ---
