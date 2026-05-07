@@ -304,7 +304,7 @@ Theme: **First OperatorHub release**
 
 ---
 
-## ruptura-operator v0.6.8 — 🔄 SUBMITTED 2026-05-07
+## ruptura-operator v0.6.8 — ✅ MERGED 2026-05-07
 
 Theme: **Critical bugfixes — ServiceAccount reconciliation**
 
@@ -364,4 +364,4 @@ ALPHA → (BRAVO || CHARLIE) → DELTA → ECHO → FOXTROT → tag v6.0.0
 ---
 
 Produced: 2026-04-24
-Last updated: 2026-05-07 — operator v0.6.8 submitted to OperatorHub; v6.6.3 released; v7.0.0 planned
+Last updated: 2026-05-07 — operator v0.6.8 merged to OperatorHub; v6.6.3 released; v7.0.0 planned

@@ -2,9 +2,9 @@
 
 ## Released
 
-### ruptura-operator v0.6.8 — 2026-05-07 🔄
+### ruptura-operator v0.6.8 — 2026-05-07 ✅
 
-OperatorHub PR open: https://github.com/k8s-operatorhub/community-operators/pull/8070
+OperatorHub PR merged: https://github.com/k8s-operatorhub/community-operators/pull/8070
 
 | Item | Detail |
 |------|--------|
