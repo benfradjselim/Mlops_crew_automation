@@ -30,7 +30,7 @@ Common Helm options:
 ```bash
 --set apiKey=<your-key>          # API bearer token (required for prod)
 --set persistence.size=20Gi               # PVC size (default: 10Gi)
---set image.tag=6.6.3                 # Pin to a specific version
+--set image.tag=6.7.0                 # Pin to a specific version
 --set serviceMonitor.enabled=true     # Prometheus Operator scrape
 --set grafana.dashboards.enabled=true # Grafana dashboard ConfigMap
 ```
@@ -103,7 +103,7 @@ docker run -d \
   -p 4317:4317 \
   -v ruptura-data:/var/lib/ruptura/data \
   -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
-  ghcr.io/benfradjselim/ruptura:6.6.3
+  ghcr.io/benfradjselim/ruptura:6.7.0
 ```
 
 | Port | Protocol | Purpose |
@@ -120,6 +120,8 @@ Verify:
 curl http://localhost:8080/api/v2/health
 # {"status":"ok","rupture_detection":"active","uptime_seconds":3}
 ```
+
+The built-in web dashboard is available at `http://localhost:8080` — no Grafana or external tools required. All assets are bundled in the binary and work in air-gapped environments.
 
 ---
 
