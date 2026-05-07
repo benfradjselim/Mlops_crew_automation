@@ -66,28 +66,31 @@ curl http://localhost:8080/api/v2/health
 
 ### Using the RupturaInstance CRD (Operator)
 
-If you have the Ruptura Operator installed, deploy a full instance declaratively:
+If you have the Ruptura Operator installed (via OLM / OperatorHub or manually), deploy a full instance declaratively:
 
 ```yaml
 apiVersion: ruptura.io/v1alpha1
 kind: RupturaInstance
 metadata:
-  name: production
+  name: ruptura
   namespace: ruptura-system
 spec:
-  image: ghcr.io/benfradjselim/ruptura:6.6.3
-  port: 8080
-  storageSize: 20Gi
-  apiKey:
-    secretRef: ruptura-api-key
-  replicas: 1
+  edition: community        # community (read-only actions) | autopilot (full execution)
+  storageSize: 10Gi         # PVC size for BadgerDB (default: 10Gi)
+  replicas: 1               # must be 1 — BadgerDB is single-writer
+  apiKeyRef: ruptura-secret # name of a Secret with key 'api-key' (optional)
 ```
 
 ```bash
 kubectl apply -f ruptura-instance.yaml
+
+# Watch the operator reconcile it:
+kubectl get rupturainstance -n ruptura-system -w
 ```
 
-See [Operator →](../architecture/operator.md) for full CRD reference.
+The operator creates: ServiceAccount `ruptura-instance`, PVC `{name}-data`, Deployment `{name}`, Service `{name}`. On OpenShift it also creates a Route with edge TLS.
+
+See [Operator →](../architecture/operator.md) for full CRD reference and OLM install instructions.
 
 ---
 

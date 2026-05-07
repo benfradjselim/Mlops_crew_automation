@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/benfradjselim/ruptura/main/assets/logo/ruptura-icon-256.png" alt="Ruptura" width="120" /><br><br>
-  <img src="https://img.shields.io/badge/version-6.6.2-0069ff?style=for-the-badge" alt="v6.6.2">
+  <img src="https://img.shields.io/badge/version-6.6.3-0069ff?style=for-the-badge" alt="v6.6.3">
   <img src="https://img.shields.io/badge/go-1.21+-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="Go 1.21+">
   <img src="https://img.shields.io/badge/license-Apache%202.0-green?style=for-the-badge" alt="Apache 2.0">
   <img src="https://img.shields.io/badge/kubernetes-native-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes Native">
@@ -171,7 +171,7 @@ docker run -d \
   -p 4317:4317 \
   -v ruptura-data:/var/lib/ruptura/data \
   -e RUPTURA_API_KEY=$(openssl rand -hex 32) \
-  ghcr.io/benfradjselim/ruptura:6.6.2
+  ghcr.io/benfradjselim/ruptura:6.6.3
 ```
 
 | Port | Purpose |
@@ -334,14 +334,40 @@ metadata:
   name: production
   namespace: ruptura-system
 spec:
-  image: ghcr.io/benfradjselim/ruptura:6.6.2
-  port: 8080
-  storageSize: 20Gi
-  apiKey:
-    secretRef: ruptura-api-key
+  image: ghcr.io/benfradjselim/ruptura:6.6.3   # optional — defaults to bundled version
+  edition: community                             # community (read-only) | autopilot (full execution)
+  storageSize: 20Gi                              # PVC size for BadgerDB (default: 10Gi)
+  replicas: 1                                   # must be 1 — BadgerDB is single-writer
+  apiKeyRef: ruptura-secret                      # name of a Secret with key 'api-key' (optional)
 ```
 
-The operator reconciles Deployment + Service + PVC per `RupturaInstance`. See `ohe/operator/`.
+The operator reconciles Deployment + Service + PVC + ServiceAccount per `RupturaInstance`. On OpenShift it also creates a Route with edge TLS. See `operator/` (source) and `bundle/` (OLM).
+
+**Install via OLM / OperatorHub:**
+
+```bash
+# After the operator is installed from OperatorHub:
+kubectl apply -f - <<EOF
+apiVersion: ruptura.io/v1alpha1
+kind: RupturaInstance
+metadata:
+  name: ruptura
+  namespace: ruptura-system
+spec:
+  edition: community
+  storageSize: 10Gi
+EOF
+```
+
+**Operator status** (`ruptura-operator v0.6.8`):
+
+| Field | Description |
+|-------|-------------|
+| `phase` | `Running` (readyReplicas ≥ 1) or `Pending` |
+| `readyReplicas` | Number of ready pods |
+| `availableReplicas` | Number of available pods |
+| `lastReconcileTime` | RFC3339 timestamp of last reconcile |
+| `observedGeneration` | Generation this status reflects |
 
 ---
 
@@ -358,7 +384,20 @@ helm lint helm/
 
 ## Changelog
 
-### v6.6.2 — 2026-05-06
+### ruptura-operator v0.6.8 — 2026-05-07
+- **Fix: ServiceAccount never created** — operator used `serviceAccountName: ruptura-instance` in the Deployment but never created the SA. Every Pod would fail to schedule with "serviceaccount not found". Fixed by adding `reconcileServiceAccount()` to the reconcile loop and SA deletion to `cleanup()`.
+- **Fix: RBAC missing `serviceaccounts` verb** — ClusterRole now includes `create/update/patch/delete` on `serviceaccounts`.
+- **CSV: `replaces: ruptura-operator.v0.6.7`** — correct OLM upgrade graph so existing installations upgrade cleanly.
+- **Prometheus metrics**: `/metrics` + `/healthz` on `:9090`; `ruptura_instances_total` + `ruptura_reconcile_errors_total` gauges.
+- **OperatorHub PR**: https://github.com/k8s-operatorhub/community-operators/pull/8070
+
+### ruptura-operator v0.6.7 — 2026-05-07
+- First OperatorHub release: `RupturaInstance` CRD manages Deployment + Service + PVC + ServiceAccount.
+- On OpenShift: Route with edge TLS termination.
+- Finalizer-based deletion cleanup.
+- Merged into OperatorHub community-operators.
+
+### v6.6.3 — 2026-05-06
 - **Timing-safe auth**: Bearer token comparison now uses `crypto/subtle.ConstantTimeCompare` — eliminates timing-oracle attack on the API key.
 - **Auth warning**: server logs `WARNING` at startup when `RUPTURA_API_KEY` is unset instead of silently accepting all requests.
 - **Emergency stop wired**: `POST /api/v2/actions/emergency-stop` now calls `engine.EmergencyStop()` (was a no-op).
@@ -425,9 +464,19 @@ helm lint helm/
 ## Roadmap
 
 ```
+ruptura (application)
+v6.6.3 ✅  Pre-v7 security & correctness hardening
+v6.6.0 ✅  Per-workload signal weight tuning
+v6.5.0 ✅  Edition gate (community / autopilot)
+v6.4.0 ✅  Rupture fingerprinting · business signal layer
+v6.3.0 ✅  Calibration warm-up · HealthScore ETA forecast · ruptura-sim
 v6.2.x ✅  Fused Rupture Index · workload-level signals · adaptive baselines · narrative explain
 v6.1.0 ✅  gRPC ingest · NATS/Kafka eventbus · adaptive ensemble · K8s operator
 v7.0.0 ⏳  ruptura-ctl CLI · web dashboard v2 · multi-tenant (X-Org-ID)
+
+ruptura-operator (Kubernetes Operator — OperatorHub)
+v0.6.7 ✅  First OperatorHub release — merged into community-operators
+v0.6.8 🔄  ServiceAccount fix · RBAC fix · upgrade graph — OperatorHub PR open
 ```
 
 ---

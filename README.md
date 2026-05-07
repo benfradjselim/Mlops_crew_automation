@@ -27,6 +27,13 @@ Ruptura detects workload ruptures before they cause outages — using the Fused 
 | v6.2.2 | 2026-04-30 | ✅ Released — anomaly REST endpoints, all v6.x gaps resolved |
 | v6.1.0 | 2026-04-27 | ✅ Released — gRPC, eventbus, adaptive ensemble, K8s operator |
 
+**Operator:**
+
+| Version | Date | Status |
+|---------|------|--------|
+| ruptura-operator v0.6.8 | 2026-05-07 | 🔄 OperatorHub PR submitted — ServiceAccount fix, RBAC fix, upgrade graph |
+| ruptura-operator v0.6.7 | 2026-05-07 | ✅ Merged into OperatorHub community-operators |
+
 **Active branch:** `main` · **Module:** `github.com/benfradjselim/ruptura`
 
 ---
@@ -181,15 +188,20 @@ docker run -d \
 ## What's Inside
 
 ```
-workdir/                  Ruptura Go source (v6.6.0)
+workdir/                  Ruptura Go source (v6.6.3)
   cmd/ruptura/            Main binary
   internal/               Engine, pipelines, API, storage, actions, fusion
   pkg/                    Public Go packages (rupture, composites, client)
   deploy/
-    helm/ruptura/         Helm chart (v0.6.6, appVersion 6.6.0)
     *.yaml                Kustomize manifests
     grafana/              Grafana dashboard JSON + provisioning
-  ohe/operator/           Kubernetes operator (RupturaInstance CRD)
+  operator/               Kubernetes operator (ruptura-operator v0.6.8)
+                          RupturaInstance CRD · Deployment + Service + PVC + SA + Route
+
+helm/                     Helm chart (v0.6.8, appVersion 6.6.3)
+bundle/                   OLM bundle (OperatorHub submission format)
+catalog/                  File-Based Catalog for OLM
+operators/                community-operators submission tree
 
 docs/
   v6.0.0/                 SPECS, AGENTS, ROADMAP, whitepaper, DEV-GUIDE
@@ -202,6 +214,7 @@ docs/
 ## Roadmap
 
 ```
+ruptura (application)
 v6.6.3 ✅  Pre-v7 security & correctness hardening (timing-safe auth, emergency stop, forecast fix)
 v6.6.0 ✅  Per-workload signal weight tuning (runtime + env bootstrap)
 v6.5.0 ✅  Edition gate — community (read-only) / autopilot (full execution)
@@ -211,6 +224,10 @@ v6.2.x ✅  Fused Rupture Index · workload-level signals · adaptive baselines
             narrative explain · topology contagion · maintenance windows
 v6.1.0 ✅  gRPC ingest · NATS/Kafka eventbus · adaptive ensemble · K8s operator
 v7.0.0 ⏳  ruptura-ctl CLI · web dashboard v2 · multi-tenant opt-in (X-Org-ID)
+
+ruptura-operator (Kubernetes operator — OperatorHub)
+v0.6.8 🔄  OperatorHub PR open — ServiceAccount reconciliation fix · RBAC fix · Prometheus metrics
+v0.6.7 ✅  First OperatorHub release — merged into community-operators
 ```
 
 ---

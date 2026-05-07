@@ -257,6 +257,67 @@ Theme: **Per-workload signal weight tuning**
 
 ---
 
+## v6.6.1 — ✅ RELEASED 2026-05-06
+
+Theme: **CLI + simulation bugfixes**
+
+| Item | Detail |
+|------|--------|
+| `sim inject` fixed | CLI was sending `{pattern}` payload; server expects `{workload, metrics}`. Rewired to `sim.Run()` — real metric ticks per pattern, correct format. |
+| `sim.send()` auth | `APIKey` added to `sim.Config`; every tick sends `Authorization: Bearer` header. |
+| 3-segment workload refs | `describe workload ns/Kind/name` was 404 — added `/rupture/{namespace}/{kind}/{workload}` route and handler. Explain routes updated to `{rupture_id:.+}` for slash-containing refs. |
+| Suppressions field mismatch | Handler now accepts `workload`/`start`/`end` fields sent by the CLI (was `workload_key`/`from`/`until`). POST returns the full suppression object. |
+| Health port label | `ruptura-ctl health` now shows `traces (OTLP :4317)` (was `gRPC :9090`). |
+
+---
+
+## v6.6.3 — ✅ RELEASED 2026-05-06
+
+Theme: **Pre-v7 security & correctness hardening**
+
+| Item | Detail |
+|------|--------|
+| Timing-safe auth | Bearer token comparison uses `crypto/subtle.ConstantTimeCompare` — eliminates timing-oracle on the API key. |
+| Auth warning | Server logs `WARNING` at startup when `RUPTURA_API_KEY` is unset. |
+| Emergency stop wired | `POST /api/v2/actions/emergency-stop` now calls `engine.EmergencyStop()` (was a no-op). |
+| Forecast signal fix | Warm-up stub returns the requested signal's current value via `signalValue()`; nil-guard on `h.store`. |
+| `RUPTURA_API_KEY` env var | Server reads the API key from the environment when `--api-key` flag is absent. |
+| Slowloris protection | `http.Server` sets `ReadHeaderTimeout: 5s`. |
+| Horizon + limit caps | `?horizon=` capped at 10 080 min (1 week); `?limit=` capped at 1 000. |
+| Sim robustness | Injector uses `http.Client{Timeout: 10s}`; `math/rand` seeded at `Run()` start. |
+| `reject` 404 | `POST /api/v2/actions/{id}/reject` returns 404 for unknown IDs. |
+| `ruptura-ctl status` | `Actions()` error surfaced as a dim warning. |
+
+---
+
+## ruptura-operator v0.6.7 — ✅ RELEASED 2026-05-07
+
+Theme: **First OperatorHub release**
+
+| Item | Detail |
+|------|--------|
+| `RupturaInstance` CRD | Manages Deployment + Service + PVC + ServiceAccount per instance |
+| OpenShift Route | Edge-TLS Route created automatically when running on OpenShift |
+| Finalizer cleanup | `ruptura.io/cleanup` finalizer ensures owned resources are deleted on CR removal |
+| OLM bundle | Correct dot-notation annotation keys; `stable` and `alpha` channels |
+| OperatorHub | Merged into k8s-operatorhub/community-operators |
+
+---
+
+## ruptura-operator v0.6.8 — 🔄 SUBMITTED 2026-05-07
+
+Theme: **Critical bugfixes — ServiceAccount reconciliation**
+
+| Item | Detail |
+|------|--------|
+| **Fix: ServiceAccount never created** | Operator used `serviceAccountName: ruptura-instance` but never created the SA → every Pod failed to schedule with "serviceaccount not found". `reconcileServiceAccount()` added to reconcile loop; SA deleted in `cleanup()`. |
+| **Fix: RBAC missing `serviceaccounts` verb** | ClusterRole now grants `create/update/patch/delete` on `serviceaccounts`. |
+| **OLM upgrade graph** | `replaces: ruptura-operator.v0.6.7` in CSV — existing installations upgrade cleanly. |
+| **Prometheus metrics** | `/metrics` + `/healthz` on `:9090`; operator version, instance count, reconcile error gauges. |
+| OperatorHub PR | https://github.com/k8s-operatorhub/community-operators/pull/8070 |
+
+---
+
 ## v7.0.0 — PLANNED (Q3 2026)
 
 | Feature | Detail |
@@ -303,4 +364,4 @@ ALPHA → (BRAVO || CHARLIE) → DELTA → ECHO → FOXTROT → tag v6.0.0
 ---
 
 Produced: 2026-04-24
-Last updated: 2026-05-05 — v6.6.0 released; v7.0.0 planned
+Last updated: 2026-05-07 — operator v0.6.8 submitted to OperatorHub; v6.6.3 released; v7.0.0 planned

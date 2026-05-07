@@ -2,6 +2,28 @@
 
 ## Released
 
+### ruptura-operator v0.6.8 — 2026-05-07 🔄
+
+OperatorHub PR open: https://github.com/k8s-operatorhub/community-operators/pull/8070
+
+| Item | Detail |
+|------|--------|
+| **Fix: ServiceAccount never created** | Operator used `serviceAccountName: ruptura-instance` in the Deployment but never created the SA. Every Pod would fail to schedule. Fixed: `reconcileServiceAccount()` added to the reconcile loop; SA deleted in `cleanup()`. |
+| **Fix: RBAC missing `serviceaccounts` verb** | ClusterRole now grants `create/update/patch/delete` on `serviceaccounts`. |
+| **OLM upgrade graph** | `replaces: ruptura-operator.v0.6.7` added to CSV — existing installations upgrade cleanly. |
+| **Prometheus metrics** | `/metrics` + `/healthz` on `:9090`; `ruptura_instances_total` + `ruptura_reconcile_errors_total` gauges. |
+
+### ruptura-operator v0.6.7 — 2026-05-07 ✅
+
+First OperatorHub release, merged into community-operators.
+
+| Item | Detail |
+|------|--------|
+| `RupturaInstance` CRD | Manages Deployment + Service + PVC + ServiceAccount per instance |
+| OpenShift support | Route with edge TLS termination when running on OpenShift |
+| Finalizer cleanup | `ruptura.io/cleanup` finalizer ensures owned resources are deleted before CR removal |
+| OLM bundle | Correct dot-notation annotation keys; `stable` and `alpha` channels |
+
 ### v6.6.3 — 2026-05-06 ✅
 
 | Item | Detail |

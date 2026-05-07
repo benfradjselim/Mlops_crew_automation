@@ -1071,6 +1071,62 @@ workloadWeights:
 
 ---
 
+### v6.6.1 (shipped 2026-05-06 — bugfixes)
+
+**What shipped**:
+- **`sim inject` payload fix**: CLI was sending `{pattern}` payload; server expects `{workload, metrics}`. Rewired to call `sim.Run()` directly.
+- **`sim.send()` auth**: `APIKey` added to `sim.Config`; every tick sends `Authorization: Bearer` header so auth-enabled servers accept simulation data.
+- **3-segment workload refs in CLI**: `describe workload ns/Kind/name` returned 404 — added `/rupture/{namespace}/{kind}/{workload}` route. Explain routes updated to `{rupture_id:.+}` for slash-containing IDs.
+- **Suppressions field mismatch**: Handler now accepts `workload`/`start`/`end` fields sent by the client.
+- **Health port label correction**: `ruptura-ctl health` now shows `traces (OTLP :4317)`.
+
+---
+
+### v6.6.3 (shipped 2026-05-06 — pre-v7 security hardening)
+
+**What shipped**:
+- **Timing-safe auth**: `crypto/subtle.ConstantTimeCompare` for Bearer token comparison — eliminates timing-oracle on the API key.
+- **Emergency stop wired**: `POST /api/v2/actions/emergency-stop` calls `engine.EmergencyStop()` (was a no-op — high severity gap).
+- **Forecast signal fix**: warm-up stub now returns the correct signal value instead of always returning `health_score`.
+- **Slowloris protection**: `http.Server` sets `ReadHeaderTimeout: 5s`.
+- **Auth warning at startup**: Server logs `WARNING` when `RUPTURA_API_KEY` is unset.
+- **`RUPTURA_API_KEY` env var**: Fallback to env when `--api-key` flag is absent.
+- **Horizon + limit caps**: `?horizon=` capped at 10 080 min; `?limit=` capped at 1 000.
+- **All 38 packages**: `go test -race ./...` passes clean.
+
+**Judgment for v7.0**: The application engine is hardened and production-ready. The operator is now the active work stream. Next meaningful application work is:
+1. FR-10: X-Org-ID multi-tenant isolation.
+2. Web dashboard v2 (Svelte).
+3. `ruptura-ctl` CLI — `status`, `explain <id>`, `suppress <workload> 30m`.
+
+---
+
+### ruptura-operator v0.6.7 (shipped 2026-05-07 — first OperatorHub release)
+
+**What shipped**:
+- `RupturaInstance` CRD manages Deployment + Service + PVC + ServiceAccount per instance.
+- OpenShift Route with edge TLS termination, auto-detected via `route.openshift.io/v1` API availability.
+- Finalizer-based deletion cleanup — all owned resources deleted before finalizer removal.
+- Prometheus metrics endpoint on `:9090/metrics`; `/healthz` for liveness/readiness.
+- OLM bundle with correct dot-notation annotation keys.
+- Merged into k8s-operatorhub/community-operators.
+
+**Critical gap discovered post-submission**: The operator's Deployment set `serviceAccountName: ruptura-instance` but the reconcile loop never created that ServiceAccount. Every deployed `RupturaInstance` Pod would fail to schedule with "serviceaccount not found". Additionally, the ClusterRole did not include permission to create ServiceAccounts. Fixed in v0.6.8.
+
+---
+
+### ruptura-operator v0.6.8 (submitted 2026-05-07 — critical bugfix)
+
+**What shipped**:
+- **Fix: ServiceAccount never created** — `reconcileServiceAccount()` added to the reconcile loop before `reconcilePVC()`. ServiceAccount deleted in `cleanup()` before `patchFinalizers()`.
+- **Fix: RBAC missing `serviceaccounts` verb** — ClusterRole now includes `create/update/patch/delete` on `serviceaccounts` in addition to `services` and `persistentvolumeclaims`.
+- **OLM upgrade graph** — `replaces: ruptura-operator.v0.6.7` in CSV; v0.6.8 bundle entry with `replaces` chain in `catalog.yaml`.
+- **OperatorHub PR**: https://github.com/k8s-operatorhub/community-operators/pull/8070 — DCO signed, PR-traffic-light passing.
+
+**Judgment**: v0.6.7 should never have reached OperatorHub in its state — the SA bug would have made every deployed instance non-functional. The submission process (OLM bundle validation) does not catch runtime behavioral bugs, only structural ones. Future submissions must include a smoke-test step that actually deploys a `RupturaInstance` and verifies the Pod reaches `Running` state.
+
+---
+
 ### v6.6.0 (shipped — P2 commercial foundation, complete)
 
 **What shipped**:
