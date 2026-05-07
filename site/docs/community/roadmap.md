@@ -2,6 +2,14 @@
 
 ## Released
 
+### v6.7.0 — 2026-05-06 ✅
+
+| Item | Detail |
+|------|--------|
+| **Embedded web dashboard** | Self-contained Svelte UI served by the Go binary — no external dependencies. Chart.js and Alpine.js vendored locally; font loading non-blocking with noscript fallback. Works fully in air-gapped environments. |
+| **Dashboard panels** | Fused Rupture Index heatmap, per-workload signal timelines, action log with approve/reject/emergency-stop, narrative explain panel, SLO widget, health forecast. |
+| **Air-gap safe** | All assets (`vendor/alpine.min.js`, `vendor/chart.min.js`, embedded PNG logo) served from the binary via `go:embed`. No CDN required. |
+
 ### ruptura-operator v0.6.8 — 2026-05-07 ✅
 
 OperatorHub PR merged: https://github.com/k8s-operatorhub/community-operators/pull/8070
@@ -141,7 +149,6 @@ Clean-room rewrite from OHE v5.1 as `github.com/benfradjselim/ruptura`:
 
 | Feature | Detail |
 |---------|--------|
-| Web dashboard v2 | Embedded Svelte UI: Fused Rupture Index heatmap, signal timelines, action log, narrative explain panel |
 | Multi-tenant opt-in (FR-10) | X-Org-ID header → namespace filter on all queries; per-org storage namespacing |
 | Python SDK v2 | async support (`httpx`), type stubs, full v2 parity with Go SDK |
 

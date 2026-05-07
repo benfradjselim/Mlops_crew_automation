@@ -318,13 +318,26 @@ Theme: **Critical bugfixes — ServiceAccount reconciliation**
 
 ---
 
+## v6.7.0 — ✅ RELEASED 2026-05-06
+
+Theme: **Embedded web dashboard — air-gap safe**
+
+| Item | Detail |
+|------|--------|
+| **Embedded Svelte UI** | Self-contained dashboard served by the Go binary via `go:embed`. No external server required. |
+| **Vendor-local assets** | Chart.js and Alpine.js bundled in `static/vendor/` — no CDN calls at runtime. |
+| **Air-gap safe fonts** | Google Fonts loaded via non-blocking `preload` with `noscript` fallback — dashboard fully functional with no internet access. |
+| **Dashboard panels** | FusedR heatmap, per-workload signal timelines, action log (approve/reject/emergency-stop with toast notifications), narrative explain, SLO widget, health forecast. |
+| **Ruptura logo** | Brand icon embedded as PNG served from binary — no external image refs. |
+
+---
+
 ## v7.0.0 — PLANNED (Q3 2026)
 
 | Feature | Detail |
 |---------|--------|
-| `ruptura-ctl` CLI | `ruptura-ctl status`, `ruptura-ctl explain <id>`, `ruptura-ctl suppress <workload> 30m` |
-| Web dashboard v2 | Embedded Svelte UI: FusedR heatmap, signal timelines, action log, narrative explain panel |
 | Multi-tenant opt-in | X-Org-ID header → namespace filter on all queries; per-org storage namespacing |
+| Python SDK v2 | async support (`httpx`), type stubs, full v2 parity with Go SDK |
 
 ---
 
@@ -364,4 +377,4 @@ ALPHA → (BRAVO || CHARLIE) → DELTA → ECHO → FOXTROT → tag v6.0.0
 ---
 
 Produced: 2026-04-24
-Last updated: 2026-05-07 — operator v0.6.8 merged to OperatorHub; v6.6.3 released; v7.0.0 planned
+Last updated: 2026-05-07 — embedded dashboard shipped in v6.7.0; operator v0.6.8 merged to OperatorHub; v6.6.3 released; v7.0.0 planned
