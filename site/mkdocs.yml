@@ -41,6 +41,7 @@ nav:
     - index.md
     - Pipelines: architecture/pipelines.md
     - Fusion Engine: architecture/fusion-engine.md
+    - Embedded Dashboard: architecture/dashboard.md
     - Operator: architecture/operator.md
   - API:
     - index.md
